@@ -1,0 +1,164 @@
+import { useState } from 'react'
+import { read, write, upsert } from '../../lib/store.js'
+import { formatRupiah } from '../../lib/format.js'
+import { newSiswa } from '../../lib/constants.js'
+import Modal from '../../components/Modal.jsx'
+
+export default function StudentList() {
+  const [siswa, setSiswa] = useState(() => read('siswa'))
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState(null)
+
+  const sekolah = read('sekolah')
+
+  function refresh() {
+    setSiswa(read('siswa'))
+  }
+
+  function openAdd() {
+    const defaultSekolah = sekolah.length > 0 ? sekolah[0] : null
+    setForm(newSiswa(defaultSekolah?.id || '', defaultSekolah?.nama || ''))
+    setModalOpen(true)
+  }
+
+  function openEdit(s) {
+    setForm({ ...s })
+    setModalOpen(true)
+  }
+
+  function save() {
+    upsert('siswa', form)
+    setModalOpen(false)
+    refresh()
+  }
+
+  function remove(id) {
+    if (!confirm('Hapus siswa ini?')) return
+    const updated = siswa.filter(s => s.id !== id)
+    write('siswa', updated)
+    refresh()
+  }
+
+  if (siswa.length === 0 && !modalOpen) {
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">Manajemen Siswa</h2>
+            <p className="text-xs text-slate-500">Profil, Kehadiran, Status SPP Bulanan</p>
+          </div>
+          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>
+        </div>
+        <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
+          <p className="text-slate-400 text-sm">Belum ada data siswa. Klik "Tambah Siswa Baru" untuk memulai.</p>
+        </div>
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Siswa">
+          <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} />
+        </Modal>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Manajemen Siswa</h2>
+          <p className="text-xs text-slate-500">Profil, Kehadiran, Status SPP Bulanan</p>
+        </div>
+        <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                <th className="py-4 px-6">Siswa</th>
+                <th className="py-4 px-6">Sekolah Mitra</th>
+                <th className="py-4 px-6">Kontak WA</th>
+                <th className="py-4 px-6 text-center">Kehadiran (Bulan Ini)</th>
+                <th className="py-4 px-6 text-center">Kehadiran (Total)</th>
+                <th className="py-4 px-6 text-center">SPP Bulan Ini</th>
+                <th className="py-4 px-6 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y text-sm">
+              {siswa.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50/50">
+                  <td className="py-4 px-6 flex items-center gap-3">
+                    <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                    <div>
+                      <p className="font-bold text-slate-800">{s.nama}</p>
+                      <p className="text-xs text-slate-400">{s.kelas}</p>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{s.sekolahNama}</td>
+                  <td className="py-4 px-6">
+                    <a href={`https://wa.me/${s.wa}`} target="_blank" className="text-blue-600 font-semibold hover:underline">{s.wa}</a>
+                  </td>
+                  <td className="py-4 px-6 text-center font-extrabold text-blue-700">0 Sesi</td>
+                  <td className="py-4 px-6 text-center font-bold text-slate-500">0 Sesi</td>
+                  <td className="py-4 px-6 text-center">
+                    <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">Belum Bayar</span>
+                  </td>
+                  <td className="py-4 px-6 text-center">
+                    <div className="flex justify-center gap-2">
+                      <button onClick={() => openEdit(s)} className="text-slate-500 hover:text-blue-600">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg>
+                      </button>
+                      <button onClick={() => remove(s.id)} className="text-slate-500 hover:text-rose-600">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21" strokeWidth="2"/></svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form && siswa.find(s => s.id === form.id) ? 'Edit Siswa' : 'Tambah Siswa'}>
+        {form && <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} />}
+      </Modal>
+    </div>
+  )
+}
+
+function SiswaForm({ form, setForm, save, onClose, sekolah }) {
+  return (
+    <>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Nama Siswa</label>
+        <input value={form.nama} onChange={e => setForm({ ...form, nama: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Kelas</label>
+        <input value={form.kelas} onChange={e => setForm({ ...form, kelas: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">WhatsApp</label>
+        <input value={form.wa} onChange={e => setForm({ ...form, wa: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Sekolah</label>
+        <select value={form.sekolahId} onChange={e => {
+          const s = sekolah.find(sch => sch.id === e.target.value)
+          setForm({ ...form, sekolahId: e.target.value, sekolahNama: s ? s.nama : '' })
+        }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">
+          <option value="">-- Pilih Sekolah --</option>
+          {sekolah.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
+        <input value={form.foto} onChange={e => setForm({ ...form, foto: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button onClick={save} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>
+        <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
+      </div>
+    </>
+  )
+}
