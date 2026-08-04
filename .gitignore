@@ -1,2 +1,3 @@
-.kilo
-UNIVERSAL.md
+node_modules
+dist
+.env
