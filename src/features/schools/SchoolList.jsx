@@ -1,0 +1,195 @@
+import { useState } from 'react'
+import { read, write, upsert } from '../../lib/store.js'
+import { formatRupiah } from '../../lib/format.js'
+import { newSekolah } from '../../lib/constants.js'
+import Modal from '../../components/Modal.jsx'
+
+export default function SchoolList() {
+  const [sekolah, setSekolah] = useState(() => read('sekolah'))
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState(newSekolah())
+
+  function refresh() {
+    setSekolah(read('sekolah'))
+  }
+
+  function openAdd() {
+    setForm(newSekolah())
+    setModalOpen(true)
+  }
+
+  function openEdit(sch) {
+    setForm({ ...sch })
+    setModalOpen(true)
+  }
+
+  function save() {
+    const prev = sekolah.find(s => s.id === form.id)
+    const oldTrainerIds = prev ? prev.trainerIds : []
+    upsert('sekolah', form)
+    const trainerList = read('trainer')
+    oldTrainerIds.forEach(tId => {
+      if (!form.trainerIds.includes(tId)) {
+        const t = trainerList.find(tr => tr.id === tId)
+        if (t) {
+          t.sekolahIds = (t.sekolahIds || []).filter(sId => sId !== form.id)
+          upsert('trainer', t)
+        }
+      }
+    })
+    form.trainerIds.forEach(tId => {
+      if (!oldTrainerIds.includes(tId)) {
+        const t = trainerList.find(tr => tr.id === tId)
+        if (t) {
+          if (!(t.sekolahIds || []).includes(form.id)) {
+            t.sekolahIds = [...(t.sekolahIds || []), form.id]
+            upsert('trainer', t)
+          }
+        }
+      }
+    })
+    setModalOpen(false)
+    refresh()
+  }
+
+  function remove(id) {
+    const siswa = read('siswa')
+    if (siswa.some(s => s.sekolahId === id)) {
+      alert('Tidak dapat menghapus sekolah yang memiliki siswa. Pindahkan siswa terlebih dahulu.')
+      return
+    }
+    const sch = sekolah.find(s => s.id === id)
+    if (sch) {
+      const trainerList = read('trainer')
+      ;(sch.trainerIds || []).forEach(tId => {
+        const t = trainerList.find(tr => tr.id === tId)
+        if (t) {
+          t.sekolahIds = (t.sekolahIds || []).filter(sId => sId !== id)
+          upsert('trainer', t)
+        }
+      })
+    }
+    const updated = sekolah.filter(s => s.id !== id)
+    write('sekolah', updated)
+    refresh()
+  }
+
+  if (sekolah.length === 0 && !modalOpen) {
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
+            <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
+          </div>
+          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
+        </div>
+        <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
+          <p className="text-slate-400 text-sm">Belum ada data sekolah mitra. Klik "Tambah Sekolah Mitra" untuk memulai.</p>
+        </div>
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && sekolah.find(s => s.id === form.id) ? 'Edit Sekolah' : 'Tambah Sekolah'}>
+          <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
+        </Modal>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
+          <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
+        </div>
+        <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {sekolah.map(sch => (
+          <div key={sch.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100 flex flex-col hover:shadow-md transition">
+            <div className="h-44 relative bg-slate-200">
+              <img
+                src={sch.foto}
+                alt={sch.nama}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=400&auto=format&fit=crop&q=80'
+                }}
+              />
+              <div className="absolute top-2 right-2 flex gap-1">
+                <button onClick={() => openEdit(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"><svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg></button>
+                <button onClick={() => remove(sch.id)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"><svg className="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2"/></svg></button>
+              </div>
+            </div>
+
+            <div className="p-5 flex-1 flex flex-col justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 line-clamp-1">{sch.nama}</h3>
+                <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
+                  <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <span className="line-clamp-1">{sch.alamat}</span>
+                </p>
+
+                <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Trainer</p>
+                    <p className="text-sm font-semibold text-slate-700 line-clamp-1">{sch.trainerIds?.length || 0} Trainer</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Jumlah Siswa</p>
+                    <p className="text-sm font-semibold text-slate-700">{read('siswa').filter(s => s.sekolahId === sch.id).length} Siswa</p>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Jadwal Kelas</p>
+                  <p className="text-xs text-slate-600 bg-slate-100 py-1 px-2.5 rounded-md inline-block mt-1">{sch.jadwal || 'Belum diatur'}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">SPP Bulanan</span>
+                <span className="text-base font-extrabold text-blue-700">{formatRupiah(sch.spp)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && sekolah.find(s => s.id === form.id) ? 'Edit Sekolah' : 'Tambah Sekolah'}>
+        <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
+      </Modal>
+    </div>
+  )
+}
+
+function SchoolForm({ form, setForm, save, onClose }) {
+  return (
+    <>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Nama Sekolah</label>
+        <input value={form.nama} onChange={e => setForm({ ...form, nama: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Alamat</label>
+        <textarea value={form.alamat} onChange={e => setForm({ ...form, alamat: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" rows="2" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
+        <input value={form.foto} onChange={e => setForm({ ...form, foto: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Jadwal</label>
+        <input value={form.jadwal} onChange={e => setForm({ ...form, jadwal: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">SPP Bulanan</label>
+        <input type="number" min="0" value={form.spp} onChange={e => setForm({ ...form, spp: Number(e.target.value) })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button onClick={save} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>
+        <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
+      </div>
+    </>
+  )
+}
