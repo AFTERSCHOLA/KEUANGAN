@@ -277,7 +277,7 @@ Facade of the workload: each milestone decomposes into a **strictly-ordered chai
 
 **M0 – Person 1**
 
-- M0.1 `EDIT: root` create Vite+React+Tailwind scaffold + `.gitignore` (node_modules, dist, .env) → VERIFY: `npm run dev` serves blank page.
+- M0.1 `EDIT: root` create Vite+React+Tailwind scaffold + `.gitignore` (node_modules, dist, .env) → VERIFY: `npm run dev` serves blank page. ✅✅✅ (Sudah: Akbar Dwi Herlambang)
 - M0.2 `EDIT: lib/constants.js` hard-code months Jul→Jun + id factory → VERIFY: import works in App.
 - M0.3 `EDIT: lib/store.js` v4 CRUD (read/write/upsert) → VERIFY: write→refresh→read back a dummy.
 - M0.4 `EDIT: lib/format.js` formatRupiah, waNormalize → VERIFY: `waNormalize("0812 3") === "628123"`.
