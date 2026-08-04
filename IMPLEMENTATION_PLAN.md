@@ -278,13 +278,13 @@ Facade of the workload: each milestone decomposes into a **strictly-ordered chai
 **M0 – Person 1**
 
 - M0.1 `EDIT: root` create Vite+React+Tailwind scaffold + `.gitignore` (node_modules, dist, .env) → VERIFY: `npm run dev` serves blank page. ✅✅✅
-- M0.2 `EDIT: lib/constants.js` hard-code months Jul→Jun + id factory → VERIFY: import works in App.
-- M0.3 `EDIT: lib/store.js` v4 CRUD (read/write/upsert) → VERIFY: write→refresh→read back a dummy.
-- M0.4 `EDIT: lib/format.js` formatRupiah, waNormalize → VERIFY: `waNormalize("0812 3") === "628123"`.
-- M0.5 `EDIT: App.jsx` render one white card with copy from original → VERIFY: looks correct (start of design-parity habit).
-- M0.6 `EDIT: features/schools` cut-paste school list markup only, read from store → VERIFY: renders empty state.
-- M0.7 `EDIT: remaining features one at a time` repeat cut-paste per tab → VERIFY: each tab renders.
-- → M0 exit gate (Part 3).
+- M0.2 `EDIT: lib/constants.js` hard-code months Jul→Jun + id factory → VERIFY: import works in App. ✅✅✅
+- M0.3 `EDIT: lib/store.js` v4 CRUD (read/write/upsert) → VERIFY: write→refresh→read back a dummy. ✅✅✅
+- M0.4 `EDIT: lib/format.js` formatRupiah, waNormalize → VERIFY: `waNormalize("0812 3") === "628123"`. ✅✅✅
+- M0.5 `EDIT: App.jsx` render one white card with copy from original → VERIFY: looks correct (start of design-parity habit). ✅✅✅
+- M0.6 `EDIT: features/schools` cut-paste school list markup only, read from store → VERIFY: renders empty state. ✅✅✅
+- M0.7 `EDIT: remaining features one at a time` repeat cut-paste per tab → VERIFY: each tab renders. ✅✅✅
+- → M0 exit gate (Part 3). ✅✅✅
 
 **M1 – Persons 2 & 5**
 
