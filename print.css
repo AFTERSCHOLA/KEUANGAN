@@ -1,0 +1,52 @@
+/* print.css — Person 4 (M3.4)
+   Import this once, e.g. in main.jsx: `import './print.css'`
+   or append via @import at the bottom of index.css.
+
+   Integration note (flag for FinanceReport.jsx): wrap the report's
+   printable content in a container with className="printable-report".
+   Everything outside that container (header, sidebar, nav, tab bar,
+   buttons) is hidden when printing via the rules below. */
+
+@media print {
+  /* Hide everything by default... */
+  body * {
+    visibility: hidden;
+  }
+
+  /* ...then reveal only the printable report and its children. */
+  .printable-report,
+  .printable-report * {
+    visibility: visible;
+  }
+
+  .printable-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Anything explicitly marked no-print (buttons, nav, the Print
+     trigger itself) stays hidden even inside the printable area. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Cards/tables lose shadow + rounded corners on paper — those read
+     as visual noise once color/shadow rendering is stripped. */
+  .printable-report .shadow-sm,
+  .printable-report .shadow-md,
+  .printable-report .shadow-lg,
+  .printable-report .shadow-2xl {
+    box-shadow: none !important;
+  }
+
+  /* Force page background to plain white regardless of app theme. */
+  html, body {
+    background: white !important;
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}

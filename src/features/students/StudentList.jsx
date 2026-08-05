@@ -1,15 +1,25 @@
 import { useState } from 'react'
-import { read, write, upsert } from '../../lib/store.js'
+import { read, write, upsert, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newSiswa } from '../../lib/constants.js'
+import { elapsedPeriods, isTunggakan, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
 
 export default function StudentList() {
   const [siswa, setSiswa] = useState(() => read('siswa'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(null)
+  const [onlyTunggakan, setOnlyTunggakan] = useState(false)
 
   const sekolah = read('sekolah')
+  const period = usePeriod()
+  const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
+
+  function unpaidMonthsOf(s) {
+    return elapsed.filter(({ periode }) => !s.sppLunas?.[periode]).map(e => e.monthName)
+  }
+
+  const visibleSiswa = onlyTunggakan ? siswa.filter(s => isTunggakan(s, elapsed)) : siswa
 
   function refresh() {
     setSiswa(read('siswa'))
@@ -69,6 +79,17 @@ export default function StudentList() {
         <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>
       </div>
 
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setOnlyTunggakan(v => !v)}
+          className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${
+            onlyTunggakan ? 'bg-yellow-400 text-slate-900 shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
+          }`}
+        >
+          Hanya yang menunggak
+        </button>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -80,11 +101,19 @@ export default function StudentList() {
                 <th className="py-4 px-6 text-center">Kehadiran (Bulan Ini)</th>
                 <th className="py-4 px-6 text-center">Kehadiran (Total)</th>
                 <th className="py-4 px-6 text-center">SPP Bulan Ini</th>
+                {onlyTunggakan && <th className="py-4 px-6">Bulan Menunggak</th>}
                 <th className="py-4 px-6 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y text-sm">
-              {siswa.map(s => (
+              {visibleSiswa.length === 0 && (
+                <tr>
+                  <td colSpan={onlyTunggakan ? 8 : 7} className="py-12 text-center text-slate-400">
+                    Tidak ada siswa yang menunggak.
+                  </td>
+                </tr>
+              )}
+              {visibleSiswa.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50/50">
                   <td className="py-4 px-6 flex items-center gap-3">
                     <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
@@ -102,8 +131,24 @@ export default function StudentList() {
                   <td className="py-4 px-6 text-center">
                     <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">Belum Bayar</span>
                   </td>
+                  {onlyTunggakan && (
+                    <td className="py-4 px-6 text-xs font-semibold text-rose-600">
+                      {unpaidMonthsOf(s).join(', ')}
+                    </td>
+                  )}
                   <td className="py-4 px-6 text-center">
                     <div className="flex justify-center gap-2">
+                      {isTunggakan(s, elapsed) && (
+                        <a
+                          href={buildTagihanWaLink(s, sekolah.find(x => x.id === s.sekolahId)?.spp || 0, unpaidMonthsOf(s))}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-slate-500 hover:text-emerald-600"
+                          title="Kirim tagihan via WhatsApp"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeWidth="2"/></svg>
+                        </a>
+                      )}
                       <button onClick={() => openEdit(s)} className="text-slate-500 hover:text-blue-600">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg>
                       </button>

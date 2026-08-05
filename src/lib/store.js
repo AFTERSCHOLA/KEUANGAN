@@ -40,7 +40,28 @@ export function upsert(key, record) {
 }
 
 // ============================================
-// PERIOD CONTEXT (M1.1)
+// PERSISTED UI STATE (M4.3, row #15)
+// ============================================
+// Separate key from entity data (D7: only afterschola_v4_* keys) — this
+// is UI state, not domain data, but stays under the same v4 namespace.
+const UI_STATE_KEY = `${STORE_KEY}_ui`
+
+export function getUiState() {
+  try {
+    const json = localStorage.getItem(UI_STATE_KEY)
+    return json ? JSON.parse(json) : {}
+  } catch {
+    return {}
+  }
+}
+
+export function setUiState(partial) {
+  const current = getUiState()
+  localStorage.setItem(UI_STATE_KEY, JSON.stringify({ ...current, ...partial }))
+}
+
+// ============================================
+// PERIOD CONTEXT (M1.1, persisted per M4.3)
 // ============================================
 import React, { createContext, useContext, useState, useCallback } from 'react'
 import { periodeKey, periodeFromDate, calYear, defaultAcademicYear, defaultMonth } from './constants'
@@ -48,8 +69,19 @@ import { periodeKey, periodeFromDate, calYear, defaultAcademicYear, defaultMonth
 const PeriodContext = createContext(null)
 
 export function PeriodProvider({ children }) {
-  const [selectedYear, setSelectedYear] = useState(defaultAcademicYear())
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth())
+  const saved = getUiState()
+  const [selectedYear, setSelectedYearState] = useState(saved.selectedYear ?? defaultAcademicYear())
+  const [selectedMonth, setSelectedMonthState] = useState(saved.selectedMonth ?? defaultMonth())
+
+  const setSelectedYear = useCallback((year) => {
+    setSelectedYearState(year)
+    setUiState({ selectedYear: year })
+  }, [])
+
+  const setSelectedMonth = useCallback((month) => {
+    setSelectedMonthState(month)
+    setUiState({ selectedMonth: month })
+  }, [])
 
   const getPeriodeKey = useCallback(
     () => periodeKey(selectedMonth, selectedYear),
