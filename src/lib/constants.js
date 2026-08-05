@@ -50,3 +50,44 @@ export function newTrainer() {
 export function newSiswa(sekolahId, sekolahNama) {
   return { id: generateId('sw'), nama: '', wa: '', kelas: '', sekolahId, sekolahNama, foto: '', sppLunas: {} }
 }
+
+// ============================================
+// ACADEMIC YEAR ENGINE (M1.1)
+// ============================================
+
+/**
+ * Konversi bulan (1-12) + tahun ajaran awal (A) → tahun kalender sesungguhnya.
+ * Juli-Desember → tahun A. Januari-Juni → tahun A+1.
+ */
+export function calYear(monthNum, academicStartYear) {
+  return monthNum >= CALENDAR_YEAR_BOUNDARY ? academicStartYear : academicStartYear + 1
+}
+
+/** Bikin key "YYYY-MM" dari bulan (1-12) + tahun ajaran awal */
+export function periodeKey(monthNum, academicStartYear) {
+  const year = calYear(monthNum, academicStartYear)
+  return `${year}-${String(monthNum).padStart(2, '0')}`
+}
+
+/** Ambil key "YYYY-MM" langsung dari tanggal "YYYY-MM-DD" — TIDAK ADA parsing nama bulan */
+export function periodeFromDate(tanggal) {
+  return tanggal.slice(0, 7)
+}
+
+/** Label tampilan tahun ajaran, misal 2026 → "2026/2027" */
+export function academicYearLabel(A) {
+  return `${A}/${A + 1}`
+}
+
+/** Tahun ajaran default = tahun ajaran yang sedang berjalan hari ini */
+export function defaultAcademicYear() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  return m >= CALENDAR_YEAR_BOUNDARY ? y : y - 1
+}
+
+/** Bulan default = bulan berjalan hari ini (1-12) */
+export function defaultMonth() {
+  return new Date().getMonth() + 1
+}

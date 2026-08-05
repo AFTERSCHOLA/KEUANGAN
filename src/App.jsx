@@ -6,6 +6,8 @@ import AttendanceForm from './features/attendance/AttendanceForm.jsx'
 import PaymentTable from './features/payments/PaymentTable.jsx'
 import FinanceReport from './features/reports/FinanceReport.jsx'
 import OverviewCards from './features/overview/OverviewCards.jsx'
+import { periodeFromDate, periodeKey, academicYearLabel } from './lib/constants'
+import { usePeriod } from './lib/store'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'M4 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z' },
@@ -19,6 +21,15 @@ const TABS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('sekolah')
+
+  // --- SEMENTARA: VERIFY M1.1, hapus blok ini setelah dicek ---
+  const period = usePeriod()
+  console.log('periodeFromDate("2027-01-10") →', periodeFromDate("2027-01-10"))
+  console.log('periodeKey(1, 2026) →', periodeKey(1, 2026))
+  console.log('periodeKey(7, 2026) →', periodeKey(7, 2026))
+  console.log('academicYearLabel(2026) →', academicYearLabel(2026))
+  console.log('period.periodeKey() →', period.periodeKey())
+  // --- akhir blok sementara ---
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 animate-fadeIn">

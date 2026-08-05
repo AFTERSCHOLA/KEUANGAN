@@ -38,3 +38,39 @@ export function upsert(key, record) {
   }
   write(key, records)
 }
+
+// ============================================
+// PERIOD CONTEXT (M1.1)
+// ============================================
+import React, { createContext, useContext, useState, useCallback } from 'react'
+import { periodeKey, periodeFromDate, calYear, defaultAcademicYear, defaultMonth } from './constants'
+
+const PeriodContext = createContext(null)
+
+export function PeriodProvider({ children }) {
+  const [selectedYear, setSelectedYear] = useState(defaultAcademicYear())
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth())
+
+  const getPeriodeKey = useCallback(
+    () => periodeKey(selectedMonth, selectedYear),
+    [selectedMonth, selectedYear]
+  )
+
+  const value = {
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    periodeKey: getPeriodeKey,
+    periodeFromDate,
+    calYear,
+  }
+
+  return React.createElement(PeriodContext.Provider, { value }, children)
+}
+
+export function usePeriod() {
+  const ctx = useContext(PeriodContext)
+  if (!ctx) throw new Error('usePeriod harus dipakai di dalam <PeriodProvider>')
+  return ctx
+}
