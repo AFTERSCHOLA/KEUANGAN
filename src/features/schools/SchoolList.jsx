@@ -48,6 +48,22 @@ export default function SchoolList() {
         }
       }
     })
+
+    // Part 2, rule 4: "School rename → refresh siswa.sekolahNama caches
+    // in the same save." — missing before; siswa list would keep showing
+    // the old school name after a rename.
+    if (prev && prev.nama !== form.nama) {
+      const siswaList = read('siswa')
+      let touched = false
+      siswaList.forEach(s => {
+        if (s.sekolahId === form.id && s.sekolahNama !== form.nama) {
+          s.sekolahNama = form.nama
+          touched = true
+        }
+      })
+      if (touched) write('siswa', siswaList)
+    }
+
     setModalOpen(false)
     refresh()
   }

@@ -54,6 +54,25 @@ export default function AttendanceForm() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  // M4.4: empty-state polish — tanpa sekolah, form ini tidak bisa
+  // dipakai sama sekali (dropdown sekolah kosong); beri arahan yang
+  // jelas daripada membiarkan panel form yang "hidup" tapi tak berguna.
+  if (sekolah.length === 0) {
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">Lembar Absensi Harian Kelas</h2>
+            <p className="text-xs text-slate-500">Mencatat data kehadiran guru dan siswa</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
+          <p className="text-slate-400 text-sm">Belum ada data sekolah mitra. Tambahkan sekolah terlebih dahulu di tab Data Sekolah sebelum mencatat absensi.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
@@ -80,10 +99,13 @@ export default function AttendanceForm() {
           </div>
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase">Trainer</label>
-            <select value={trainerId} onChange={e => { setTrainerId(e.target.value); setSaved(false) }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">
+            <select value={trainerId} onChange={e => { setTrainerId(e.target.value); setSaved(false) }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white" disabled={!sekolahId}>
               <option value="">-- Pilih Trainer --</option>
               {availableTrainers.map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
             </select>
+            {sekolahId && availableTrainers.length === 0 && (
+              <p className="text-[11px] text-rose-500 mt-1">Sekolah ini belum punya trainer yang ditugaskan.</p>
+            )}
           </div>
           {tanggal && sekolahId && trainerId && (
             <button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm active:scale-95">Simpan Absensi</button>
