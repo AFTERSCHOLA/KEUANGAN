@@ -1,3 +1,7 @@
+import { MONTHS, MONTH_KEYS, periodeKey } from './constants.js'
+
+export { MONTHS, MONTH_KEYS, periodeKey }
+
 export function formatRupiah(amount) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { read, write, upsert } from '../../lib/store.js'
-import { formatRupiah } from '../../lib/format.js'
+import { formatRupiah, waNormalize } from '../../lib/format.js'
 import { newTrainer } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
+import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => read('trainer'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newTrainer())
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmMsg, setConfirmMsg] = useState('')
+  const [pendingRemoveId, setPendingRemoveId] = useState(null)
 
   function refresh() {
     setTrainers(read('trainer'))
@@ -53,9 +57,17 @@ export default function TrainerList() {
   }
 
   function remove(id) {
-    if (!confirm('Hapus trainer ini? Data absensi dan pembayaran tetap tersimpan.')) return
-    const updated = trainers.filter(t => t.id !== id)
+    setConfirmMsg('Hapus trainer ini? Data absensi dan pembayaran tetap tersimpan.')
+    setPendingRemoveId(id)
+    setConfirmOpen(true)
+  }
+
+  function doRemove() {
+    if (!pendingRemoveId) return
+    const updated = trainers.filter(t => t.id !== pendingRemoveId)
     write('trainer', updated)
+    setPendingRemoveId(null)
+    setConfirmOpen(false)
     refresh()
   }
 
@@ -75,6 +87,7 @@ export default function TrainerList() {
         <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Trainer">
           <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
         </Modal>
+        <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
       </div>
     )
   }
@@ -135,6 +148,7 @@ export default function TrainerList() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && trainers.find(t => t.id === form.id) ? 'Edit Trainer' : 'Tambah Trainer'}>
         <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
       </Modal>
+      <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
     </div>
   )
 }
@@ -149,7 +163,7 @@ function TrainerForm({ form, setForm, save, onClose }) {
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">WhatsApp</label>
-        <input value={form.wa} onChange={e => setForm({ ...form, wa: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+        <input value={form.wa} onChange={e => setForm({ ...form, wa: e.target.value })} onBlur={e => setForm({ ...form, wa: waNormalize(e.target.value) })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Jadwal</label>

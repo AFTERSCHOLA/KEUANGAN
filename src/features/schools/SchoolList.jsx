@@ -3,11 +3,15 @@ import { read, write, upsert } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newSekolah } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
+import RupiahInput from '../../components/RupiahInput.jsx'
+import AlertDialog from '../../components/AlertDialog.jsx'
 
 export default function SchoolList() {
   const [sekolah, setSekolah] = useState(() => read('sekolah'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newSekolah())
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [alertMsg, setAlertMsg] = useState('')
 
   function refresh() {
     setSekolah(read('sekolah'))
@@ -71,7 +75,8 @@ export default function SchoolList() {
   function remove(id) {
     const siswa = read('siswa')
     if (siswa.some(s => s.sekolahId === id)) {
-      alert('Tidak dapat menghapus sekolah yang memiliki siswa. Pindahkan siswa terlebih dahulu.')
+      setAlertMsg('Tidak dapat menghapus sekolah yang memiliki siswa. Pindahkan siswa terlebih dahulu.')
+      setAlertOpen(true)
       return
     }
     const sch = sekolah.find(s => s.id === id)
@@ -106,6 +111,7 @@ export default function SchoolList() {
         <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && sekolah.find(s => s.id === form.id) ? 'Edit Sekolah' : 'Tambah Sekolah'}>
           <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
         </Modal>
+        <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
       </div>
     )
   }
@@ -175,6 +181,7 @@ export default function SchoolList() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && sekolah.find(s => s.id === form.id) ? 'Edit Sekolah' : 'Tambah Sekolah'}>
         <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
       </Modal>
+      <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
     </div>
   )
 }
@@ -200,7 +207,11 @@ function SchoolForm({ form, setForm, save, onClose }) {
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">SPP Bulanan</label>
-        <input type="number" min="0" value={form.spp} onChange={e => setForm({ ...form, spp: Number(e.target.value) })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+        <RupiahInput
+          value={form.spp}
+          onChange={val => setForm({ ...form, spp: val })}
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+        />
       </div>
       <div className="flex gap-3 pt-2">
         <button onClick={save} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>
