@@ -72,7 +72,7 @@ export default function App() {
           return (
             <div
               key={tab.id}
-              title="Segera hadir"
+              title=""
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-300/40 cursor-not-allowed ${sidebarCollapsed ? 'justify-center' : ''}`}
             >
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,7 +81,7 @@ export default function App() {
               {!sidebarCollapsed && (
                 <span className="flex items-center gap-2">
                   {tab.label}
-                  <span className="text-[9px] font-bold uppercase tracking-wide bg-blue-800 text-blue-300 px-1.5 py-0.5 rounded">Segera</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wide bg-blue-800 text-blue-300 px-1.5 py-0.5 rounded"></span>
                 </span>
               )}
             </div>
