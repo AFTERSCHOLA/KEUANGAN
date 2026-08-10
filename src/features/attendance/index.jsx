@@ -46,7 +46,7 @@ export default function AttendanceTab({ initialView = 'input' }) {
       {view === 'input' ? (
         <AttendanceForm editingRecord={editingRecord} onSaved={() => setEditingRecord(null)} />
       ) : (
-        <AttendanceHistory onLoadForCorrection={loadForCorrection} initialView={initialView} />
+        <AttendanceHistory onLoadForCorrection={loadForCorrection} />
       )}
     </div>
   )

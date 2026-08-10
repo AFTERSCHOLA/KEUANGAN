@@ -98,25 +98,6 @@ export default function App() {
     <nav className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
       {TABS.map(tab => {
         const isActive = activeTab === tab.id
-        if (tab.comingSoon) {
-          return (
-            <div
-              key={tab.id}
-              title="Segera hadir"
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-300/40 cursor-not-allowed ${sidebarCollapsed ? 'justify-center' : ''}`}
-            >
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={tab.icon} />
-              </svg>
-              {!sidebarCollapsed && (
-                <span className="flex items-center gap-2">
-                  {tab.label}
-                  <span className="text-[9px] font-bold uppercase tracking-wide bg-blue-800 text-blue-300 px-1.5 py-0.5 rounded">Segera</span>
-                </span>
-              )}
-            </div>
-          )
-        }
         return (
           <button
             key={tab.id}
