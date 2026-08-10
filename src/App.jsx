@@ -10,7 +10,7 @@ import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
-import { usePeriod, getUiState, setUiState } from './lib/store'
+import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'M4 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z' },
@@ -36,6 +36,7 @@ function buildYearOptions(selectedYear) {
 
 export default function App() {
   const period = usePeriod()
+  const [settings, setSettings] = useState(() => getSettings())
 
   const [activeTab, setActiveTabState] = useState(() => getUiState().activeTab || 'overview')
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => !!getUiState().sidebarCollapsed)
@@ -137,7 +138,7 @@ export default function App() {
       {/* Desktop sidebar */}
       <aside className={`hidden md:flex flex-col bg-blue-900 border-r-4 border-yellow-400 shrink-0 transition-all ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
         <div className={`flex items-center gap-2 px-4 py-4 border-b border-blue-800 ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-          {!sidebarCollapsed && <h1 className="text-xl font-bold tracking-tight text-yellow-300">Afterschola</h1>}
+          {!sidebarCollapsed && <h1 className="text-xl font-bold tracking-tight text-yellow-300">{settings.title || 'Afterschola'}</h1>}
           <button
             onClick={toggleSidebarCollapsed}
             className="text-blue-300 hover:text-yellow-300 p-1"
@@ -172,7 +173,7 @@ export default function App() {
             title={sidebarCollapsed ? 'Pengaturan' : undefined}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             {!sidebarCollapsed && 'Pengaturan'}
@@ -186,7 +187,7 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setMobileDrawerOpen(false)} />
           <aside className="relative w-64 bg-blue-900 border-r-4 border-yellow-400 flex flex-col animate-fadeIn">
             <div className="flex items-center justify-between px-4 py-4 border-b border-blue-800">
-              <h1 className="text-xl font-bold tracking-tight text-yellow-300">Afterschola</h1>
+              <h1 className="text-xl font-bold tracking-tight text-yellow-300">{settings.title || 'Afterschola'}</h1>
               <button onClick={() => setMobileDrawerOpen(false)} className="text-blue-300 hover:text-yellow-300 p-1">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -212,7 +213,7 @@ export default function App() {
                 className="mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white"
               >
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Pengaturan
@@ -231,7 +232,7 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-lg font-bold tracking-tight text-yellow-300">Afterschola</h1>
+            <h1 className="text-lg font-bold tracking-tight text-yellow-300">{settings.title || 'Afterschola'}</h1>
             <div className="w-8" />
           </div>
         </header>
@@ -252,7 +253,7 @@ export default function App() {
         <BackupRestorePanel onRestored={handleRestored} />
       </Modal>
 
-      <SettingsModal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
+      <SettingsModal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} onSaved={() => setSettings(getSettings())} />
     </div>
   )
 }

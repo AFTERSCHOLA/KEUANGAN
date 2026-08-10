@@ -6,13 +6,14 @@ import { getSettings, setSettings } from '../lib/store'
 const inputClass = 'w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600'
 const labelClass = 'text-xs font-bold text-slate-400 uppercase'
 
-export default function SettingsModal({ open, onClose }) {
+export default function SettingsModal({ open, onClose, onSaved }) {
   const initial = getSettings()
   const [logoUrl, setLogoUrl] = useState(initial.logoUrl || '')
   const [title, setTitle] = useState(initial.title || '')
 
   function handleSave() {
     setSettings({ logoUrl: logoUrl.trim(), title: title.trim() })
+    onSaved?.()
     onClose()
   }
 
