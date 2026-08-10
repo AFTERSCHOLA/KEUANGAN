@@ -5,6 +5,7 @@ import { newHonorPayment } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+import RupiahInput from '../../components/RupiahInput.jsx'
 
 export default function PaymentTable() {
   const period = usePeriod()
@@ -186,7 +187,11 @@ export default function PaymentTable() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={`Bayar Honor — ${selectedTrainer?.nama || ''}`}>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Nominal Pembayaran</label>
-          <input type="text" inputMode="numeric" value={payForm.nominal === '' ? '' : new Intl.NumberFormat('id-ID').format(payForm.nominal)} onChange={e => setPayForm({ ...payForm, nominal: e.target.value.replace(/\D/g, '') ? Number(e.target.value.replace(/\D/g, '')) : '' })} onFocus={e => { if (payForm.nominal !== '') e.target.value = payForm.nominal }} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+          <RupiahInput
+            value={payForm.nominal}
+            onChange={val => setPayForm({ ...payForm, nominal: val })}
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          />
         </div>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Tanggal Bayar</label>
