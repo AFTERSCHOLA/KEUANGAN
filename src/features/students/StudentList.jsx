@@ -1,19 +1,26 @@
 import { useState } from 'react'
 import { read, write, upsert, usePeriod } from '../../lib/store.js'
-import { formatRupiah } from '../../lib/format.js'
+import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa } from '../../lib/constants.js'
+import { attendanceStats } from '../../lib/finance.js'
 import { elapsedPeriods, isTunggakan, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
+import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 export default function StudentList() {
   const [siswa, setSiswa] = useState(() => read('siswa'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [onlyTunggakan, setOnlyTunggakan] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmMsg, setConfirmMsg] = useState('')
+  const [pendingRemoveId, setPendingRemoveId] = useState(null)
 
   const sekolah = read('sekolah')
+  const absensi = read('absensi')
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
+  const stats = attendanceStats(absensi, period.periodeKey())
 
   function unpaidMonthsOf(s) {
     return elapsed.filter(({ periode }) => !s.sppLunas?.[periode]).map(e => e.monthName)
@@ -43,9 +50,17 @@ export default function StudentList() {
   }
 
   function remove(id) {
-    if (!confirm('Hapus siswa ini?')) return
-    const updated = siswa.filter(s => s.id !== id)
+    setConfirmMsg('Hapus siswa ini?')
+    setPendingRemoveId(id)
+    setConfirmOpen(true)
+  }
+
+  function doRemove() {
+    if (!pendingRemoveId) return
+    const updated = siswa.filter(s => s.id !== pendingRemoveId)
     write('siswa', updated)
+    setPendingRemoveId(null)
+    setConfirmOpen(false)
     refresh()
   }
 
@@ -63,8 +78,9 @@ export default function StudentList() {
           <p className="text-slate-400 text-sm">Belum ada data siswa. Klik "Tambah Siswa Baru" untuk memulai.</p>
         </div>
         <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Siswa">
-          <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} />
+          <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} period={period} />
         </Modal>
+        <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
       </div>
     )
   }
@@ -116,7 +132,13 @@ export default function StudentList() {
               {visibleSiswa.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50/50">
                   <td className="py-4 px-6 flex items-center gap-3">
-                    <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                    {s.foto ? (
+                      <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-200 border flex items-center justify-center text-slate-400 text-xs font-bold">
+                        {s.nama?.charAt(0).toUpperCase() || '?'}
+                      </div>
+                    )}
                     <div>
                       <p className="font-bold text-slate-800">{s.nama}</p>
                       <p className="text-xs text-slate-400">{s.kelas}</p>
@@ -126,8 +148,8 @@ export default function StudentList() {
                   <td className="py-4 px-6">
                     <a href={`https://wa.me/${s.wa}`} target="_blank" className="text-blue-600 font-semibold hover:underline">{s.wa}</a>
                   </td>
-                  <td className="py-4 px-6 text-center font-extrabold text-blue-700">0 Sesi</td>
-                  <td className="py-4 px-6 text-center font-bold text-slate-500">0 Sesi</td>
+                  <td className="py-4 px-6 text-center font-extrabold text-blue-700">{stats.studentPeriodCount[s.id] ? `${stats.studentPeriodCount[s.id]} Sesi` : '—'}</td>
+                  <td className="py-4 px-6 text-center font-bold text-slate-500">{stats.studentTotalCount[s.id] ? `${stats.studentTotalCount[s.id]} Sesi` : '—'}</td>
                   <td className="py-4 px-6 text-center">
                     <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">Belum Bayar</span>
                   </td>
@@ -165,13 +187,16 @@ export default function StudentList() {
       </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form && siswa.find(s => s.id === form.id) ? 'Edit Siswa' : 'Tambah Siswa'}>
-        {form && <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} />}
+        {form && <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} period={period} />}
       </Modal>
+      <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
     </div>
   )
 }
 
-function SiswaForm({ form, setForm, save, onClose, sekolah }) {
+function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
+  const { selectedYear, selectedMonth } = period || {}
+  const monthNumList = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
   return (
     <>
       <div>
@@ -184,7 +209,7 @@ function SiswaForm({ form, setForm, save, onClose, sekolah }) {
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">WhatsApp</label>
-        <input value={form.wa} onChange={e => setForm({ ...form, wa: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+        <input value={form.wa} onChange={e => setForm({ ...form, wa: e.target.value })} onBlur={() => setForm({ ...form, wa: waNormalize(form.wa) })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Sekolah</label>
@@ -199,6 +224,32 @@ function SiswaForm({ form, setForm, save, onClose, sekolah }) {
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
         <input value={form.foto} onChange={e => setForm({ ...form, foto: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">SPP Lunas (Bulan Tahun Ajaran)</label>
+        <div className="grid grid-cols-4 gap-2">
+          {monthNumList.map((m, i) => {
+            const key = periodeKey(m, selectedYear)
+            const checked = !!form.sppLunas?.[key]
+            return (
+              <label key={key} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    const current = form.sppLunas || {}
+                    const next = checked
+                      ? Object.fromEntries(Object.entries(current).filter(([k]) => k !== key))
+                      : { ...current, [key]: true }
+                    setForm({ ...form, sppLunas: next })
+                  }}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                />
+                <span className="text-xs text-slate-600">{MONTHS[i]}</span>
+              </label>
+            )
+          })}
+        </div>
       </div>
       <div className="flex gap-3 pt-2">
         <button onClick={save} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>

@@ -1,16 +1,35 @@
-import { useState } from 'react'
-import { read, upsert, write } from '../../lib/store.js'
-import { formatRupiah } from '../../lib/format.js'
+import { useState, useMemo, useEffect } from 'react'
+import { read, upsert } from '../../lib/store.js'
+import { newAbsensi } from '../../lib/constants.js'
+import AlertDialog from '../../components/AlertDialog.jsx'
 
-export default function AttendanceForm() {
-  const [sekolah] = useState(() => read('sekolah'))
-  const [trainers] = useState(() => read('trainer'))
-  const [siswa] = useState(() => read('siswa'))
+export default function AttendanceForm({ editingRecord, onSaved }) {
+  const [dataRev, setDataRev] = useState(0)
   const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10))
   const [sekolahId, setSekolahId] = useState('')
   const [trainerId, setTrainerId] = useState('')
+  const [trainerStatus, setTrainerStatus] = useState('Hadir')
   const [siswaStatus, setSiswaStatus] = useState({})
   const [saved, setSaved] = useState(false)
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [alertMsg, setAlertMsg] = useState('')
+
+  const sekolah = useMemo(() => read('sekolah'), [dataRev])
+  const trainers = useMemo(() => read('trainer'), [dataRev])
+  const siswa = useMemo(() => read('siswa'), [dataRev])
+
+  useEffect(() => {
+    if (editingRecord) {
+      setTanggal(editingRecord.tanggal || '')
+      setSekolahId(editingRecord.sekolahId || '')
+      setTrainerId(editingRecord.trainerId || '')
+      setTrainerStatus(editingRecord.trainerStatus || 'Hadir')
+      const map = {}
+      ;(editingRecord.siswaList || []).forEach(s => { map[s.siswaId] = s.status })
+      setSiswaStatus(map)
+      setDataRev(prev => prev + 1)
+    }
+  }, [editingRecord])
 
   const filteredSiswa = siswa.filter(s => s.sekolahId === sekolahId)
   const selectedSekolah = sekolah.find(s => s.id === sekolahId)
@@ -22,36 +41,27 @@ export default function AttendanceForm() {
 
   function submit() {
     if (!tanggal || !sekolahId || !trainerId) {
-      alert('Lengkapi tanggal, sekolah, dan trainer.')
+      setAlertMsg('Lengkapi tanggal, sekolah, dan trainer.')
+      setAlertOpen(true)
       return
     }
     const trainer = trainers.find(t => t.id === trainerId)
-    const id = `${tanggal}_${sekolahId}_${trainerId}`
-    const absensi = read('absensi')
-    const existing = absensi.find(a => a.id === id)
-    const record = {
-      id,
+    const record = newAbsensi({
       tanggal,
-      periode: tanggal.slice(0, 7),
       sekolahId,
       trainerId,
       trainerNama: trainer ? trainer.nama : '',
-      trainerStatus: 'Hadir',
+      trainerStatus,
       siswaList: filteredSiswa.map(s => ({
         siswaId: s.id,
         nama: s.nama,
         status: siswaStatus[s.id] === 'Hadir' ? 'Hadir' : 'Tidak Hadir',
       })),
-    }
-    if (existing) {
-      const idx = absensi.findIndex(a => a.id === id)
-      absensi[idx] = record
-      write('absensi', absensi)
-    } else {
-      upsert('absensi', record)
-    }
+    })
+    upsert('absensi', record)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+    if (onSaved) onSaved()
   }
 
   // M4.4: empty-state polish — tanpa sekolah, form ini tidak bisa
@@ -82,6 +92,7 @@ export default function AttendanceForm() {
         </div>
         {saved && <span className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1.5 rounded-full font-bold">Tersimpan</span>}
       </div>
+      <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
@@ -119,7 +130,19 @@ export default function AttendanceForm() {
             <p className="text-center text-slate-400 py-10">Belum ada siswa di sekolah ini.</p>
           ) : (
             <div className="space-y-2">
-              <h3 className="text-sm font-bold text-slate-700 mb-3">Daftar Siswa — tap untuk toggle kehadiran</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs font-bold text-slate-400 uppercase">Status Trainer:</span>
+                {['Hadir', 'Izin', 'Alpa'].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => { setTrainerStatus(s); setSaved(false) }}
+                    className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${trainerStatus === s ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <h3 className="text-sm font-bold text-slate-700">Daftar Siswa — tap untuk toggle kehadiran</h3>
               {filteredSiswa.map(s => (
                 <div key={s.id} onClick={() => toggleSiswa(s.id)} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
                   siswaStatus[s.id] === 'Hadir' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100'

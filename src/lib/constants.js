@@ -51,6 +51,23 @@ export function newSiswa(sekolahId, sekolahNama) {
   return { id: generateId('sw'), nama: '', wa: '', kelas: '', sekolahId, sekolahNama, foto: '', sppLunas: {} }
 }
 
+export function newHonorPayment({ trainerId, periode, nominal, tanggalBayar }) {
+  return { id: generateId('hp'), trainerId, periode, nominal, tanggalBayar }
+}
+
+export function newAbsensi({ tanggal, sekolahId, trainerId, trainerNama, trainerStatus = 'Hadir', siswaList = [] }) {
+  return {
+    id: `${tanggal}_${sekolahId}_${trainerId}`,
+    tanggal,
+    periode: tanggal.slice(0, 7),
+    sekolahId,
+    trainerId,
+    trainerNama,
+    trainerStatus,
+    siswaList,
+  }
+}
+
 // ============================================
 // ACADEMIC YEAR ENGINE (M1.1)
 // ============================================
