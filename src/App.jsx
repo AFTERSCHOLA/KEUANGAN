@@ -34,9 +34,36 @@ function buildYearOptions(selectedYear) {
   return Array.from(years).sort((a, b) => a - b)
 }
 
+function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt="Logo"
+        className={`${size} rounded-full object-cover border-2 border-yellow-400 bg-white shadow-md shrink-0`}
+        onError={e => { e.currentTarget.style.display = 'none' }}
+      />
+    )
+  }
+  return (
+    <div className={`${size} rounded-full border-2 border-yellow-400 bg-blue-950 flex items-center justify-center text-white font-extrabold text-base shadow-inner shrink-0`}>
+      <svg className={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6" />
+      </svg>
+    </div>
+  )
+}
+
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
+
+  // <title> index.html mengikuti judul dari Settings (M-R6.4).
+  useEffect(() => {
+    document.title = settings.title || 'Afterschola'
+  }, [settings.title])
 
   const [activeTab, setActiveTabState] = useState(() => getUiState().activeTab || 'overview')
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => !!getUiState().sidebarCollapsed)
@@ -138,7 +165,13 @@ export default function App() {
       {/* Desktop sidebar */}
       <aside className={`hidden md:flex flex-col bg-blue-900 border-r-4 border-yellow-400 shrink-0 transition-all ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
         <div className={`flex items-center gap-2 px-4 py-4 border-b border-blue-800 ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-          {!sidebarCollapsed && <h1 className="text-xl font-bold tracking-tight text-yellow-300">{settings.title || 'Afterschola'}</h1>}
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-2 min-w-0">
+              <SidebarLogo logoUrl={settings.logoUrl} size="w-10 h-10" iconSize="w-6 h-6" />
+              <h1 className="text-xl font-bold tracking-tight text-yellow-300 truncate">{settings.title || 'Afterschola'}</h1>
+            </div>
+          )}
+          {sidebarCollapsed && <SidebarLogo logoUrl={settings.logoUrl} size="w-10 h-10" iconSize="w-6 h-6" />}
           <button
             onClick={toggleSidebarCollapsed}
             className="text-blue-300 hover:text-yellow-300 p-1"
@@ -187,7 +220,10 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setMobileDrawerOpen(false)} />
           <aside className="relative w-64 bg-blue-900 border-r-4 border-yellow-400 flex flex-col animate-fadeIn">
             <div className="flex items-center justify-between px-4 py-4 border-b border-blue-800">
-              <h1 className="text-xl font-bold tracking-tight text-yellow-300">{settings.title || 'Afterschola'}</h1>
+              <div className="flex items-center gap-2 min-w-0">
+                <SidebarLogo logoUrl={settings.logoUrl} size="w-10 h-10" iconSize="w-6 h-6" />
+                <h1 className="text-xl font-bold tracking-tight text-yellow-300 truncate">{settings.title || 'Afterschola'}</h1>
+              </div>
               <button onClick={() => setMobileDrawerOpen(false)} className="text-blue-300 hover:text-yellow-300 p-1">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -232,7 +268,7 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-lg font-bold tracking-tight text-yellow-300">{settings.title || 'Afterschola'}</h1>
+            <h1 className="text-lg font-bold tracking-tight text-yellow-300 truncate">{settings.title || 'Afterschola'}</h1>
             <div className="w-8" />
           </div>
         </header>
