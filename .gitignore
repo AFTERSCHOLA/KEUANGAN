@@ -1,8 +1,0 @@
-node_modules
-dist
-.env
-tests
-test-results
-.playwright-mcp
-.commandcode
-.kilo
