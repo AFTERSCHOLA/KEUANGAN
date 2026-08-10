@@ -33,11 +33,6 @@ export default function SchoolList() {
   }
 
   function save() {
-    if (!form.nama.trim()) {
-      setAlertMsg('Nama sekolah tidak boleh kosong.')
-      setAlertOpen(true)
-      return
-    }
     const prev = sekolah.find(s => s.id === form.id)
     const oldTrainerIds = prev ? prev.trainerIds : []
     upsert('sekolah', form)
