@@ -40,6 +40,26 @@ export function upsert(key, record) {
 }
 
 // ============================================
+// SETTINGS (settings: { logoUrl, title })
+// ============================================
+// settings is a single object (not an array) under its own v4 key.
+
+export function getSettings() {
+  try {
+    const json = localStorage.getItem(getKeys().settings)
+    const parsed = json ? JSON.parse(json) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function setSettings(partial) {
+  const current = getSettings()
+  localStorage.setItem(getKeys().settings, JSON.stringify({ ...current, ...partial }))
+}
+
+// ============================================
 // PERSISTED UI STATE (M4.3, row #15)
 // ============================================
 // Separate key from entity data (D7: only afterschola_v4_* keys) — this

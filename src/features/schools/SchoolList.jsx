@@ -5,6 +5,7 @@ import { newSekolah } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
+import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 export default function SchoolList() {
   const [sekolah, setSekolah] = useState(() => read('sekolah'))
@@ -12,6 +13,10 @@ export default function SchoolList() {
   const [form, setForm] = useState(newSekolah())
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertMsg, setAlertMsg] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState(null)
+  const [pendingSiswaCount, setPendingSiswaCount] = useState(0)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   function refresh() {
     setSekolah(read('sekolah'))
@@ -75,10 +80,37 @@ export default function SchoolList() {
   function remove(id) {
     const siswa = read('siswa')
     if (siswa.some(s => s.sekolahId === id)) {
-      setAlertMsg('Tidak dapat menghapus sekolah yang memiliki siswa. Pindahkan siswa terlebih dahulu.')
-      setAlertOpen(true)
+      setPendingDeleteId(id)
+      setPendingSiswaCount(siswa.filter(s => s.sekolahId === id).length)
+      setConfirmOpen(true)
       return
     }
+    doDelete(id)
+  }
+
+  function openReassign() {
+    setConfirmOpen(false)
+    setPickerOpen(true)
+  }
+
+  function reassignTo(targetId) {
+    const id = pendingDeleteId
+    const siswaList = read('siswa')
+    const target = sekolah.find(s => s.id === targetId)
+    let touched = false
+    siswaList.forEach(s => {
+      if (s.sekolahId === id) {
+        s.sekolahId = targetId
+        s.sekolahNama = target ? target.nama : s.sekolahNama
+        touched = true
+      }
+    })
+    if (touched) write('siswa', siswaList) // single bulk write (rule 1)
+    setPickerOpen(false)
+    doDelete(id)
+  }
+
+  function doDelete(id) {
     const sch = sekolah.find(s => s.id === id)
     if (sch) {
       const trainerList = read('trainer')
@@ -92,6 +124,8 @@ export default function SchoolList() {
     }
     const updated = sekolah.filter(s => s.id !== id)
     write('sekolah', updated)
+    setPendingDeleteId(null)
+    setPendingSiswaCount(0)
     refresh()
   }
 
@@ -112,6 +146,21 @@ export default function SchoolList() {
           <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
         </Modal>
         <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Hapus Sekolah"
+          body={`Sekolah ini memiliki ${pendingSiswaCount} siswa. Pilih "Reassign ke sekolah lain" untuk memindahkan siswa sebelum menghapus.`}
+          confirmLabel="Reassign ke sekolah lain"
+          onCancel={() => { setConfirmOpen(false); setPendingDeleteId(null) }}
+          onConfirm={openReassign}
+        />
+        <ReassignPicker
+          open={pickerOpen}
+          sekolah={sekolah}
+          excludeId={pendingDeleteId}
+          onClose={() => setPickerOpen(false)}
+          onPick={reassignTo}
+        />
       </div>
     )
   }
@@ -182,6 +231,21 @@ export default function SchoolList() {
         <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
       </Modal>
       <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Hapus Sekolah"
+        body={`Sekolah ini memiliki ${pendingSiswaCount} siswa. Pilih "Reassign ke sekolah lain" untuk memindahkan siswa sebelum menghapus.`}
+        confirmLabel="Reassign ke sekolah lain"
+        onCancel={() => { setConfirmOpen(false); setPendingDeleteId(null) }}
+        onConfirm={openReassign}
+      />
+      <ReassignPicker
+        open={pickerOpen}
+        sekolah={sekolah}
+        excludeId={pendingDeleteId}
+        onClose={() => setPickerOpen(false)}
+        onPick={reassignTo}
+      />
     </div>
   )
 }
@@ -218,5 +282,30 @@ function SchoolForm({ form, setForm, save, onClose }) {
         <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
       </div>
     </>
+  )
+}
+
+function ReassignPicker({ open, sekolah, excludeId, onClose, onPick }) {
+  const targets = sekolah.filter(s => s.id !== excludeId)
+  return (
+    <Modal open={open} onClose={onClose} title="Pindahkan Siswa">
+      {targets.length === 0 ? (
+        <p className="text-sm text-slate-500">Tidak ada sekolah lain untuk dipindahkan. Tambahkan sekolah tujuan terlebih dahulu.</p>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-slate-500">Pilih sekolah tujuan untuk memindahkan siswa dari sekolah ini:</p>
+          {targets.map(t => (
+            <button
+              key={t.id}
+              onClick={() => onPick(t.id)}
+              className="w-full text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-xl px-4 py-3 transition"
+            >
+              <span className="text-sm font-bold text-slate-800">{t.nama}</span>
+              <span className="block text-xs text-slate-400">{read('siswa').filter(s => s.sekolahId === t.id).length} siswa</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </Modal>
   )
 }

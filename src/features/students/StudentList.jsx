@@ -132,7 +132,13 @@ export default function StudentList() {
               {visibleSiswa.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50/50">
                   <td className="py-4 px-6 flex items-center gap-3">
-                    <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                    {s.foto ? (
+                      <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-200 border flex items-center justify-center text-slate-400 text-xs font-bold">
+                        {s.nama?.charAt(0).toUpperCase() || '?'}
+                      </div>
+                    )}
                     <div>
                       <p className="font-bold text-slate-800">{s.nama}</p>
                       <p className="text-xs text-slate-400">{s.kelas}</p>

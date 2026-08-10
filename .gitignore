@@ -4,3 +4,5 @@ dist
 tests
 test-results
 .playwright-mcp
+.commandcode
+.kilo

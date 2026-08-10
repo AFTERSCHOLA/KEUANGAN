@@ -8,6 +8,7 @@ import FinanceReport from './features/reports/FinanceReport.jsx'
 import OverviewCards from './features/overview/OverviewCards.jsx'
 import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
+import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
 import { usePeriod, getUiState, setUiState } from './lib/store'
 
@@ -40,6 +41,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => !!getUiState().sidebarCollapsed)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [backupModalOpen, setBackupModalOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
 
   function setActiveTab(tabId) {
     setActiveTabState(tabId)
@@ -164,6 +166,17 @@ export default function App() {
             </svg>
             {!sidebarCollapsed && 'Backup & Restore'}
           </button>
+          <button
+            onClick={() => setSettingsModalOpen(true)}
+            className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
+            title={sidebarCollapsed ? 'Pengaturan' : undefined}
+          >
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            {!sidebarCollapsed && 'Pengaturan'}
+          </button>
         </div>
       </aside>
 
@@ -193,6 +206,16 @@ export default function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
                 </svg>
                 Backup & Restore
+              </button>
+              <button
+                onClick={() => { setSettingsModalOpen(true); setMobileDrawerOpen(false) }}
+                className="mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white"
+              >
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Pengaturan
               </button>
             </div>
           </aside>
@@ -228,6 +251,8 @@ export default function App() {
       <Modal open={backupModalOpen} onClose={() => setBackupModalOpen(false)} title="Backup & Restore Data">
         <BackupRestorePanel onRestored={handleRestored} />
       </Modal>
+
+      <SettingsModal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
     </div>
   )
 }
