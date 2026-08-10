@@ -6,3 +6,5 @@ test-results
 .playwright-mcp
 .commandcode
 .kilo
+.gitignore
+scratch
