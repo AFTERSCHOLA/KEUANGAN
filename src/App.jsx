@@ -11,6 +11,8 @@ import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
 import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
+import RolePicker from './features/auth/RolePicker.jsx'
+import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'M4 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z' },
@@ -21,6 +23,20 @@ const TABS = [
   { id: 'riwayat', label: 'Riwayat Absensi', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'pembayaran', label: 'Data Pembayaran', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'keuangan', label: 'Data Keuangan', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+]
+
+// Trainer melihat 4 tab saja (M5.1.2): Absensi, Riwayat, Siswa read-only,
+// dan Rekap Saya sebagai landing view. Objek tab di-reuse dari TABS.
+const REKAP_TAB = {
+  id: 'rekap',
+  label: 'Rekap Saya',
+  icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+}
+const TRAINER_TABS = [
+  TABS.find(t => t.id === 'absensi'),
+  TABS.find(t => t.id === 'riwayat'),
+  TABS.find(t => t.id === 'siswa'),
+  REKAP_TAB,
 ]
 
 // Rentang tahun ajaran yang ditawarkan di dropdown. Selalu sertakan
@@ -59,6 +75,8 @@ function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
+  const [role, setRole] = useState(() => getUiState().role || null)
+  const [trainerId, setTrainerId] = useState(() => getUiState().trainerId || null)
 
   // <title> index.html mengikuti judul dari Settings (M-R6.4).
   useEffect(() => {
@@ -85,6 +103,23 @@ export default function App() {
     })
   }
 
+  function handleRoleSelected({ role: selectedRole, trainerId: selectedTrainerId }) {
+    setRole(selectedRole)
+    setTrainerId(selectedTrainerId || null)
+    setUiState({ role: selectedRole, trainerId: selectedTrainerId || null })
+    setActiveTab('overview')
+  }
+
+  // M5.1.2: trainer yang mendarat di tab admin-only (mis. direct load dengan
+  // activeTab tersimpan 'keuangan') di-redirect ke dashboard trainer (rekap).
+  useEffect(() => {
+    if (role !== 'trainer') return
+    const allowed = new Set(TRAINER_TABS.map(t => t.id))
+    if (!allowed.has(activeTab)) {
+      setActiveTab('rekap')
+    }
+  }, [role, activeTab])
+
   const yearOptions = buildYearOptions(period.selectedYear)
 
   function handleRestored() {
@@ -96,7 +131,7 @@ export default function App() {
 
   const NavList = ({ onNavigate }) => (
     <nav className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
-      {TABS.map(tab => {
+      {(role === 'trainer' ? TRAINER_TABS : TABS).map(tab => {
         const isActive = activeTab === tab.id
         if (tab.comingSoon) {
           return (
@@ -168,6 +203,14 @@ export default function App() {
     </div>
   )
 
+  if (!role) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
+        <RolePicker onSelect={handleRoleSelected} />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
       {/* Desktop sidebar */}
@@ -218,6 +261,16 @@ export default function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             {!sidebarCollapsed && 'Pengaturan'}
+          </button>
+          <button
+            onClick={() => { setRole(null); setTrainerId(null); setUiState({ role: null, trainerId: null }); setActiveTab('overview') }}
+            className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
+            title={sidebarCollapsed ? 'Ganti Peran' : undefined}
+          >
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+            </svg>
+            {!sidebarCollapsed && 'Ganti Peran'}
           </button>
         </div>
       </aside>
@@ -282,9 +335,10 @@ export default function App() {
         </header>
 
         <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
+          {role === 'trainer' && activeTab === 'rekap' && <TrainerDashboard trainerId={trainerId} />}
           {activeTab === 'overview' && <OverviewCards />}
           {activeTab === 'sekolah' && <SchoolList />}
-          {activeTab === 'siswa' && <StudentList />}
+          {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'absensi' && <AttendanceTab />}
           {activeTab === 'riwayat' && <AttendanceTab initialView="riwayat" />}
