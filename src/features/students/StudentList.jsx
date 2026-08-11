@@ -7,7 +7,7 @@ import { elapsedPeriods, isTunggakan, buildTagihanWaLink } from '../../lib/tungg
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
-export default function StudentList() {
+export default function StudentList({ readOnly = false }) {
   const [siswa, setSiswa] = useState(() => read('siswa'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(null)
@@ -72,15 +72,19 @@ export default function StudentList() {
             <h2 className="text-xl font-bold text-slate-800">Manajemen Siswa</h2>
             <p className="text-xs text-slate-500">Profil, Kehadiran, Status SPP Bulanan</p>
           </div>
-          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>
+          {!readOnly && <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>}
         </div>
         <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
           <p className="text-slate-400 text-sm">Belum ada data siswa. Klik "Tambah Siswa Baru" untuk memulai.</p>
         </div>
-        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Siswa">
-          <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} period={period} />
-        </Modal>
-        <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
+        {!readOnly && (
+          <>
+            <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Siswa">
+              <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} period={period} />
+            </Modal>
+            <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
+          </>
+        )}
       </div>
     )
   }
@@ -92,7 +96,7 @@ export default function StudentList() {
           <h2 className="text-xl font-bold text-slate-800">Manajemen Siswa</h2>
           <p className="text-xs text-slate-500">Profil, Kehadiran, Status SPP Bulanan</p>
         </div>
-        <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>
+        {!readOnly && <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -118,13 +122,13 @@ export default function StudentList() {
                 <th className="py-4 px-6 text-center">Kehadiran (Total)</th>
                 <th className="py-4 px-6 text-center">SPP Bulan Ini</th>
                 {onlyTunggakan && <th className="py-4 px-6">Bulan Menunggak</th>}
-                <th className="py-4 px-6 text-center">Aksi</th>
+                {!readOnly && <th className="py-4 px-6 text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y text-sm">
               {visibleSiswa.length === 0 && (
                 <tr>
-                  <td colSpan={onlyTunggakan ? 8 : 7} className="py-12 text-center text-slate-400">
+                  <td colSpan={onlyTunggakan ? (readOnly ? 7 : 8) : (readOnly ? 6 : 7)} className="py-12 text-center text-slate-400">
                     Tidak ada siswa yang menunggak.
                   </td>
                 </tr>
@@ -158,27 +162,29 @@ export default function StudentList() {
                       {unpaidMonthsOf(s).join(', ')}
                     </td>
                   )}
-                  <td className="py-4 px-6 text-center">
-                    <div className="flex justify-center gap-2">
-                      {isTunggakan(s, elapsed) && (
-                        <a
-                          href={buildTagihanWaLink(s, sekolah.find(x => x.id === s.sekolahId)?.spp || 0, unpaidMonthsOf(s))}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-slate-500 hover:text-emerald-600"
-                          title="Kirim tagihan via WhatsApp"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeWidth="2"/></svg>
-                        </a>
-                      )}
-                      <button onClick={() => openEdit(s)} className="text-slate-500 hover:text-blue-600">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg>
-                      </button>
-                      <button onClick={() => remove(s.id)} className="text-slate-500 hover:text-rose-600">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21" strokeWidth="2"/></svg>
-                      </button>
-                    </div>
-                  </td>
+                  {!readOnly && (
+                    <td className="py-4 px-6 text-center">
+                      <div className="flex justify-center gap-2">
+                        {isTunggakan(s, elapsed) && (
+                          <a
+                            href={buildTagihanWaLink(s, sekolah.find(x => x.id === s.sekolahId)?.spp || 0, unpaidMonthsOf(s))}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-slate-500 hover:text-emerald-600"
+                            title="Kirim tagihan via WhatsApp"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeWidth="2"/></svg>
+                          </a>
+                        )}
+                        <button onClick={() => openEdit(s)} className="text-slate-500 hover:text-blue-600">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg>
+                        </button>
+                        <button onClick={() => remove(s.id)} className="text-slate-500 hover:text-rose-600">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21" strokeWidth="2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -186,10 +192,14 @@ export default function StudentList() {
         </div>
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form && siswa.find(s => s.id === form.id) ? 'Edit Siswa' : 'Tambah Siswa'}>
-        {form && <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} period={period} />}
-      </Modal>
-      <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
+      {!readOnly && (
+        <>
+          <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form && siswa.find(s => s.id === form.id) ? 'Edit Siswa' : 'Tambah Siswa'}>
+            {form && <SiswaForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} sekolah={sekolah} period={period} />}
+          </Modal>
+          <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
+        </>
+      )}
     </div>
   )
 }
