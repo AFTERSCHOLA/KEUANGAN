@@ -11,6 +11,7 @@ import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
 import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
+import RolePicker from './features/auth/RolePicker.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'M4 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z' },
@@ -59,6 +60,7 @@ function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
+  const [role, setRole] = useState(() => getUiState().role || null)
 
   // <title> index.html mengikuti judul dari Settings (M-R6.4).
   useEffect(() => {
@@ -83,6 +85,12 @@ export default function App() {
       setUiState({ sidebarCollapsed: next })
       return next
     })
+  }
+
+  function handleRoleSelected({ role: selectedRole, trainerId }) {
+    setRole(selectedRole)
+    setUiState({ role: selectedRole, trainerId })
+    setActiveTab('overview')
   }
 
   const yearOptions = buildYearOptions(period.selectedYear)
@@ -167,6 +175,14 @@ export default function App() {
       </select>
     </div>
   )
+
+  if (!role) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
+        <RolePicker onSelect={handleRoleSelected} />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
