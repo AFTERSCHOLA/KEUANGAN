@@ -55,9 +55,23 @@ export function newHonorPayment({ trainerId, periode, nominal, tanggalBayar }) {
   return { id: generateId('hp'), trainerId, periode, nominal, tanggalBayar }
 }
 
-export function newAbsensi({ tanggal, sekolahId, trainerId, trainerNama, trainerStatus = 'Hadir', siswaList = [] }) {
+export function newAbsensi({
+  id,
+  tanggal,
+  sekolahId,
+  trainerId,
+  trainerNama,
+  trainerStatus = 'Hadir',
+  siswaList = [],
+  asistenId = null,
+  asistenNama = null,
+  dokumentasi = [],
+  catatan = '',
+  statusVerifikasi = null,
+  sesiKe = 1,
+}) {
   return {
-    id: `${tanggal}_${sekolahId}_${trainerId}`,
+    id: id || generateId('abs'),
     tanggal,
     periode: tanggal.slice(0, 7),
     sekolahId,
@@ -65,6 +79,12 @@ export function newAbsensi({ tanggal, sekolahId, trainerId, trainerNama, trainer
     trainerNama,
     trainerStatus,
     siswaList,
+    asistenId,
+    asistenNama,
+    dokumentasi,
+    catatan,
+    statusVerifikasi,
+    sesiKe,
   }
 }
 

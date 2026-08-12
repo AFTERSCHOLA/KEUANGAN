@@ -47,6 +47,7 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
     }
     const trainer = trainers.find(t => t.id === trainerId)
     const record = newAbsensi({
+      id: editingRecord ? editingRecord.id : undefined,
       tanggal,
       sekolahId,
       trainerId,
