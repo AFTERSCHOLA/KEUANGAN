@@ -58,7 +58,7 @@ Superadmin (Pusat)
 | **Data Trainer** | ✅ Full everywhere | 🟡 Propose only | 🔍 Read own | Write requires pusat role; read filtered by assignment |
 | **Data Siswa** | ✅ Full (audit trail) | ✅ Full own branch | 🔍 Read-only view | Write filtered by `cabangId`; trainer gets view-only component |
 | **Absensi entry** | 🔍 Read + ✅ Verify | ✅ Write own branch | ✅ Write own sessions | Write requires matching `trainerId = token.trainerId` OR cabang role; verify requires elevated role |
-| **Absensi verification** | ✅ Verify all | ✅ Verify own (before pusat lock) | ❌ | Verify flag writable only by `role IN ('superadmin', 'admin')` or higher |
+| **Absensi verification** | ✅ Verify all (exception queue: flags + random sample) | ✅ Verify own (before pusat lock; same exception queue, branch-scoped) | ✅ Self-certify own weekly records (`konfirmasiTrainer` stamp) | Verify flag writable only by `role IN ('superadmin', 'admin')` or higher; certification stamp writable only by `trainerId = token.trainerId` |
 
 ### FINANCIAL DATA
 

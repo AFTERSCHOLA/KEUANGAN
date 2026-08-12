@@ -39,6 +39,10 @@ Add two photo slots: "Foto Kehadiran" and "Foto Kegiatan".
 Store compressed base64 in `dokumentasi[]` (IndexedDB if >1MB, else dataURL).  
 **VERIFY:** Save record → refresh → photos render as thumbnails; quota warning shows if localStorage >4MB.
 
+**M5.2.3b** `EDIT: features/attendance/AttendanceForm.jsx`  
+Save-time sanity prompt: on save, show confirm — "{n} tercatat hadir — sesuai kertas? [Ya, Simpan] [Cek Ulang]".  
+**VERIFY:** Prompt appears on every save; "Cek Ulang" returns to list without saving; "Ya" proceeds.
+
 **M5.2.4** `EDIT: features/attendance/QuickSession.jsx`  
 Create QuickSession component: "Semua Hadir?" button marks all 30 students present; taps flip exceptions.  
 **VERIFY:** One tap → all toggled → 3 exceptions tapped → save → record shows 27/30.
@@ -46,12 +50,12 @@ Create QuickSession component: "Semua Hadir?" button marks all 30 students prese
 ### M5.3 — Verification & History
 
 **M5.3.1** `EDIT: features/attendance/RiwayatAbsensi.jsx`  
-Add `statusVerifikasi` badge per row; filter "Belum Dicek"; verify button (admin/head-trainer role only).  
-**VERIFY:** Admin can verify; trainer cannot; filter hides verified rows.
+Replace flat "Belum Dicek" filter with **exception-filtered review queue** (default view): shows only flagged records — no-photo sessions, hadir count deviating >20% from school's trailing average, first-ever attendance appearance of a student, records edited after prior verification. Plus randomized sample: 2–3 unreviewed records per trainer per week appended to the queue. Verify button (admin/head-trainer role only) stamps `statusVerifikasi`.  
+**VERIFY:** Queue shows only flags + sample, not all records; admin can verify; trainer sees no verify button; full history still reachable via explicit "Semua" toggle.
 
-**M5.3.2** `EDIT: features/attendance/TrainerHistory.jsx`  
-Create trainer-only history showing own records, upcoming schedule, "rekap saya" totals.  
-**VERIFY:** Trainer sees only own `absensi` records; totals match manual calculation.
+**M5.3.1b** `EDIT: lib/constants.js + features/attendance/TrainerHistory.jsx`  
+Add `konfirmasiTrainer` timestamp field to `newAbsensi()` factory (null until certified). Add weekly self-certification flow to TrainerHistory: one-tap "Saya nyatakan absensi minggu ini sesuai dokumen kertas" button stamps all own un-certified records of the week. Static retention label rendered beside photo upload: *"Simpan kertas absensi minimal 1 tahun ajaran."*  
+**VERIFY:** One tap → week's own records carry `konfirmasiTrainer` timestamp; already-certified records untouched; label visible on attendance form.
 
 **M5.3.3** `EDIT: features/students/StudentList.jsx`  
 Add view-only mode: hide Edit/Delete buttons when `role === 'trainer'`. Add Trial badge.  

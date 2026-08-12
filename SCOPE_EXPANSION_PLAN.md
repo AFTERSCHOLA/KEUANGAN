@@ -43,7 +43,7 @@ The base application is **admin-complete but trainer-naive**. It successfully de
 | 4 | **No SPP payment ledger** — `sppLunas` is a boolean toggle with no custody trail | High | Can't track *who* collected money or *when* it was remitted |
 | 5 | **No trial student mechanism** — binary active/inactive status | Medium | New students are either fully billed immediately or invisible |
 | 6 | **No multi-branch (cabang) structure** — assumes single entity | Medium | Future expansion blocked; schema not tenant-aware |
-| 7 | **No attendance verification workflow** — digital records float free of paper reality | Medium | Printing/paper is still the de-facto source of truth |
+| 7 | **No attendance verification workflow** — digital records float free of paper reality | Medium | Printing/paper is still the de-facto source of truth. Solved by **tiered verification**: photo of paper at capture, save-time count prompt, trainer weekly self-certification (attribution), Head review by exception queue + random sample only (no review-everything bottleneck), paper retained 1 academic year as dispute backstop. No OCR, no models |
 | 8 | **No MTD/YTD comparison** — single-month view only | Low | Trend analysis requires manual CSV work |
 
 ---
@@ -67,7 +67,7 @@ flowchart LR
 - **A2.** Attendance upgrade: assistant dropdown, photo documentation (2 slots), `catatan` field
 - **A3.** Quick-session flow ("Semua Hadir" button + tap exceptions)
 - **A4.** Trainer-only views: view-only student list, own attendance history, "rekap saya"
-- **A5.** Verification flag + review queue for admin/head-trainer
+- **A5.** Tiered verification: save-time sanity prompt + trainer weekly self-certification + exception-filtered review queue (Head reviews anomalies and a random sample, not every record); paper retention policy printed in-app as dispute backstop
 
 ### Phase B — Head Trainer / Finance Wins (Priority 2)
 
@@ -120,7 +120,7 @@ flowchart LR
 
 | # | Item | Decision | Priority | Notes |
 |---|------|----------|----------|-------|
-| 1 | Absensi verification | ✅ Build | High | Photo + flag + queue; no OCR |
+| 1 | Absensi verification | ✅ Build (tiered) | High | Photo + sanity prompt + self-certification + exception queue; no OCR, no review-everything |
 | 2 | MTD/YTD comparison | ✅ Build | High | Finance-focused; limit metrics |
 | 3 | Flow documentation | ✅ Build | High | Zero code; write day-in-life scripts |
 | 4 | One-week trial system | ✅ Build | High | **Blocked on billing rule** (see below) |
@@ -270,7 +270,7 @@ src/
 
 | Entity | New Fields | New Entity? | Phase |
 |--------|-----------|-------------|-------|
-| `absensi` | `asistenId`, `asistenNama`, `dokumentasi[]`, `catatan`, `statusVerifikasi`, `sesiKe` | No | A |
+| `absensi` | `asistenId`, `asistenNama`, `dokumentasi[]`, `catatan`, `statusVerifikasi`, `konfirmasiTrainer`, `sesiKe` | No | A |
 | `siswa` | `status: 'Trial'|'Aktif'|'Berhenti'`, `trialMulai`, `sppOverride` | No | A |
 | `sekolah` | `cabangId` | No | C |
 | — | `sppPayments` ledger | Yes | B |
