@@ -6,9 +6,9 @@ import AttendanceHistory from './AttendanceHistory'
 export { default as AttendanceForm } from './AttendanceForm'
 export { default as AttendanceHistory } from './AttendanceHistory'
 
-export default function AttendanceTab() {
+export default function AttendanceTab({ initialView = 'input' }) {
   const { periodeKey } = usePeriod()
-  const [view, setView] = useState('input')
+  const [view, setView] = useState(initialView)
   const [editingRecord, setEditingRecord] = useState(null)
 
   function loadForCorrection(record) {
@@ -46,7 +46,7 @@ export default function AttendanceTab() {
       {view === 'input' ? (
         <AttendanceForm editingRecord={editingRecord} onSaved={() => setEditingRecord(null)} />
       ) : (
-        <AttendanceHistory onLoadForCorrection={loadForCorrection} />
+        <AttendanceHistory onLoadForCorrection={loadForCorrection} initialView={initialView} />
       )}
     </div>
   )

@@ -31,6 +31,54 @@ export function newSiswa(sekolahId, sekolahNama) {
   return { id: generateId('sw'), nama: '', wa: '', kelas: '', sekolahId, sekolahNama, foto: '', sppLunas: {} }
 }
 
+<<<<<<< HEAD
+=======
+export function newHonorPayment({ trainerId, periode, nominal, tanggalBayar }) {
+  return { id: generateId('hp'), trainerId, periode, nominal, tanggalBayar }
+}
+
+export function newAbsensi({
+  id,
+  tanggal,
+  sekolahId,
+  trainerId,
+  trainerNama,
+  trainerStatus = 'Hadir',
+  siswaList = [],
+  asistenId = null,
+  asistenNama = null,
+  dokumentasi = [],
+  catatan = '',
+  statusVerifikasi = null,
+  sesiKe = 1,
+}) {
+  return {
+    id: id || generateId('abs'),
+    tanggal,
+    periode: tanggal.slice(0, 7),
+    sekolahId,
+    trainerId,
+    trainerNama,
+    trainerStatus,
+    siswaList,
+    asistenId,
+    asistenNama,
+    dokumentasi,
+    catatan,
+    statusVerifikasi,
+    sesiKe,
+  }
+}
+
+// ============================================
+// ACADEMIC YEAR ENGINE (M1.1)
+// ============================================
+
+/**
+ * Konversi bulan (1-12) + tahun ajaran awal (A) → tahun kalender sesungguhnya.
+ * Juli-Desember → tahun A. Januari-Juni → tahun A+1.
+ */
+>>>>>>> 9d7ab327c5993a8bd6e19d5f91f7e43dc9f7c573
 export function calYear(monthNum, academicStartYear) {
   return monthNum >= CALENDAR_YEAR_BOUNDARY ? academicStartYear : academicStartYear + 1
 }

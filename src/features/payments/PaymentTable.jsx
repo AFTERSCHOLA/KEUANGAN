@@ -1,9 +1,10 @@
 import { useState, Fragment } from 'react'
 import { read, upsert, write, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
-import { generateId } from '../../lib/constants.js'
+import { newHonorPayment } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
 import Modal from '../../components/Modal.jsx'
+import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 export default function PaymentTable() {
   const period = usePeriod()
@@ -13,6 +14,9 @@ export default function PaymentTable() {
   const [selectedTrainer, setSelectedTrainer] = useState(null)
   const [payForm, setPayForm] = useState({ nominal: '', tanggalBayar: new Date().toISOString().slice(0, 10) })
   const [expandedTrainerId, setExpandedTrainerId] = useState(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmMsg, setConfirmMsg] = useState('')
+  const [confirmOnConfirm, setConfirmOnConfirm] = useState(null)
 
   const sekolah = read('sekolah')
   const absensi = read('absensi')
@@ -38,14 +42,7 @@ export default function PaymentTable() {
     // hasil parsing tanggalBayar) — "Lunaskan" & pembayaran manual sama-sama
     // melunasi Beban Honor periode berjalan, terlepas kapan uangnya
     // secara fisik dibayarkan.
-    const payment = {
-      id: generateId('hp'),
-      trainerId: selectedTrainer.id,
-      periode,
-      nominal: Number(nominal),
-      tanggalBayar: payForm.tanggalBayar,
-    }
-    upsert('honorPayments', payment)
+    upsert('honorPayments', newHonorPayment({ trainerId: selectedTrainer.id, periode, nominal: Number(nominal), tanggalBayar: payForm.tanggalBayar }))
     setModalOpen(false)
     refreshPayments()
   }
@@ -55,7 +52,10 @@ export default function PaymentTable() {
     const fin = financeByTrainerId[selectedTrainer.id]
     const sisa = fin ? fin.sisaHonor : 0
     if (Number(payForm.nominal) > sisa && sisa > 0) {
-      if (!confirm(`Peringatan: nominal pembayaran (${formatRupiah(Number(payForm.nominal))}) melebihi sisa kewajiban (${formatRupiah(sisa)}). Lanjutkan?`)) return
+      setConfirmMsg(`Peringatan: nominal pembayaran (${formatRupiah(Number(payForm.nominal))}) melebihi sisa kewajiban (${formatRupiah(sisa)}). Lanjutkan?`)
+      setConfirmOnConfirm(() => () => writePayment(payForm.nominal))
+      setConfirmOpen(true)
+      return
     }
     writePayment(payForm.nominal)
   }
@@ -65,24 +65,23 @@ export default function PaymentTable() {
     const sisa = fin ? fin.sisaHonor : 0
     if (sisa <= 0) return
     const bulanLabel = new Date(`${periode}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-    if (!confirm(`Bayar sisa ${formatRupiah(sisa)} kepada ${trainer.nama} untuk ${bulanLabel}?`)) return
-    setSelectedTrainer(trainer)
-    const payment = {
-      id: generateId('hp'),
-      trainerId: trainer.id,
-      periode,
-      nominal: sisa,
-      tanggalBayar: new Date().toISOString().slice(0, 10),
-    }
-    upsert('honorPayments', payment)
-    refreshPayments()
+    setConfirmMsg(`Bayar sisa ${formatRupiah(sisa)} kepada ${trainer.nama} untuk ${bulanLabel}?`)
+    setConfirmOnConfirm(() => () => {
+      setSelectedTrainer(trainer)
+      upsert('honorPayments', newHonorPayment({ trainerId: trainer.id, periode, nominal: sisa, tanggalBayar: new Date().toISOString().slice(0, 10) }))
+      refreshPayments()
+    })
+    setConfirmOpen(true)
   }
 
   function deletePayment(id) {
-    if (!confirm('Hapus entri pembayaran ini? Sisa kewajiban akan dihitung ulang.')) return
-    const updated = payments.filter(p => p.id !== id)
-    write('honorPayments', updated)
-    refreshPayments()
+    setConfirmMsg('Hapus entri pembayaran ini? Sisa kewajiban akan dihitung ulang.')
+    const prevPayments = payments.filter(p => p.id !== id)
+    setConfirmOnConfirm(() => () => {
+      write('honorPayments', prevPayments)
+      refreshPayments()
+    })
+    setConfirmOpen(true)
   }
 
   if (trainers.length === 0) {
@@ -187,7 +186,7 @@ export default function PaymentTable() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={`Bayar Honor — ${selectedTrainer?.nama || ''}`}>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Nominal Pembayaran</label>
-          <input type="number" min="0" value={payForm.nominal} onChange={e => setPayForm({ ...payForm, nominal: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+          <input type="text" inputMode="numeric" value={payForm.nominal === '' ? '' : new Intl.NumberFormat('id-ID').format(payForm.nominal)} onChange={e => setPayForm({ ...payForm, nominal: e.target.value.replace(/\D/g, '') ? Number(e.target.value.replace(/\D/g, '')) : '' })} onFocus={e => { if (payForm.nominal !== '') e.target.value = payForm.nominal }} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
         </div>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Tanggal Bayar</label>
@@ -208,6 +207,7 @@ export default function PaymentTable() {
           <button onClick={() => setModalOpen(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
         </div>
       </Modal>
+      <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setConfirmOnConfirm(null) }} onConfirm={() => confirmOnConfirm?.()} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Lanjutkan" />
     </div>
   )
 }

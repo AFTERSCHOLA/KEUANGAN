@@ -2,6 +2,14 @@ import { read, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { financialData } from '../../lib/finance.js'
 import PrintButton from '../../components/PrintButton.jsx'
+import {
+  exportSekolahCSV,
+  exportSiswaCSV,
+  exportTrainerCSV,
+  exportAbsensiCSV,
+  exportPembayaranCSV,
+  exportRingkasanCSV,
+} from '../../lib/csv.js'
 
 export default function FinanceReport() {
   const period = usePeriod()
@@ -26,29 +34,54 @@ export default function FinanceReport() {
         <PrintButton />
       </div>
 
-      <div className="bg-gradient-to-br from-blue-900 to-slate-950 text-white rounded-2xl p-6 shadow-md grid grid-cols-1 md:grid-cols-4 gap-4 animate-scaleIn">
+      <div className="bg-gradient-to-br from-blue-900 to-slate-950 text-white rounded-2xl p-6 shadow-md grid grid-cols-2 md:grid-cols-4 gap-4 animate-scaleIn">
         <div className="space-y-1">
-          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Pemasukan SPP</p>
-          <h3 className="text-2xl font-extrabold text-white">{formatRupiah(data.pemasukanSpp)}</h3>
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Potensi SPP <span className="normal-case font-normal text-blue-200">(memo)</span></p>
+          <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.potensiSpp)}</h3>
+          <p className="text-[10px] text-blue-200">Total Tagihan SPP</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Pemasukan SPP <span className="normal-case font-normal text-blue-200">(kas)</span></p>
+          <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(data.pemasukanSpp)}</h3>
           <p className="text-[10px] text-blue-200">Realisasi SPP Lunas</p>
         </div>
         <div className="space-y-1">
-          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Beban Honor Trainer</p>
-          <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.totalBebanHonor)}</h3>
-          <p className="text-[10px] text-blue-200">Log Akrual Kehadiran Sesi</p>
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">SPP Belum Tertagih <span className="normal-case font-normal text-blue-200">(memo)</span></p>
+          <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.belumTertagih)}</h3>
+          <p className="text-[10px] text-blue-200">Potensi − Pemasukan</p>
         </div>
         <div className="space-y-1">
-          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Honor Telah Dibayar</p>
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Beban Honor <span className="normal-case font-normal text-blue-200">(memo)</span></p>
+          <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.totalBebanHonor)}</h3>
+          <p className="text-[10px] text-blue-200">Akrual Kehadiran Sesi</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Honor Dibayar <span className="normal-case font-normal text-blue-200">(kas)</span></p>
           <h3 className="text-2xl font-extrabold text-emerald-400">{formatRupiah(data.totalHonorDibayar)}</h3>
           <p className="text-[10px] text-blue-200">Realisasi Kas Keluar</p>
         </div>
+        <div className="space-y-1">
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Sisa Kewajiban <span className="normal-case font-normal text-blue-200">(memo)</span></p>
+          <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.sisaKewajiban)}</h3>
+          <p className="text-[10px] text-blue-200">Beban − Dibayar</p>
+        </div>
         <div className="space-y-1 border-t md:border-t-0 md:border-l border-blue-800 pt-4 md:pt-0 md:pl-4">
-          <p className="text-xs font-bold text-yellow-300 uppercase tracking-wider">Laba / Rugi Bersih</p>
+          <p className="text-xs font-bold text-yellow-300 uppercase tracking-wider">Laba / Rugi <span className="normal-case font-normal text-blue-200">(kas)</span></p>
           <h3 className={`text-2xl font-extrabold ${data.labaRugi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatRupiah(data.labaRugi)}
           </h3>
-          <p className="text-[10px] text-blue-200">SPP - Realisasi Kas Keluar</p>
+          <p className="text-[10px] text-blue-200">Pemasukan − Kas Keluar</p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-slate-500 font-semibold mr-1">Export:</span>
+        <button onClick={() => exportSekolahCSV(sekolah, trainer, period.periodeKey())} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">Sekolah</button>
+        <button onClick={() => exportSiswaCSV(siswa, period.periodeKey())} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">Siswa</button>
+        <button onClick={() => exportTrainerCSV(data.trainerFinance, period.periodeKey())} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">Trainer</button>
+        <button onClick={() => exportAbsensiCSV(absensi, sekolah, period.periodeKey())} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">Absensi</button>
+        <button onClick={() => exportPembayaranCSV(honorPayments, trainer, period.periodeKey())} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">Pembayaran</button>
+        <button onClick={() => exportRingkasanCSV(data, period.periodeKey())} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">Ringkasan</button>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border">
