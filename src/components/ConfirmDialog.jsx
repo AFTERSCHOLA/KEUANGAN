@@ -5,6 +5,7 @@ export default function ConfirmDialog({
   title,
   body,
   confirmLabel = 'Lanjutkan',
+  cancelLabel = 'Batal',
   danger = false,
 }) {
   if (!open) return null
@@ -19,7 +20,7 @@ export default function ConfirmDialog({
         <h4 className="text-lg font-bold text-slate-900 mb-2">{title}</h4>
         <p className="text-sm text-slate-600 mb-6">{body}</p>
         <div className="flex gap-3 justify-end">
-          <button onClick={onCancel} className="px-4 py-2 border rounded-xl text-xs font-bold text-slate-500">Batal</button>
+          <button onClick={onCancel} className="px-4 py-2 border rounded-xl text-xs font-bold text-slate-500">{cancelLabel}</button>
           <button onClick={onConfirm} className={confirmBtn}>{confirmLabel}</button>
         </div>
       </div>

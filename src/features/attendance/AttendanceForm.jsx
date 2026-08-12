@@ -2,6 +2,73 @@ import { useState, useMemo, useEffect } from 'react'
 import { read, upsert } from '../../lib/store.js'
 import { newAbsensi } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
+import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+import QuickSession from './QuickSession.jsx'
+import { compressImage, storePhoto, loadPhotoDataUrl, deletePhotoEntry, localStorageUsageBytes, LOCALSTORAGE_WARN_THRESHOLD } from '../../lib/photoStorage.js'
+
+function PhotoSlot({ label, entry, onChange, disabled }) {
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!entry) {
+      setPreviewUrl(null)
+      return
+    }
+    loadPhotoDataUrl(entry).then(url => {
+      if (!cancelled) setPreviewUrl(url)
+    })
+    return () => { cancelled = true }
+  }, [entry])
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    try {
+      const compressed = await compressImage(file)
+      const stored = await storePhoto(compressed, label.toLowerCase().replace(/\s+/g, '-'))
+      onChange(stored)
+    } catch (err) {
+      console.error('Gagal memproses foto', err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRemove() {
+    if (entry) await deletePhotoEntry(entry)
+    onChange(null)
+  }
+
+  return (
+    <div>
+      <label className="text-xs font-bold text-slate-400 uppercase">{label}</label>
+      <div className="mt-1 flex items-center gap-3">
+        {previewUrl ? (
+          <img src={previewUrl} alt={label} className="w-16 h-16 rounded-lg object-cover border" />
+        ) : (
+          <div className="w-16 h-16 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-300 text-[10px] text-center">
+            Belum ada
+          </div>
+        )}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-blue-600 cursor-pointer hover:underline">
+            {busy ? 'Memproses...' : entry ? 'Ganti foto' : 'Pilih foto'}
+            <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={disabled || busy} />
+          </label>
+          {entry && (
+            <button type="button" onClick={handleRemove} className="text-xs font-semibold text-rose-500 hover:underline text-left">
+              Hapus foto
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function AttendanceForm({ editingRecord, onSaved }) {
   const [dataRev, setDataRev] = useState(0)
@@ -10,9 +77,14 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
   const [trainerId, setTrainerId] = useState('')
   const [trainerStatus, setTrainerStatus] = useState('Hadir')
   const [siswaStatus, setSiswaStatus] = useState({})
+  const [asistenId, setAsistenId] = useState('')
+  const [catatan, setCatatan] = useState('')
+  const [fotoKehadiran, setFotoKehadiran] = useState(null)
+  const [fotoKegiatan, setFotoKegiatan] = useState(null)
   const [saved, setSaved] = useState(false)
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertMsg, setAlertMsg] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const sekolah = useMemo(() => read('sekolah'), [dataRev])
   const trainers = useMemo(() => read('trainer'), [dataRev])
@@ -24,6 +96,11 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
       setSekolahId(editingRecord.sekolahId || '')
       setTrainerId(editingRecord.trainerId || '')
       setTrainerStatus(editingRecord.trainerStatus || 'Hadir')
+      setAsistenId(editingRecord.asistenId || '')
+      setCatatan(editingRecord.catatan || '')
+      const dok = editingRecord.dokumentasi || []
+      setFotoKehadiran(dok.find(d => d.slot === 'kehadiran') || null)
+      setFotoKegiatan(dok.find(d => d.slot === 'kegiatan') || null)
       const map = {}
       ;(editingRecord.siswaList || []).forEach(s => { map[s.siswaId] = s.status })
       setSiswaStatus(map)
@@ -34,18 +111,42 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
   const filteredSiswa = siswa.filter(s => s.sekolahId === sekolahId)
   const selectedSekolah = sekolah.find(s => s.id === sekolahId)
   const availableTrainers = trainers.filter(t => selectedSekolah?.trainerIds?.includes(t.id))
+  const availableAsisten = availableTrainers.filter(t => t.id !== trainerId)
+  const hadirCount = filteredSiswa.filter(s => siswaStatus[s.id] === 'Hadir').length
 
   function toggleSiswa(id) {
     setSiswaStatus(prev => ({ ...prev, [id]: prev[id] === 'Hadir' ? 'Tidak Hadir' : 'Hadir' }))
   }
 
-  function submit() {
+  function setAllHadir() {
+    const next = {}
+    filteredSiswa.forEach(s => { next[s.id] = 'Hadir' })
+    setSiswaStatus(next)
+    setSaved(false)
+  }
+
+  function attemptSubmit() {
     if (!tanggal || !sekolahId || !trainerId) {
       setAlertMsg('Lengkapi tanggal, sekolah, dan trainer.')
       setAlertOpen(true)
       return
     }
+    if (asistenId && asistenId === trainerId) {
+      setAlertMsg('Asisten tidak boleh sama dengan trainer utama.')
+      setAlertOpen(true)
+      return
+    }
+    setConfirmOpen(true)
+  }
+
+  function doSave() {
+    setConfirmOpen(false)
     const trainer = trainers.find(t => t.id === trainerId)
+    const asisten = asistenId ? trainers.find(t => t.id === asistenId) : null
+    const dokumentasi = [
+      fotoKehadiran ? { ...fotoKehadiran, slot: 'kehadiran' } : null,
+      fotoKegiatan ? { ...fotoKegiatan, slot: 'kegiatan' } : null,
+    ].filter(Boolean)
     const record = newAbsensi({
       id: editingRecord ? editingRecord.id : undefined,
       tanggal,
@@ -58,10 +159,21 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
         nama: s.nama,
         status: siswaStatus[s.id] === 'Hadir' ? 'Hadir' : 'Tidak Hadir',
       })),
+      asistenId: asisten ? asisten.id : null,
+      asistenNama: asisten ? asisten.nama : null,
+      catatan,
+      dokumentasi,
     })
     upsert('absensi', record)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+
+    const usage = localStorageUsageBytes()
+    if (usage > LOCALSTORAGE_WARN_THRESHOLD) {
+      setAlertMsg(`Peringatan: penyimpanan lokal sudah terpakai ${(usage / 1024 / 1024).toFixed(1)} MB. Pertimbangkan backup & bersihkan data lama.`)
+      setAlertOpen(true)
+    }
+
     if (onSaved) onSaved()
   }
 
@@ -94,6 +206,15 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
         {saved && <span className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1.5 rounded-full font-bold">Tersimpan</span>}
       </div>
       <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
+      <ConfirmDialog
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={doSave}
+        title="Konfirmasi Kehadiran"
+        body={`${hadirCount} siswa tercatat hadir — sesuai catatan kertas?`}
+        confirmLabel="Ya, Simpan"
+        cancelLabel="Cek Ulang"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
@@ -111,7 +232,12 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
           </div>
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase">Trainer</label>
-            <select value={trainerId} onChange={e => { setTrainerId(e.target.value); setSaved(false) }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white" disabled={!sekolahId}>
+            <select value={trainerId} onChange={e => {
+              const val = e.target.value
+              setTrainerId(val)
+              setSaved(false)
+              if (asistenId === val) setAsistenId('')
+            }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white" disabled={!sekolahId}>
               <option value="">-- Pilih Trainer --</option>
               {availableTrainers.map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
             </select>
@@ -119,8 +245,27 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
               <p className="text-[11px] text-rose-500 mt-1">Sekolah ini belum punya trainer yang ditugaskan.</p>
             )}
           </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase">Asisten <span className="normal-case font-normal text-slate-400">(opsional)</span></label>
+            <select value={asistenId} onChange={e => { setAsistenId(e.target.value); setSaved(false) }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white" disabled={!trainerId}>
+              <option value="">— Tanpa Asisten —</option>
+              {availableAsisten.map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase">Catatan <span className="normal-case font-normal text-slate-400">(opsional)</span></label>
+            <textarea
+              value={catatan}
+              onChange={e => { setCatatan(e.target.value); setSaved(false) }}
+              rows={3}
+              placeholder="Catatan tambahan untuk sesi ini..."
+              className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 resize-none"
+            />
+          </div>
+          <PhotoSlot label="Foto Kehadiran" entry={fotoKehadiran} onChange={v => { setFotoKehadiran(v); setSaved(false) }} disabled={!trainerId} />
+          <PhotoSlot label="Foto Kegiatan" entry={fotoKegiatan} onChange={v => { setFotoKegiatan(v); setSaved(false) }} disabled={!trainerId} />
           {tanggal && sekolahId && trainerId && (
-            <button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm active:scale-95">Simpan Absensi</button>
+            <button onClick={attemptSubmit} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm active:scale-95">Simpan Absensi</button>
           )}
         </div>
 
@@ -130,33 +275,36 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
           ) : filteredSiswa.length === 0 ? (
             <p className="text-center text-slate-400 py-10">Belum ada siswa di sekolah ini.</p>
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs font-bold text-slate-400 uppercase">Status Trainer:</span>
-                {['Hadir', 'Izin', 'Alpa'].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => { setTrainerStatus(s); setSaved(false) }}
-                    className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${trainerStatus === s ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-                  >
-                    {s}
-                  </button>
+            <>
+              <QuickSession siswaList={filteredSiswa} hadirCount={hadirCount} onSetAllHadir={setAllHadir} />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xs font-bold text-slate-400 uppercase">Status Trainer:</span>
+                  {['Hadir', 'Izin', 'Alpa'].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => { setTrainerStatus(s); setSaved(false) }}
+                      className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${trainerStatus === s ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <h3 className="text-sm font-bold text-slate-700">Daftar Siswa — tap untuk toggle kehadiran</h3>
+                {filteredSiswa.map(s => (
+                  <div key={s.id} onClick={() => toggleSiswa(s.id)} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
+                    siswaStatus[s.id] === 'Hadir' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100'
+                  }`}>
+                    <span className="font-semibold text-slate-700">{s.nama}</span>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      siswaStatus[s.id] === 'Hadir' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'
+                    }`}>
+                      {siswaStatus[s.id] === 'Hadir' ? 'Hadir' : 'Tidak Hadir'}
+                    </span>
+                  </div>
                 ))}
               </div>
-              <h3 className="text-sm font-bold text-slate-700">Daftar Siswa — tap untuk toggle kehadiran</h3>
-              {filteredSiswa.map(s => (
-                <div key={s.id} onClick={() => toggleSiswa(s.id)} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                  siswaStatus[s.id] === 'Hadir' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100'
-                }`}>
-                  <span className="font-semibold text-slate-700">{s.nama}</span>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    siswaStatus[s.id] === 'Hadir' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'
-                  }`}>
-                    {siswaStatus[s.id] === 'Hadir' ? 'Hadir' : 'Tidak Hadir'}
-                  </span>
-                </div>
-              ))}
-            </div>
+            </>
           )}
         </div>
       </div>
