@@ -51,8 +51,11 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
 
   const sekolahFinance = sekolah.map(sch => {
     const siswaSekolah = siswa.filter(s => s.sekolahId === sch.id)
-    const targetSpp = siswaSekolah.length * sch.spp
-    const realisasiSpp = siswaSekolah.filter(s => s.sppLunas?.[periode]).length * sch.spp
+    // M5.4.3 — Trial students never enter SPP potensi/tunggakan math (R4: ledger trust,
+    // and Trial is a billing-status, not attendance/list-membership filter)
+    const siswaBilling = siswaSekolah.filter(s => s.status !== 'Trial')
+    const targetSpp = siswaBilling.length * sch.spp
+    const realisasiSpp = siswaBilling.filter(s => s.sppLunas?.[periode]).length * sch.spp
 
     potensiSpp += targetSpp
     pemasukanSpp += realisasiSpp

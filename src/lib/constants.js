@@ -42,7 +42,7 @@ export function newTrainer() {
   }
 }
 
-export function newSiswa(sekolahId, sekolahNama) {
+export function newSiswa(sekolahId, sekolahNama, { trial = false, trialMulai = null } = {}) {
   return {
     id: generateId('sw'),
     nama: '',
@@ -52,7 +52,13 @@ export function newSiswa(sekolahId, sekolahNama) {
     sekolahNama,
     foto: '',
     sppLunas: {},
+    status: trial ? 'Trial' : 'Aktif',
+    trialMulai: trial ? (trialMulai || todayISO()) : null,
   }
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
 }
 
 export function newHonorPayment({

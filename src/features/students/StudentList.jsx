@@ -4,7 +4,6 @@ import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../..
 import { newSiswa } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
 import { elapsedPeriods, isTunggakan, buildTagihanWaLink } from '../../lib/tunggakan.js'
-import { getRole } from '../../lib/role.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
@@ -21,12 +20,7 @@ export default function StudentList({ readOnly = false }) {
   const absensi = read('absensi')
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
-<<<<<<< HEAD
-  const role = getRole()
-  const canManage = role !== 'trainer' // M5.3.3 — trainer = view-only
-=======
   const stats = attendanceStats(absensi, period.periodeKey())
->>>>>>> 9d7ab327c5993a8bd6e19d5f91f7e43dc9f7c573
 
   function unpaidMonthsOf(s) {
     return elapsed.filter(({ periode }) => !s.sppLunas?.[periode]).map(e => e.monthName)
@@ -152,7 +146,7 @@ export default function StudentList({ readOnly = false }) {
                     <div>
                       <p className="font-bold text-slate-800 flex items-center gap-1.5">
                         {s.nama}
-                        {s.trial && (
+                        {s.status === 'Trial' && (
                           <span className="text-[9px] font-extrabold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full border border-yellow-200">
                             Trial
                           </span>
@@ -175,47 +169,6 @@ export default function StudentList({ readOnly = false }) {
                       {unpaidMonthsOf(s).join(', ')}
                     </td>
                   )}
-<<<<<<< HEAD
-                  <td className="py-4 px-6 text-center">
-                    <div className="flex justify-center gap-2">
-                      {isTunggakan(s, elapsed) && (
-  <a
-    href={buildTagihanWaLink(
-      s,
-      sekolah.find(x => x.id === s.sekolahId)?.spp || 0,
-      unpaidMonthsOf(s)
-    )}
-    target="_blank"
-    rel="noreferrer"
-    className="text-slate-500 hover:text-emerald-600"
-    title="Kirim tagihan via WhatsApp"
-  >
-    <svg
-      className="w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
-        strokeWidth="2"
-      />
-    </svg>
-  </a>
-                      )}
-                      {canManage && (
-                        <>
-                          <button onClick={() => openEdit(s)} className="text-slate-500 hover:text-blue-600">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg>
-                          </button>
-                          <button onClick={() => remove(s.id)} className="text-slate-500 hover:text-rose-600">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21" strokeWidth="2"/></svg>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-=======
                   {!readOnly && (
                     <td className="py-4 px-6 text-center">
                       <div className="flex justify-center gap-2">
@@ -239,7 +192,6 @@ export default function StudentList({ readOnly = false }) {
                       </div>
                     </td>
                   )}
->>>>>>> 9d7ab327c5993a8bd6e19d5f91f7e43dc9f7c573
                 </tr>
               ))}
             </tbody>
@@ -289,6 +241,38 @@ function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
         <input value={form.foto} onChange={e => setForm({ ...form, foto: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Status Siswa</label>
+        <div className="flex gap-4">
+          {['Aktif', 'Trial', 'Berhenti'].map(opt => (
+            <label key={opt} className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name="status"
+                checked={form.status === opt}
+                onChange={() => setForm({
+                  ...form,
+                  status: opt,
+                  trialMulai: opt === 'Trial' ? (form.trialMulai || new Date().toISOString().slice(0, 10)) : null,
+                })}
+                className="w-4 h-4 border-slate-300 text-blue-600 focus:ring-blue-600"
+              />
+              <span className="text-xs text-slate-600">{opt}</span>
+            </label>
+          ))}
+        </div>
+        {form.status === 'Trial' && (
+          <div className="mt-2">
+            <label className="text-xs font-bold text-slate-400 uppercase">Trial Mulai</label>
+            <input
+              type="date"
+              value={form.trialMulai || ''}
+              onChange={e => setForm({ ...form, trialMulai: e.target.value })}
+              className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
+        )}
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">SPP Lunas (Bulan Tahun Ajaran)</label>
