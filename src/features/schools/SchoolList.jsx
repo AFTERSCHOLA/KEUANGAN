@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { read, write, upsert } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newSekolah } from '../../lib/constants.js'
-import Modal from '../../components/Modal.jsx'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
+import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+
 
 export default function SchoolList() {
   const [sekolah, setSekolah] = useState(() => read('sekolah'))

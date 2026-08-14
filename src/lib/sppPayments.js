@@ -52,3 +52,30 @@ export function deleteSppPayment(id) {
   write('sppPayments', all)
   return all
 }
+
+/**
+ * M6.1.3 — Turunkan sppLunas dari ledger: satu periode dianggap "lunas"
+ * kalau ada MINIMAL 1 entry pembayaran untuk periode itu (bukan jumlah
+ * nominal — keputusan desain: sppLunas tetap boolean sederhana seperti
+ * semula, bukan tracking pembayaran sebagian).
+ */
+export function computeSppLunas(siswaId, allPayments) {
+  const map = {}
+  allPayments
+    .filter(p => p.siswaId === siswaId)
+    .forEach(p => { map[p.periode] = true })
+  return map
+}
+
+/** Hitung ulang sppLunas siswa dari ledger, lalu simpan ke record siswa */
+export function recomputeSppLunasForSiswa(siswaId) {
+  const siswaList = read('siswa')
+  const target = siswaList.find(s => s.id === siswaId)
+  if (!target) return null
+
+  const allPayments = read('sppPayments')
+  const sppLunas = computeSppLunas(siswaId, allPayments)
+  const updated = { ...target, sppLunas }
+  write('siswa', siswaList.map(s => (s.id === siswaId ? updated : s)))
+  return updated
+}

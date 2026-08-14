@@ -42,8 +42,8 @@ export function newTrainer() {
   }
 }
 
-export function newSiswa(sekolahId, sekolahNama, { trial = false, trialMulai = null } = {}) {
-  return {
+export function newSiswa(sekolahId, sekolahNama) {
+  const siswa = {
     id: generateId('sw'),
     nama: '',
     wa: '',
@@ -51,10 +51,36 @@ export function newSiswa(sekolahId, sekolahNama, { trial = false, trialMulai = n
     sekolahId,
     sekolahNama,
     foto: '',
+    status: 'Aktif',
+    trialMulai: null,
+    // M6.1.2 — Derived from sppPayments ledger — never edit directly.
+    // Recompute lewat computeSppLunas() di lib/sppPayments.js.
+    // (Objek ini masih dibaca seperti biasa di finance.js/tunggakan.js;
+    // yang berubah cuma cara MENULISNYA — tidak lagi manual toggle.)
     sppLunas: {},
-    status: trial ? 'Trial' : 'Aktif',
-    trialMulai: trial ? (trialMulai || todayISO()) : null,
   }
+
+  // Dev-only guard: peringatkan kalau ada yang nulis ulang sppLunas
+  // langsung di objek baru (misal lewat checkbox lama yang belum dicabut).
+  // Catatan: proteksi ini hilang begitu objek di-serialize ke localStorage
+  // dan dibaca ulang (JSON.parse menghasilkan objek polos, bukan Proxy) —
+  // ini cuma jaring pengaman dev-time, bukan enforcement permanen.
+  if (import.meta.env?.DEV) {
+    return new Proxy(siswa, {
+      set(target, prop, value) {
+        if (prop === 'sppLunas') {
+          console.warn(
+            '[siswa.sppLunas] Field ini derived dari sppPayments ledger — jangan diedit langsung. ' +
+            'Tulis lewat SppPaymentModal / computeSppLunas() (M6.1.3).'
+          )
+        }
+        target[prop] = value
+        return true
+      },
+    })
+  }
+
+  return siswa
 }
 
 function todayISO() {
