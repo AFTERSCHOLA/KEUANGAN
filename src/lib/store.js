@@ -62,6 +62,7 @@ export function getKeys() {
     siswa: `${STORE_KEY}_siswa`,
     absensi: `${STORE_KEY}_absensi`,
     honorPayments: `${STORE_KEY}_honorPayments`,
+    sppPayments: `${STORE_KEY}_sppPayments`,
     settings: `${STORE_KEY}_settings`,
   }
 }

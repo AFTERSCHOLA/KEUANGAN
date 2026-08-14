@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { usePeriod } from '../../lib/store'
 import AttendanceForm from './AttendanceForm'
-import AttendanceHistory from './AttendanceHistory'
+import RiwayatAbsensi from './RiwayatAbsensi'
 
 export { default as AttendanceForm } from './AttendanceForm'
-export { default as AttendanceHistory } from './AttendanceHistory'
+export { default as RiwayatAbsensi } from './RiwayatAbsensi'
 
 export default function AttendanceTab({ initialView = 'input' }) {
   const { periodeKey } = usePeriod()
@@ -46,7 +46,7 @@ export default function AttendanceTab({ initialView = 'input' }) {
       {view === 'input' ? (
         <AttendanceForm editingRecord={editingRecord} onSaved={() => setEditingRecord(null)} />
       ) : (
-        <AttendanceHistory onLoadForCorrection={loadForCorrection} initialView={initialView} />
+        <RiwayatAbsensi onLoadForCorrection={loadForCorrection} initialView={initialView} />
       )}
     </div>
   )

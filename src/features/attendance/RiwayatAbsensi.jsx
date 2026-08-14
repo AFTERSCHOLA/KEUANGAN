@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { read, upsert, usePeriod } from '../../lib/store'
-import { buildReviewQueue } from '../../lib/attendanceFlags'
+import { buildReviewQueue } from '../../lib/attendance'
 import { getRole, canVerify } from '../../lib/role'
 
 export default function RiwayatAbsensi({ onLoadForCorrection }) {
