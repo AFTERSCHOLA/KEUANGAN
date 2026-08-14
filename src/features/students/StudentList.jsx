@@ -6,6 +6,7 @@ import { attendanceStats } from '../../lib/finance.js'
 import { elapsedPeriods, isTunggakan, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+import SppPaymentModal from '../payments/SppPaymentModal.jsx'
 
 export default function StudentList({ readOnly = false }) {
   const [siswa, setSiswa] = useState(() => read('siswa'))
@@ -15,6 +16,7 @@ export default function StudentList({ readOnly = false }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
   const [pendingRemoveId, setPendingRemoveId] = useState(null)
+  const [sppPaymentSiswaId, setSppPaymentSiswaId] = useState(null)
 
   const sekolah = read('sekolah')
   const absensi = read('absensi')
@@ -191,6 +193,11 @@ export default function StudentList({ readOnly = false }) {
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeWidth="2"/></svg>
                           </a>
                         )}
+                        {isBillable(s) && (
+                          <button onClick={() => setSppPaymentSiswaId(s.id)} className="text-slate-500 hover:text-emerald-600" title="Catat pembayaran SPP">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                          </button>
+                        )}
                         <button onClick={() => openEdit(s)} className="text-slate-500 hover:text-blue-600">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg>
                         </button>
@@ -215,6 +222,14 @@ export default function StudentList({ readOnly = false }) {
           <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
         </>
       )}
+      <SppPaymentModal
+        open={!!sppPaymentSiswaId}
+        siswaId={sppPaymentSiswaId}
+        sekolah={sekolah}
+        period={period}
+        onClose={() => setSppPaymentSiswaId(null)}
+        onSaved={() => { setSppPaymentSiswaId(null); refresh() }}
+      />
     </div>
   )
 }
@@ -283,27 +298,19 @@ function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
         )}
       </div>
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">SPP Lunas (Bulan Tahun Ajaran)</label>
+        <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">
+          SPP Lunas <span className="normal-case font-normal text-slate-400">(otomatis dari riwayat pembayaran — catat lewat tombol pembayaran di daftar siswa)</span>
+        </label>
         <div className="grid grid-cols-4 gap-2">
           {monthNumList.map((m, i) => {
             const key = periodeKey(m, selectedYear)
-            const checked = !!form.sppLunas?.[key]
+            const lunas = !!form.sppLunas?.[key]
             return (
-              <label key={key} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => {
-                    const current = form.sppLunas || {}
-                    const next = checked
-                      ? Object.fromEntries(Object.entries(current).filter(([k]) => k !== key))
-                      : { ...current, [key]: true }
-                    setForm({ ...form, sppLunas: next })
-                  }}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-                />
-                <span className="text-xs text-slate-600">{MONTHS[i]}</span>
-              </label>
+              <span key={key} className={`text-[11px] font-bold px-2 py-1 rounded-full text-center ${
+                lunas ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+              }`}>
+                {MONTHS[i]}
+              </span>
             )
           })}
         </div>
