@@ -26,7 +26,9 @@ export default function StudentList({ readOnly = false }) {
     return elapsed.filter(({ periode }) => !s.sppLunas?.[periode]).map(e => e.monthName)
   }
 
-  const visibleSiswa = onlyTunggakan ? siswa.filter(s => isTunggakan(s, elapsed)) : siswa
+  const isBillable = s => s.status !== 'Trial' // M5.4.3 — Trial siswa tidak masuk hitungan tunggakan sama sekali
+
+  const visibleSiswa = onlyTunggakan ? siswa.filter(s => isBillable(s) && isTunggakan(s, elapsed)) : siswa
 
   function refresh() {
     setSiswa(read('siswa'))
@@ -39,7 +41,9 @@ export default function StudentList({ readOnly = false }) {
   }
 
   function openEdit(s) {
-    setForm({ ...s })
+    // M5.4 — legacy siswa records predate `status`; default to 'Aktif' for display only,
+    // real data untouched unless user actually saves.
+    setForm({ status: 'Aktif', trialMulai: null, ...s })
     setModalOpen(true)
   }
 
@@ -162,7 +166,11 @@ export default function StudentList({ readOnly = false }) {
                   <td className="py-4 px-6 text-center font-extrabold text-blue-700">{stats.studentPeriodCount[s.id] ? `${stats.studentPeriodCount[s.id]} Sesi` : '—'}</td>
                   <td className="py-4 px-6 text-center font-bold text-slate-500">{stats.studentTotalCount[s.id] ? `${stats.studentTotalCount[s.id]} Sesi` : '—'}</td>
                   <td className="py-4 px-6 text-center">
-                    <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">Belum Bayar</span>
+                    {s.status === 'Trial' ? (
+                      <span className="bg-yellow-100 text-yellow-700 text-xs px-2.5 py-1 rounded-full font-bold">Trial — Belum Ditagih</span>
+                    ) : (
+                      <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">Belum Bayar</span>
+                    )}
                   </td>
                   {onlyTunggakan && (
                     <td className="py-4 px-6 text-xs font-semibold text-rose-600">
@@ -172,7 +180,7 @@ export default function StudentList({ readOnly = false }) {
                   {!readOnly && (
                     <td className="py-4 px-6 text-center">
                       <div className="flex justify-center gap-2">
-                        {isTunggakan(s, elapsed) && (
+                        {isBillable(s) && isTunggakan(s, elapsed) && (
                           <a
                             href={buildTagihanWaLink(s, sekolah.find(x => x.id === s.sekolahId)?.spp || 0, unpaidMonthsOf(s))}
                             target="_blank"
