@@ -20,21 +20,54 @@ export function generateId(prefix) {
 }
 
 export function newSekolah() {
-  return { id: generateId('skl'), nama: '', alamat: '', foto: '', jadwal: '', spp: 0, trainerIds: [] }
+  return {
+    id: generateId('skl'),
+    nama: '',
+    alamat: '',
+    foto: '',
+    jadwal: '',
+    spp: 0,
+    trainerIds: [],
+  }
 }
 
 export function newTrainer() {
-  return { id: generateId('trn'), nama: '', wa: '', jadwal: '', sekolahIds: [], honor: 0 }
+  return {
+    id: generateId('trn'),
+    nama: '',
+    wa: '',
+    jadwal: '',
+    sekolahIds: [],
+    honor: 0,
+  }
 }
 
 export function newSiswa(sekolahId, sekolahNama) {
-  return { id: generateId('sw'), nama: '', wa: '', kelas: '', sekolahId, sekolahNama, foto: '', sppLunas: {} }
+  return {
+    id: generateId('sw'),
+    nama: '',
+    wa: '',
+    kelas: '',
+    sekolahId,
+    sekolahNama,
+    foto: '',
+    sppLunas: {},
+  }
 }
 
-<<<<<<< HEAD
-=======
-export function newHonorPayment({ trainerId, periode, nominal, tanggalBayar }) {
-  return { id: generateId('hp'), trainerId, periode, nominal, tanggalBayar }
+export function newHonorPayment({
+  trainerId,
+  periode,
+  nominal,
+  tanggalBayar,
+}) {
+  return {
+    id: generateId('pay'),
+    trainerId,
+    periode,
+    nominal: Number(nominal),
+    tanggalBayar,
+  }
 }
 
 export function newAbsensi({
@@ -51,11 +84,14 @@ export function newAbsensi({
   catatan = '',
   statusVerifikasi = null,
   sesiKe = 1,
+  foto = '',
+  konfirmasiTrainer = null,
+  lastEditedAt = null,
 }) {
   return {
-    id: id || generateId('abs'),
+    id: id || `${tanggal}_${sekolahId}_${trainerId}`,
     tanggal,
-    periode: tanggal.slice(0, 7),
+    periode: periodeFromDate(tanggal),
     sekolahId,
     trainerId,
     trainerNama,
@@ -67,20 +103,27 @@ export function newAbsensi({
     catatan,
     statusVerifikasi,
     sesiKe,
+    foto,
+    konfirmasiTrainer,
+    lastEditedAt,
   }
 }
 
 // ============================================
-// ACADEMIC YEAR ENGINE (M1.1)
+// ACADEMIC YEAR ENGINE
 // ============================================
 
 /**
- * Konversi bulan (1-12) + tahun ajaran awal (A) → tahun kalender sesungguhnya.
- * Juli-Desember → tahun A. Januari-Juni → tahun A+1.
+ * Konversi bulan (1-12) + tahun ajaran awal (A)
+ * → tahun kalender sesungguhnya.
+ *
+ * Juli-Desember → tahun A
+ * Januari-Juni → tahun A+1
  */
->>>>>>> 9d7ab327c5993a8bd6e19d5f91f7e43dc9f7c573
 export function calYear(monthNum, academicStartYear) {
-  return monthNum >= CALENDAR_YEAR_BOUNDARY ? academicStartYear : academicStartYear + 1
+  return monthNum >= CALENDAR_YEAR_BOUNDARY
+    ? academicStartYear
+    : academicStartYear + 1
 }
 
 export function periodeKey(monthNum, academicStartYear) {
@@ -100,6 +143,7 @@ export function defaultAcademicYear() {
   const now = new Date()
   const y = now.getFullYear()
   const m = now.getMonth() + 1
+
   return m >= CALENDAR_YEAR_BOUNDARY ? y : y - 1
 }
 
@@ -110,40 +154,4 @@ export function defaultMonth() {
 export function monthLabel(monthKeyStr) {
   const idx = MONTH_KEYS.indexOf(monthKeyStr)
   return idx >= 0 ? MONTHS[idx] : monthKeyStr
-}
-
-// ============================================
-// M2 FACTORIES
-// ============================================
-
-/**
- * Record absensi.
- * M5.3 menambah 4 field baru (perluasan skema di luar Part 2 asli, sengaja
- * untuk fitur verifikasi): foto, statusVerifikasi, konfirmasiTrainer, lastEditedAt.
- */
-export function newAbsensi(tanggal, sekolahId, trainerId, trainerNama) {
-  return {
-    id: `${tanggal}_${sekolahId}_${trainerId}`,
-    tanggal,
-    periode: periodeFromDate(tanggal),
-    sekolahId,
-    trainerId,
-    trainerNama,
-    trainerStatus: 'Hadir',
-    siswaList: [],
-    foto: '',                 // M5.3.1 — URL bukti foto sesi; kosong = flagged "Tanpa foto"
-    statusVerifikasi: null,   // M5.3.1 — { by, at } saat admin/head-trainer verifikasi
-    konfirmasiTrainer: null,  // M5.3.1b — timestamp self-cert trainer per minggu
-    lastEditedAt: null,       // M5.3.1 — dipakai deteksi "diedit setelah diverifikasi"
-  }
-}
-
-export function newHonorPayment(trainerId, periode, nominal, tanggalBayar) {
-  return {
-    id: generateId('pay'),
-    trainerId,
-    periode,
-    nominal: Number(nominal),
-    tanggalBayar,
-  }
 }
