@@ -5,6 +5,7 @@ import { newHonorPayment } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+import SlipHonor from '../reports/SlipHonor.jsx'
 
 export default function PaymentTable() {
   const period = usePeriod()
@@ -17,6 +18,7 @@ export default function PaymentTable() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
   const [confirmOnConfirm, setConfirmOnConfirm] = useState(null)
+  const [printEntry, setPrintEntry] = useState(null)
 
   const sekolah = read('sekolah')
   const absensi = read('absensi')
@@ -82,6 +84,10 @@ export default function PaymentTable() {
       refreshPayments()
     })
     setConfirmOpen(true)
+  }
+
+  if (printEntry) {
+    return <SlipHonor trainer={printEntry.trainer} payment={printEntry.payment} onBack={() => setPrintEntry(null)} />
   }
 
   if (trainers.length === 0) {
@@ -166,9 +172,14 @@ export default function PaymentTable() {
                               <div key={p.id} className="flex items-center justify-between bg-white rounded-lg border border-slate-100 px-3 py-2 text-xs">
                                 <span className="text-slate-500">{new Date(p.tanggalBayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                 <span className="font-bold text-emerald-600">{formatRupiah(p.nominal)}</span>
-                                <button onClick={() => deletePayment(p.id)} className="text-slate-400 hover:text-rose-600">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => setPrintEntry({ trainer: t, payment: p })} className="text-slate-400 hover:text-blue-600" title="Cetak Slip">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a1 1 0 001-1v-4a1 1 0 00-1-1H9a1 1 0 00-1 1v4a1 1 0 001 1zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                  </button>
+                                  <button onClick={() => deletePayment(p.id)} className="text-slate-400 hover:text-rose-600">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
