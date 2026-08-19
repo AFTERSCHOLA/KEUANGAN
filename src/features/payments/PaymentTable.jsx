@@ -26,7 +26,7 @@ export default function PaymentTable() {
 
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
-  const data = financialData({ sekolah, siswa: read('siswa'), trainer: trainers, absensi, honorPayments: payments, periode })
+  const data = financialData({ sekolah, siswa: read('siswa'), trainer: trainers, absensi, honorPayments: payments, sppPayments: read('sppPayments'), periode })
   const financeByTrainerId = Object.fromEntries(data.trainerFinance.map(t => [t.id, t]))
 
   function refreshPayments() {

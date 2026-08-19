@@ -2,6 +2,9 @@ node_modules
 dist
 .env
 tests
+!tests/
+tests/*
+!tests/m61-verify.spec.js
 test-results
 .playwright-mcp
 .commandcode

@@ -19,6 +19,7 @@ export default function OverviewCards() {
     trainer: read('trainer'),
     absensi: read('absensi'),
     honorPayments: read('honorPayments'),
+    sppPayments: read('sppPayments'),
   }
 
   const noData = entities.sekolah.length === 0 && entities.siswa.length === 0 && entities.trainer.length === 0

@@ -31,8 +31,16 @@ export function elapsedPeriods(academicStartYear, selectedMonthNum) {
  * Does this siswa have at least one unpaid month among the elapsed periods?
  * sppLunas is sparse: missing key = unpaid (Part 2 convention #2).
  */
-export function isTunggakan(siswa, elapsed) {
-  return elapsed.some(({ periode }) => !siswa.sppLunas?.[periode])
+export function sppPaidForPeriode(siswa, periode, sppPayments = [], sppTarif = 0) {
+  const total = sppPayments
+    .filter(p => p.siswaId === siswa.id && p.periode === periode)
+    .reduce((sum, p) => sum + Number(p.nominal || 0), 0)
+  return total >= Number(sppTarif)
+}
+
+export function isTunggakan(siswa, elapsed, sppPayments = [], sppTarif = 0) {
+  if (siswa.status === 'Trial') return false
+  return elapsed.some(({ periode }) => !sppPaidForPeriode(siswa, periode, sppPayments, sppTarif))
 }
 
 /**
@@ -40,13 +48,15 @@ export function isTunggakan(siswa, elapsed) {
  * Each returned item is annotated with `unpaidMonths` (display names) for
  * the row UI to render, e.g. "Belum bayar: Agustus, Oktober".
  */
-export function filterTunggakan(siswaList, academicStartYear, selectedMonthNum) {
+export function filterTunggakan(siswaList, academicStartYear, selectedMonthNum, sppPayments = [], sppTarifForSiswa = () => 0) {
   const elapsed = elapsedPeriods(academicStartYear, selectedMonthNum)
   return siswaList
-    .filter(s => isTunggakan(s, elapsed))
+    .filter(s => isTunggakan(s, elapsed, sppPayments, sppTarifForSiswa(s)))
     .map(s => ({
       ...s,
-      unpaidMonths: elapsed.filter(({ periode }) => !s.sppLunas?.[periode]).map(e => e.monthName),
+      unpaidMonths: elapsed
+        .filter(({ periode }) => !sppPaidForPeriode(s, periode, sppPayments, sppTarifForSiswa(s)))
+        .map(e => e.monthName),
     }))
 }
 

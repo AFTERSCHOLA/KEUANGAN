@@ -18,7 +18,8 @@ export default function TrainerDashboard({ trainerId }) {
   const siswa = read('siswa')
   const absensi = read('absensi')
   const honorPayments = read('honorPayments')
-  const finance = financialData({ sekolah, siswa, trainer: trainers, absensi, honorPayments, periode })
+  const sppPayments = read('sppPayments')
+  const finance = financialData({ sekolah, siswa, trainer: trainers, absensi, honorPayments, sppPayments, periode })
   const trainerFinance = finance.trainerFinance.find(t => t.id === trainerId) || {
     hadirSesi: 0,
     tarif: trainer?.honor || 0,

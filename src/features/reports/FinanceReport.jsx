@@ -87,14 +87,15 @@ export default function FinanceReport() {
   const trainer = read('trainer')
   const absensi = read('absensi')
   const honorPayments = read('honorPayments')
+  const sppPayments = read('sppPayments')
 
   const periode = period.periodeKey()
   const periodePrevBulan = shiftPeriode(periode, -1)
   const periodePrevTahun = shiftPeriode(periode, -12)
 
-  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode })
-  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode: periodePrevBulan })
-  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode: periodePrevTahun })
+  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode })
+  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: periodePrevBulan })
+  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: periodePrevTahun })
 
   const comparisonRows = [
     { label: 'Potensi SPP', key: 'potensiSpp', tag: 'Memo' },
@@ -122,7 +123,7 @@ export default function FinanceReport() {
   }
 
   const rangeDataByPeriode = Object.fromEntries(
-    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode: p })])
+    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: p })])
   )
   const rangeTotals = Object.fromEntries(
     RANGE_ROWS.map(row => [row.key, rangePeriods.reduce((sum, p) => sum + rangeDataByPeriode[p][row.key], 0)])

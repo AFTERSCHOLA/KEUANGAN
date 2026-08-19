@@ -3,7 +3,7 @@ import { read, write, upsert, usePeriod } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
-import { elapsedPeriods, isTunggakan, buildTagihanWaLink } from '../../lib/tunggakan.js'
+import { elapsedPeriods, isTunggakan, sppPaidForPeriode, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SppPaymentModal from '../payments/SppPaymentModal.jsx'
@@ -20,17 +20,30 @@ export default function StudentList({ readOnly = false }) {
 
   const sekolah = read('sekolah')
   const absensi = read('absensi')
+  const sppPayments = read('sppPayments')
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
   const stats = attendanceStats(absensi, period.periodeKey())
 
+  function sppTarifOf(s) {
+    return sekolah.find(sch => sch.id === s.sekolahId)?.spp || 0
+  }
+
   function unpaidMonthsOf(s) {
-    return elapsed.filter(({ periode }) => !s.sppLunas?.[periode]).map(e => e.monthName)
+    return elapsed
+      .filter(({ periode }) => !sppPaidForPeriode(s, periode, sppPayments, sppTarifOf(s)))
+      .map(e => e.monthName)
+  }
+
+  function sppTotalOf(s, periode) {
+    return sppPayments
+      .filter(p => p.siswaId === s.id && p.periode === periode)
+      .reduce((sum, p) => sum + Number(p.nominal || 0), 0)
   }
 
   const isBillable = s => s.status !== 'Trial' // M5.4.3 — Trial siswa tidak masuk hitungan tunggakan sama sekali
 
-  const visibleSiswa = onlyTunggakan ? siswa.filter(s => isBillable(s) && isTunggakan(s, elapsed)) : siswa
+  const visibleSiswa = onlyTunggakan ? siswa.filter(s => isBillable(s) && isTunggakan(s, elapsed, sppPayments, sppTarifOf(s))) : siswa
 
   function refresh() {
     setSiswa(read('siswa'))
@@ -170,6 +183,10 @@ export default function StudentList({ readOnly = false }) {
                   <td className="py-4 px-6 text-center">
                     {s.status === 'Trial' ? (
                       <span className="bg-yellow-100 text-yellow-700 text-xs px-2.5 py-1 rounded-full font-bold">Trial — Belum Ditagih</span>
+                    ) : sppPaidForPeriode(s, period.periodeKey(), sppPayments, sppTarifOf(s)) ? (
+                      <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-bold">Lunas</span>
+                    ) : sppTotalOf(s, period.periodeKey()) > 0 ? (
+                      <span className="bg-yellow-100 text-yellow-700 text-xs px-2.5 py-1 rounded-full font-bold">Sebagian Bayar</span>
                     ) : (
                       <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">Belum Bayar</span>
                     )}
@@ -182,7 +199,7 @@ export default function StudentList({ readOnly = false }) {
                   {!readOnly && (
                     <td className="py-4 px-6 text-center">
                       <div className="flex justify-center gap-2">
-                        {isBillable(s) && isTunggakan(s, elapsed) && (
+                        {isBillable(s) && isTunggakan(s, elapsed, sppPayments, sppTarifOf(s)) && (
                           <a
                             href={buildTagihanWaLink(s, sekolah.find(x => x.id === s.sekolahId)?.spp || 0, unpaidMonthsOf(s))}
                             target="_blank"
