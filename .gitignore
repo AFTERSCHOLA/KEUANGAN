@@ -5,6 +5,7 @@ tests
 !tests/
 tests/*
 !tests/m61-verify.spec.js
+!tests/m62-verify.spec.js
 test-results
 .playwright-mcp
 .commandcode

@@ -1,5 +1,5 @@
 import { read, write } from './store.js'
-import { generateId } from './constants.js'
+import { generateId, DEFAULT_CABANG_KODE } from './constants.js'
 
 export function newInvoice({
   sekolahId,
@@ -49,13 +49,20 @@ export function addInvoice(invoice) {
  * (Draft -> Terbit) — supaya draft yang dihapus tidak "membakar" nomor urut.
  * Reset ke 0001 tiap ganti tahun kalender (dihitung dari tanggalTerbit).
  */
-export function generateInvoiceNumber(tanggal) {
+export function generateInvoiceNumber(tanggal, sekolahId) {
   const all = read('invoices')
   const year = tanggal.slice(0, 4)
-  const yearMonth = tanggal.slice(0, 7).replace('-', '')
-  const countThisYear = all.filter(inv => inv.nomor && inv.tanggalTerbit?.slice(0, 4) === year).length
-  const seq = countThisYear + 1
-  return `AFS-${yearMonth}-${String(seq).padStart(4, '0')}`
+  const sekolah = read('sekolah').find(s => s.id === sekolahId)
+  const cabang = read('cabang').find(c => c.id === sekolah?.cabangId)
+  const branch = cabang?.kode || DEFAULT_CABANG_KODE
+  const countThisYearAndBranch = all.filter(inv => {
+    if (!inv.nomor || inv.tanggalTerbit?.slice(0, 4) !== year) return false
+    const invoiceSchool = read('sekolah').find(s => s.id === inv.sekolahId)
+    const invoiceBranch = read('cabang').find(c => c.id === invoiceSchool?.cabangId)
+    return (invoiceBranch?.kode || DEFAULT_CABANG_KODE) === branch
+  }).length
+  const seq = countThisYearAndBranch + 1
+  return `INV/${year}/${tanggal.slice(5, 7)}/${branch}-${String(seq).padStart(4, '0')}`
 }
 
 export function setInvoiceStatus(id, status) {
@@ -64,7 +71,7 @@ export function setInvoiceStatus(id, status) {
     if (inv.id !== id) return inv
     const next = { ...inv, status }
     if (status === 'Terbit' && !inv.nomor) {
-      next.nomor = generateInvoiceNumber(inv.tanggalTerbit)
+      next.nomor = generateInvoiceNumber(inv.tanggalTerbit, inv.sekolahId)
     }
     return next
   })
