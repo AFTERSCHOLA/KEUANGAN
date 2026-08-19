@@ -14,6 +14,7 @@ import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './li
 import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
 import RolePicker from './features/auth/RolePicker.jsx'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
+import BranchManager from './features/admin/BranchManager.jsx'
 
 
 
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'pembayaran', label: 'Data Pembayaran', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'keuangan', label: 'Data Keuangan', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { id: 'cabang', label: 'Data Cabang', icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V13a1 1 0 011-1h4a1 1 0 011 1v8M9 9h1m-1 4h1m4-4h1m-1 4h1' },
 ]
 
 // Trainer melihat 4 tab saja (M5.1.2): Absensi, Riwayat, Siswa read-only,
@@ -350,6 +352,7 @@ export default function App() {
           {activeTab === 'pembayaran' && <PaymentTable />}
           {activeTab === 'keuangan' && <FinanceReport />}
           {activeTab === 'aging' && <AgingReport />}
+          {activeTab === 'cabang' && <BranchManager />}
         </main>
       </div>
 

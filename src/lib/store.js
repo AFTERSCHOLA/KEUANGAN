@@ -68,6 +68,8 @@ export function getKeys() {
     sppPayments: `${STORE_KEY}_sppPayments`,
     invoices: `${STORE_KEY}_invoices`,
     settings: `${STORE_KEY}_settings`,
+    // M7.1.1 — branch entity, read/written like any other collection.
+    cabang: `${STORE_KEY}_cabang`,
   }
 }
 
@@ -100,12 +102,153 @@ export function upsert(key, record) {
   if (ctx.role === 'trainer' && !isWithinScope(key, record, ctx)) return
   const records = read(key)
   const idx = records.findIndex(r => r.id === record.id)
+  let saved
   if (idx >= 0) {
     records[idx] = { ...records[idx], ...record }
+    saved = records[idx]
   } else {
     records.push(record)
+    saved = record
   }
   write(key, records)
+  queueSync(key, saved)
+}
+
+// ============================================
+// M7.2.1 — SERVER-FIRST SYNC LAYER (additive)
+// ============================================
+// Design note: read()/write()/upsert() above stay fully synchronous —
+// every existing caller (SchoolList, BranchManager, StudentList, ...)
+// calls read('sekolah') expecting an array back immediately, inside
+// useState initializers and render logic. Converting them to return a
+// Promise — a literal reading of "read() → fetch(...)" — breaks every one
+// of those call sites, files this microtask does not own (R7). Instead
+// this section adds a *parallel* sync layer on the same localStorage
+// source of truth:
+//   - upsert() (above) also queues the saved record for server push
+//   - syncPending() flushes the queue to the PHP endpoints (M7.2.2) when
+//     online — this is what a "Sync" button (UI, out of this file's
+//     scope) calls to show a pending count and trigger a push
+//   - pullRemote() opportunistically refreshes the local cache from the
+//     server in the background; it never blocks or replaces read()
+// This matches the microtask's own VERIFY line: "Network off → app still
+// works from cache → network on → sync button shows pending count → sync
+// resolves" — a queue-and-sync-button pattern, not a request/response
+// rewrite of read().
+
+const SYNC_LOG_KEY = `${STORE_KEY}_syncLog`
+
+// Only these collections are append-only ledgers with a matching PHP
+// endpoint (M7.2.2). Everything else (sekolah, trainer, siswa, cabang,
+// settings) stays localStorage-only for now — unchanged from before this
+// microtask, and out of scope to wire up here.
+const SYNC_ENDPOINTS = {
+  absensi: '/api/absensi.php',
+  sppPayments: '/api/sppPayments.php',
+  honorPayments: '/api/honorPayments.php',
+}
+
+function readSyncLog() {
+  try {
+    const json = localStorage.getItem(SYNC_LOG_KEY)
+    const parsed = json ? JSON.parse(json) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeSyncLog(entries) {
+  localStorage.setItem(SYNC_LOG_KEY, JSON.stringify(entries))
+}
+
+// Queues a record for push to its PHP endpoint. Silently no-ops for keys
+// without one (sekolah, trainer, siswa, cabang, ...) so upsert() can call
+// this unconditionally without callers needing to know which keys sync.
+function queueSync(key, record) {
+  if (!SYNC_ENDPOINTS[key] || !record?.id) return
+  const log = readSyncLog()
+  // Replace any existing queued entry for the same record — the queue
+  // holds at most one pending push per record (last write wins locally;
+  // only the latest version is ever POSTed), not a growing history.
+  const next = log.filter(e => !(e.key === key && e.id === record.id))
+  next.push({ key, id: record.id, record, queuedAt: Date.now() })
+  writeSyncLog(next)
+}
+
+// Read-only status for a "Sync" button UI: how many records are waiting
+// to be pushed. Safe to call anytime (offline or online).
+export function getSyncStatus() {
+  const log = readSyncLog()
+  return { pending: log.length, entries: log }
+}
+
+// Pushes every queued entry to its PHP endpoint, in order. Stops at the
+// first network failure and leaves the remaining entries queued — a
+// flaky connection degrades to "still pending", never silent data loss.
+// A 409 (server already has this ID — append-only per M7.2.2) is treated
+// as success and dropped from the queue: the record is already on the
+// server, nothing left to push.
+export async function syncPending() {
+  const log = readSyncLog()
+  const remaining = []
+  let synced = 0
+  let stoppedOnFailure = false
+
+  for (const entry of log) {
+    if (stoppedOnFailure) {
+      remaining.push(entry)
+      continue
+    }
+    const url = SYNC_ENDPOINTS[entry.key]
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry.record),
+      })
+      if (res.ok || res.status === 409) {
+        synced++
+      } else {
+        remaining.push(entry)
+        stoppedOnFailure = true
+      }
+    } catch {
+      // Offline or unreachable — stop here, keep this and the rest queued.
+      remaining.push(entry)
+      stoppedOnFailure = true
+    }
+  }
+
+  writeSyncLog(remaining)
+  return { synced, pending: remaining.length }
+}
+
+// Best-effort background refresh of the local cache from the server.
+// Never blocks or replaces read() — a failed/offline pull just leaves the
+// existing localStorage cache in place, which read() keeps serving
+// synchronously regardless of this call's outcome. Merge is additive only
+// (remote records the local cache doesn't have yet get appended); it
+// never overwrites a local record, since append-only ledgers never change
+// an existing row server-side either (M7.2.2).
+export async function pullRemote(key) {
+  const url = SYNC_ENDPOINTS[key]
+  if (!url) return false
+  try {
+    const res = await fetch(url, { method: 'GET' })
+    if (!res.ok) return false
+    const remote = await res.json()
+    if (!Array.isArray(remote)) return false
+    const local = read(key)
+    const localIds = new Set(local.map(r => r.id))
+    const merged = local.concat(remote.filter(r => !localIds.has(r.id)))
+    write(key, merged)
+    return true
+  } catch {
+    // Offline or unreachable — local cache (already serving read())
+    // is left exactly as it was.
+    return false
+  }
 }
 
 // ============================================
