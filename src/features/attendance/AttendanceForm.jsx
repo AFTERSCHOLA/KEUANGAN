@@ -100,6 +100,11 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
       asistenNama: asisten ? asisten.nama : null,
       catatan,
       dokumentasi,
+      foto: editingRecord?.foto || '',
+      statusVerifikasi: editingRecord?.statusVerifikasi || null,
+      konfirmasiTrainer: editingRecord?.konfirmasiTrainer || null,
+      sesiKe: editingRecord?.sesiKe || 1,
+      lastEditedAt: editingRecord ? new Date().toISOString() : null,
     })
     upsert('absensi', record)
     setSaved(true)
@@ -199,8 +204,11 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
               className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 resize-none"
             />
           </div>
-          <PhotoSlot label="Foto Kehadiran" entry={fotoKehadiran} onChange={v => { setFotoKehadiran(v); setSaved(false) }} disabled={!trainerId} />
-          <PhotoSlot label="Foto Kegiatan" entry={fotoKegiatan} onChange={v => { setFotoKegiatan(v); setSaved(false) }} disabled={!trainerId} />
+          <div className="space-y-2">
+            <PhotoSlot label="Foto Kehadiran" entry={fotoKehadiran} onChange={v => { setFotoKehadiran(v); setSaved(false) }} disabled={!trainerId} />
+            <PhotoSlot label="Foto Kegiatan" entry={fotoKegiatan} onChange={v => { setFotoKegiatan(v); setSaved(false) }} disabled={!trainerId} />
+            <p className="text-[11px] font-semibold text-slate-400">Simpan kertas absensi minimal 1 tahun ajaran.</p>
+          </div>
           {tanggal && sekolahId && trainerId && (
             <button onClick={attemptSubmit} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm active:scale-95">Simpan Absensi</button>
           )}

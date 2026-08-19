@@ -54,8 +54,12 @@ Replace flat "Belum Dicek" filter with **exception-filtered review queue** (defa
 **VERIFY:** Queue shows only flags + sample, not all records; admin can verify; trainer sees no verify button; full history still reachable via explicit "Semua" toggle.
 
 **M5.3.1b** `EDIT: lib/constants.js + features/attendance/TrainerHistory.jsx`  
-Add `konfirmasiTrainer` timestamp field to `newAbsensi()` factory (null until certified). Add weekly self-certification flow to TrainerHistory: one-tap "Saya nyatakan absensi minggu ini sesuai dokumen kertas" button stamps all own un-certified records of the week. Static retention label rendered beside photo upload: *"Simpan kertas absensi minimal 1 tahun ajaran."*  
-**VERIFY:** One tap → week's own records carry `konfirmasiTrainer` timestamp; already-certified records untouched; label visible on attendance form.
+Add `konfirmasiTrainer` timestamp field to `newAbsensi()` factory (null until certified). TrainerHistory must render each own record's `asistenNama`, `dokumentasi` thumbnails, and `catatan` BEFORE the self-certification action so the trainer can actually inspect what they are certifying. Add weekly self-certification flow: one-tap "Saya nyatakan absensi minggu ini sesuai dokumen kertas" button stamps all own un-certified records of the week. Static retention label rendered beside photo upload: *"Simpan kertas absensi minimal 1 tahun ajaran."*  
+**VERIFY:** Each own record shows asisten, documentation thumbnails, and catatan in TrainerHistory; one tap → week's own records carry `konfirmasiTrainer` timestamp; already-certified records untouched; label visible on attendance form.
+
+**M5.3.2** `EDIT: features/auth/TrainerDashboard.jsx`  
+Replace the Rekap Saya stub with real landing content: today's scheduled schools for this trainer (from `sekolah.jadwal` + trainer assignment), which scheduled schools already have absensi today vs. pending, and the trainer's own current-period honor summary (sesi hadir × tarif, honor dibayar, sisa) derived from `financialData()`.  
+**VERIFY:** Trainer logs in → Rekap Saya shows scheduled schools with pending/done status for today plus own honor summary; figures match Data Pembayaran/Keuangan for the selected period.
 
 **M5.3.3** `EDIT: features/students/StudentList.jsx`  
 Add view-only mode: hide Edit/Delete buttons when `role === 'trainer'`. Add Trial badge.  
@@ -75,7 +79,7 @@ Add status radio + trial start date picker.
 `financialData()` excludes `status === 'Trial'` from `potensiSpp` and `tunggakan`.  
 **VERIFY:** 30 active + 2 trial students → SPP potensi counts only 30.
 
-**Exit gate:** Trainer can login → mark attendance with photos → admin verifies same record → finance numbers unchanged by trial students.
+**Exit gate:** Trainer can login → Rekap Saya shows today's schedule + own honor summary → mark attendance with photos → see asisten/documentation/catatan in own history → self-certify the week → admin verifies the flagged record → finance numbers unchanged by trial students.
 
 ---
 

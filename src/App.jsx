@@ -14,6 +14,7 @@ import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './li
 import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
 import RolePicker from './features/auth/RolePicker.jsx'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
+import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
 
 
@@ -348,7 +349,7 @@ export default function App() {
           {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'absensi' && <AttendanceTab />}
-          {activeTab === 'riwayat' && <AttendanceTab initialView="riwayat" />}
+          {activeTab === 'riwayat' && (role === 'trainer' ? <TrainerHistory trainerId={trainerId} /> : <AttendanceTab initialView="riwayat" />)}
           {activeTab === 'pembayaran' && <PaymentTable />}
           {activeTab === 'keuangan' && <FinanceReport />}
           {activeTab === 'aging' && <AgingReport />}
