@@ -167,6 +167,12 @@ export function periodeFromDate(tanggal) {
   return tanggal.slice(0, 7)
 }
 
+export function shiftPeriode(periode, monthsDelta) {
+  const [y, m] = periode.split('-').map(Number)
+  const d = new Date(y, m - 1 + monthsDelta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 export function academicYearLabel(A) {
   return `${A}/${A + 1}`
 }

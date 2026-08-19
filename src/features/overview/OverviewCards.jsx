@@ -2,6 +2,7 @@ import { read, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { MONTHS, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
+import ExecutiveSummary from '../reports/ExecutiveSummary.jsx'
 
 // M4.2 — Overview graphs (Person 5). Pure SVG/CSS, no chart library.
 // R4: every number here comes out of finance.js's financialData(); this
@@ -25,7 +26,6 @@ export default function OverviewCards() {
   const currentPeriode = period.periodeKey()
   const current = financialData({ ...entities, periode: currentPeriode })
 
-  // 12 bulan Juli→Juni tahun ajaran yang dipilih.
   const monthly = MONTHS.map((label, i) => {
     const monthNum = Number(MONTH_KEYS[i])
     const periode = periodeKey(monthNum, period.selectedYear)
@@ -33,7 +33,6 @@ export default function OverviewCards() {
     return { label, periode, ...fd }
   })
 
-  // Posisi kas kumulatif: running sum labaRugi cash-basis dari Juli s.d. bulan terpilih.
   const selectedIdx = MONTH_KEYS.indexOf(String(period.selectedMonth).padStart(2, '0'))
   let running = 0
   const cashPosition = monthly.slice(0, selectedIdx + 1).map(m => {
@@ -65,6 +64,9 @@ export default function OverviewCards() {
         <h2 className="text-xl font-bold text-slate-800">Overview</h2>
         <p className="text-xs text-slate-500">Ringkasan operasional & keuangan — {MONTHS[selectedIdx]} {period.selectedYear}/{period.selectedYear + 1}</p>
       </div>
+
+      {/* M6.3.3 — Executive Summary: Laba/Rugi + kolektibilitas + red flags */}
+      <ExecutiveSummary />
 
       {/* Summary cards — cash rows vs memo rows visually distinct (D1) */}
       <div className="bg-gradient-to-br from-blue-900 to-slate-950 text-white rounded-2xl p-6 shadow-md grid grid-cols-1 md:grid-cols-4 gap-4 animate-scaleIn">
@@ -160,7 +162,6 @@ function Legend({ items }) {
   )
 }
 
-// ---- Grouped bar chart: 12 bulan × 3 seri (Pemasukan, Dibayar, Beban) ----
 function MonthlyTrendChart({ data }) {
   const padding = { top: 10, right: 10, bottom: 24, left: 10 }
   const innerW = CHART_W - padding.left - padding.right
@@ -205,7 +206,6 @@ function MonthlyTrendChart({ data }) {
   )
 }
 
-// ---- Donut: collection rate ----
 function DonutChart({ rate }) {
   const size = 160
   const stroke = 18
@@ -237,7 +237,6 @@ function DonutChart({ rate }) {
   )
 }
 
-// ---- Horizontal bars per school ----
 function PerSchoolBars({ data }) {
   const rowH = 34
   const height = data.length * rowH + 10
@@ -268,7 +267,6 @@ function PerSchoolBars({ data }) {
   )
 }
 
-// ---- Cumulative cash-position line ----
 function CashPositionLine({ data }) {
   const padding = { top: 16, right: 16, bottom: 24, left: 16 }
   const innerW = CHART_W - padding.left - padding.right
