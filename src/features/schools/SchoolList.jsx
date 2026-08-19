@@ -6,6 +6,8 @@ import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+import InvoiceModal from '../reports/InvoiceModal.jsx'
+import InvoiceTemplate from '../reports/InvoiceTemplate.jsx'
 
 
 export default function SchoolList() {
@@ -17,7 +19,9 @@ export default function SchoolList() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState(null)
   const [pendingSiswaCount, setPendingSiswaCount] = useState(0)
-  const [pickerOpen, setPickerOpen] = useState(false)
+    const [pickerOpen, setPickerOpen] = useState(false)
+  const [invoiceModalSchool, setInvoiceModalSchool] = useState(null)
+  const [printInvoice, setPrintInvoice] = useState(null)
 
   function refresh() {
     setSekolah(read('sekolah'))
@@ -135,6 +139,10 @@ export default function SchoolList() {
     refresh()
   }
 
+    if (printInvoice) {
+    return <InvoiceTemplate invoice={printInvoice.invoice} sekolah={printInvoice.sekolah} onBack={() => setPrintInvoice(null)} />
+  }
+
   if (sekolah.length === 0 && !modalOpen) {
     return (
       <div className="space-y-6 animate-fadeIn">
@@ -193,8 +201,9 @@ export default function SchoolList() {
                   e.target.src = 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=400&auto=format&fit=crop&q=80'
                 }}
               />
-              <div className="absolute top-2 right-2 flex gap-1">
-                <button onClick={() => openEdit(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"><svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth="2"/></svg></button>
+                            <div className="absolute top-2 right-2 flex gap-1">
+                <button onClick={() => setInvoiceModalSchool(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm" title="Kelola Invoice"><svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>
+                <button onClick={() => openEdit(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"></button>
                 <button onClick={() => remove(sch.id)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"><svg className="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2"/></svg></button>
               </div>
             </div>
@@ -245,12 +254,18 @@ export default function SchoolList() {
         onCancel={() => { setConfirmOpen(false); setPendingDeleteId(null) }}
         onConfirm={openReassign}
       />
-      <ReassignPicker
+            <ReassignPicker
         open={pickerOpen}
         sekolah={sekolah}
         excludeId={pendingDeleteId}
         onClose={() => setPickerOpen(false)}
         onPick={reassignTo}
+      />
+      <InvoiceModal
+        open={!!invoiceModalSchool}
+        sekolah={invoiceModalSchool}
+        onClose={() => setInvoiceModalSchool(null)}
+        onPrint={(invoice, sch) => { setInvoiceModalSchool(null); setPrintInvoice({ invoice, sekolah: sch }) }}
       />
     </div>
   )

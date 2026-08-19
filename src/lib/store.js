@@ -48,8 +48,11 @@ function isWithinScope(key, record, ctx) {
       return sekolahIds.includes(record.sekolahId)
     case 'siswa':
       return sekolahIds.includes(record.sekolahId)
-    case 'honorPayments':
+        case 'honorPayments':
       return record.trainerId === ctx.trainerId
+    case 'invoices':
+      // Trainer tidak punya akses ke invoice sama sekali (lihat SCOPE_EXPANSION_PRIVILEGES.md)
+      return false
     default:
       return true
   }
@@ -63,6 +66,7 @@ export function getKeys() {
     absensi: `${STORE_KEY}_absensi`,
     honorPayments: `${STORE_KEY}_honorPayments`,
     sppPayments: `${STORE_KEY}_sppPayments`,
+    invoices: `${STORE_KEY}_invoices`,
     settings: `${STORE_KEY}_settings`,
   }
 }
