@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { read, upsert, usePeriod } from '../../lib/store'
+import { readCached, upsert, usePeriod } from '../../lib/store'
 import { loadPhotoDataUrl } from '../../lib/photoStorage.js'
 
 function isoWeekKey(dateStr) {
@@ -16,7 +16,7 @@ function isoWeekKey(dateStr) {
 export default function TrainerHistory({ trainerId }) {
   const { periodeKey } = usePeriod()
   const [tick, setTick] = useState(0)
-  const absensi = useMemo(() => read('absensi'), [tick])
+  const absensi = useMemo(() => readCached('absensi'), [tick])
 
   const periode = periodeKey()
   const myRecords = useMemo(() => absensi

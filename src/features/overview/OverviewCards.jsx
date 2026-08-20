@@ -1,4 +1,4 @@
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { MONTHS, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
@@ -14,12 +14,12 @@ const CHART_H = 220
 export default function OverviewCards() {
   const period = usePeriod()
   const entities = {
-    sekolah: read('sekolah'),
-    siswa: read('siswa'),
-    trainer: read('trainer'),
-    absensi: read('absensi'),
-    honorPayments: read('honorPayments'),
-    sppPayments: read('sppPayments'),
+    sekolah: readCached('sekolah'),
+    siswa: readCached('siswa'),
+    trainer: readCached('trainer'),
+    absensi: readCached('absensi'),
+    honorPayments: readCached('honorPayments'),
+    sppPayments: readCached('sppPayments'),
   }
 
   const noData = entities.sekolah.length === 0 && entities.siswa.length === 0 && entities.trainer.length === 0

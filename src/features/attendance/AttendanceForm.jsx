@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { read, upsert } from '../../lib/store.js'
+import { readCached, upsert } from '../../lib/store.js'
 import { newAbsensi } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -23,9 +23,9 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
   const [alertMsg, setAlertMsg] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const sekolah = useMemo(() => read('sekolah'), [dataRev])
-  const trainers = useMemo(() => read('trainer'), [dataRev])
-  const siswa = useMemo(() => read('siswa'), [dataRev])
+  const sekolah = useMemo(() => readCached('sekolah'), [dataRev])
+  const trainers = useMemo(() => readCached('trainer'), [dataRev])
+  const siswa = useMemo(() => readCached('siswa'), [dataRev])
 
   useEffect(() => {
     if (editingRecord) {

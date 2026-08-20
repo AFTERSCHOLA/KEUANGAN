@@ -4,6 +4,7 @@ import { compressImage, storePhoto, loadPhotoDataUrl, deletePhotoEntry } from '.
 export default function PhotoSlot({ label, entry, onChange, disabled }) {
   const [previewUrl, setPreviewUrl] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -22,12 +23,13 @@ export default function PhotoSlot({ label, entry, onChange, disabled }) {
     e.target.value = ''
     if (!file) return
     setBusy(true)
+    setError('')
     try {
       const compressed = await compressImage(file)
       const stored = await storePhoto(compressed, label.toLowerCase().replace(/\s+/g, '-'))
       onChange(stored)
     } catch (err) {
-      console.error('Gagal memproses foto', err)
+      setError(err.message || 'Gagal memproses foto')
     } finally {
       setBusy(false)
     }
@@ -61,6 +63,7 @@ export default function PhotoSlot({ label, entry, onChange, disabled }) {
           )}
         </div>
       </div>
+      {error && <p className="mt-1 text-xs font-semibold text-rose-500">{error}</p>}
     </div>
   )
 }

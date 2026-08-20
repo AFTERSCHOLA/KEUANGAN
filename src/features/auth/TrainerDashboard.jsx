@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { financialData } from '../../lib/finance.js'
 import { formatRupiah } from '../../lib/format.js'
 
@@ -12,13 +12,13 @@ function scheduleIncludesToday(schedule, dayName) {
 export default function TrainerDashboard({ trainerId }) {
   const { periodeKey } = usePeriod()
   const periode = periodeKey()
-  const trainers = read('trainer')
+  const trainers = readCached('trainer')
   const trainer = trainers.find(t => t.id === trainerId)
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
-  const absensi = read('absensi')
-  const honorPayments = read('honorPayments')
-  const sppPayments = read('sppPayments')
+  const sekolah = readCached('sekolah')
+  const siswa = readCached('siswa')
+  const absensi = readCached('absensi')
+  const honorPayments = readCached('honorPayments')
+  const sppPayments = readCached('sppPayments')
   const finance = financialData({ sekolah, siswa, trainer: trainers, absensi, honorPayments, sppPayments, periode })
   const trainerFinance = finance.trainerFinance.find(t => t.id === trainerId) || {
     hadirSesi: 0,

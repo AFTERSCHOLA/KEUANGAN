@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { read, write, upsert } from '../../lib/store.js'
+import { readCached, write, upsert } from '../../lib/store.js'
 import { formatRupiah, waNormalize } from '../../lib/format.js'
 import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 export default function TrainerList() {
-  const [trainers, setTrainers] = useState(() => read('trainer'))
+  const [trainers, setTrainers] = useState(() => readCached('trainer'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newTrainer())
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -14,11 +14,11 @@ export default function TrainerList() {
   const [pendingRemoveId, setPendingRemoveId] = useState(null)
 
   function refresh() {
-    setTrainers(read('trainer'))
+    setTrainers(readCached('trainer'))
   }
 
   function openAdd() {
-    const firstBranch = read('cabang')[0] || defaultCabang()
+    const firstBranch = readCached('cabang')[0] || defaultCabang()
     setForm(newTrainer(firstBranch.kode))
     setModalOpen(true)
   }
@@ -32,7 +32,7 @@ export default function TrainerList() {
     const prev = trainers.find(t => t.id === form.id)
     const oldSekolahIds = prev ? prev.sekolahIds : []
     upsert('trainer', form)
-    const sekolahList = read('sekolah')
+    const sekolahList = readCached('sekolah')
     oldSekolahIds.forEach(sId => {
       if (!form.sekolahIds.includes(sId)) {
         const s = sekolahList.find(sch => sch.id === sId)
@@ -155,7 +155,7 @@ export default function TrainerList() {
 }
 
 function TrainerForm({ form, setForm, save, onClose }) {
-  const sekolah = read('sekolah')
+  const sekolah = readCached('sekolah')
   return (
     <>
       <div>

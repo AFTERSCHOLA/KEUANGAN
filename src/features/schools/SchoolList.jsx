@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { read, write, upsert, getRoleContext } from '../../lib/store.js'
+import { readCached, write, upsert, getRoleContext } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newSekolah, defaultCabang } from '../../lib/constants.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
@@ -11,9 +11,9 @@ import InvoiceTemplate from '../reports/InvoiceTemplate.jsx'
 
 
 export default function SchoolList() {
-  const [sekolah, setSekolah] = useState(() => read('sekolah'))
+  const [sekolah, setSekolah] = useState(() => readCached('sekolah'))
   const [cabang, setCabang] = useState(() => {
-    const list = read('cabang')
+    const list = readCached('cabang')
     return list.length ? list : [defaultCabang()]
   })
   const [selectedCabangId, setSelectedCabangId] = useState('')
@@ -32,8 +32,8 @@ export default function SchoolList() {
   const visibleSekolah = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah
 
   function refresh() {
-    setSekolah(read('sekolah'))
-    const nextCabang = read('cabang')
+    setSekolah(readCached('sekolah'))
+    const nextCabang = readCached('cabang')
     if (nextCabang.length) setCabang(nextCabang)
   }
 
@@ -57,7 +57,7 @@ export default function SchoolList() {
     const prev = sekolah.find(s => s.id === form.id)
     const oldTrainerIds = prev ? prev.trainerIds : []
     upsert('sekolah', form)
-    const trainerList = read('trainer')
+    const trainerList = readCached('trainer')
     oldTrainerIds.forEach(tId => {
       if (!form.trainerIds.includes(tId)) {
         const t = trainerList.find(tr => tr.id === tId)
@@ -83,7 +83,7 @@ export default function SchoolList() {
     // in the same save." — missing before; siswa list would keep showing
     // the old school name after a rename.
     if (prev && prev.nama !== form.nama) {
-      const siswaList = read('siswa')
+      const siswaList = readCached('siswa')
       let touched = false
       siswaList.forEach(s => {
         if (s.sekolahId === form.id && s.sekolahNama !== form.nama) {
@@ -99,7 +99,7 @@ export default function SchoolList() {
   }
 
   function remove(id) {
-    const siswa = read('siswa')
+    const siswa = readCached('siswa')
     if (siswa.some(s => s.sekolahId === id)) {
       setPendingDeleteId(id)
       setPendingSiswaCount(siswa.filter(s => s.sekolahId === id).length)
@@ -116,7 +116,7 @@ export default function SchoolList() {
 
   function reassignTo(targetId) {
     const id = pendingDeleteId
-    const siswaList = read('siswa')
+    const siswaList = readCached('siswa')
     const target = sekolah.find(s => s.id === targetId)
     let touched = false
     siswaList.forEach(s => {
@@ -134,7 +134,7 @@ export default function SchoolList() {
   function doDelete(id) {
     const sch = sekolah.find(s => s.id === id)
     if (sch) {
-      const trainerList = read('trainer')
+      const trainerList = readCached('trainer')
       ;(sch.trainerIds || []).forEach(tId => {
         const t = trainerList.find(tr => tr.id === tId)
         if (t) {
@@ -241,7 +241,7 @@ export default function SchoolList() {
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-bold uppercase">Jumlah Siswa</p>
-                    <p className="text-sm font-semibold text-slate-700">{read('siswa').filter(s => s.sekolahId === sch.id).length} Siswa</p>
+                    <p className="text-sm font-semibold text-slate-700">{readCached('siswa').filter(s => s.sekolahId === sch.id).length} Siswa</p>
                   </div>
                 </div>
 
@@ -359,7 +359,7 @@ function ReassignPicker({ open, sekolah, excludeId, onClose, onPick }) {
               className="w-full text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-xl px-4 py-3 transition"
             >
               <span className="text-sm font-bold text-slate-800">{t.nama}</span>
-              <span className="block text-xs text-slate-400">{read('siswa').filter(s => s.sekolahId === t.id).length} siswa</span>
+              <span className="block text-xs text-slate-400">{readCached('siswa').filter(s => s.sekolahId === t.id).length} siswa</span>
             </button>
           ))}
         </div>

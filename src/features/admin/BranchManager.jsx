@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { read, write, upsert, getRoleContext } from '../../lib/store.js'
+import { readCached, write, upsert, getRoleContext } from '../../lib/store.js'
 import { newCabang, defaultCabang } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -10,7 +10,7 @@ import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 // Branch management is restricted to the explicit superadmin role.
 
 function seedCabangIfEmpty() {
-  let list = read('cabang')
+  let list = readCached('cabang')
   if (list.length === 0) {
     list = [defaultCabang()]
     write('cabang', list)
@@ -21,7 +21,7 @@ function seedCabangIfEmpty() {
 export default function BranchManager() {
   const ctx = getRoleContext()
   const [cabang, setCabang] = useState(() => seedCabangIfEmpty())
-  const [sekolah, setSekolah] = useState(() => read('sekolah'))
+  const [sekolah, setSekolah] = useState(() => readCached('sekolah'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newCabang())
   const [alertOpen, setAlertOpen] = useState(false)
@@ -31,8 +31,8 @@ export default function BranchManager() {
   const [assignPickerFor, setAssignPickerFor] = useState(null)
 
   function refresh() {
-    setCabang(read('cabang'))
-    setSekolah(read('sekolah'))
+    setCabang(readCached('cabang'))
+    setSekolah(readCached('sekolah'))
   }
 
   function openAdd() {

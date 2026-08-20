@@ -1,4 +1,4 @@
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { elapsedPeriods, sppPaidForPeriode } from '../../lib/tunggakan.js'
 
@@ -40,9 +40,9 @@ function computeAging(sekolah, siswa, elapsed, sppPayments) {
 
 export default function AgingReport() {
   const period = usePeriod()
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
-  const sppPayments = read('sppPayments')
+  const sekolah = readCached('sekolah')
+  const siswa = readCached('siswa')
+  const sppPayments = readCached('sppPayments')
 
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
   const rows = computeAging(sekolah, siswa, elapsed, sppPayments)

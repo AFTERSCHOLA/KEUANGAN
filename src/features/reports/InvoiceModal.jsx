@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import { formatRupiah, MONTHS, periodeKey } from '../../lib/format.js'
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { newInvoice, addInvoice, invoicesForSekolah, setInvoiceStatus, deleteInvoice } from '../../lib/invoices.js'
 
 const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
@@ -22,8 +22,8 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
 
   if (!open || !sekolah) return null
 
-  const cabangKode = read('cabang').find(c => c.id === sekolah.cabangId)?.kode
-  const siswaAktif = read('siswa').filter(s => s.sekolahId === sekolah.id && s.status !== 'Trial')
+  const cabangKode = readCached('cabang').find(c => c.id === sekolah.cabangId)?.kode
+  const siswaAktif = readCached('siswa').filter(s => s.sekolahId === sekolah.id && s.status !== 'Trial')
   const jumlahSiswa = siswaAktif.length
 
   const periodeList = mode === 'bulanan'

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { financialData } from '../../lib/finance.js'
 import { shiftPeriode, monthLabel, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
@@ -82,12 +82,12 @@ const RANGE_ROWS = [
 
 export default function FinanceReport() {
   const period = usePeriod()
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
-  const trainer = read('trainer')
-  const absensi = read('absensi')
-  const honorPayments = read('honorPayments')
-  const sppPayments = read('sppPayments')
+  const sekolah = readCached('sekolah')
+  const siswa = readCached('siswa')
+  const trainer = readCached('trainer')
+  const absensi = readCached('absensi')
+  const honorPayments = readCached('honorPayments')
+  const sppPayments = readCached('sppPayments')
 
   const periode = period.periodeKey()
   const periodePrevBulan = shiftPeriode(periode, -1)

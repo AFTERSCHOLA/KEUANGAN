@@ -1,7 +1,7 @@
 // src/lib/sppPayments.js
 // Ledger pembayaran SPP siswa — mirror pola honorPayments (append-only).
 // Koreksi dilakukan lewat hapus-entry, bukan edit di tempat.
-import { read, write } from './store.js'
+import { readCached, write } from './store.js'
 import { generateId } from './constants.js'
 
 export function newSppPayment({
@@ -29,27 +29,27 @@ export function newSppPayment({
 }
 
 export function listSppPayments() {
-  return read('sppPayments')
+  return readCached('sppPayments')
 }
 
 export function sppPaymentsForSiswa(siswaId) {
-  return read('sppPayments').filter(p => p.siswaId === siswaId)
+  return readCached('sppPayments').filter(p => p.siswaId === siswaId)
 }
 
 export function sppPaymentsForPeriode(periode) {
-  return read('sppPayments').filter(p => p.periode === periode)
+  return readCached('sppPayments').filter(p => p.periode === periode)
 }
 
 /** Tambah entry baru ke ledger (append-only — tidak ada fungsi "update") */
 export function addSppPayment(payment) {
-  const all = read('sppPayments')
+  const all = readCached('sppPayments')
   write('sppPayments', [...all, payment])
   return payment
 }
 
 /** Hapus 1 entry — ini satu-satunya jalur koreksi */
 export function deleteSppPayment(id) {
-  const all = read('sppPayments')
+  const all = readCached('sppPayments')
   const deleted = all.find(p => p.id === id)
   const remaining = all.filter(p => p.id !== id)
   write('sppPayments', remaining)
@@ -74,12 +74,12 @@ export function computeSppLunas(siswaId, allPayments, sppTarif = 0) {
 
 /** Hitung ulang sppLunas siswa dari ledger, lalu simpan ke record siswa. */
 export function recomputeSppLunasForSiswa(siswaId) {
-  const siswaList = read('siswa')
+  const siswaList = readCached('siswa')
   const target = siswaList.find(s => s.id === siswaId)
   if (!target) return null
 
-  const sekolah = read('sekolah').find(s => s.id === target.sekolahId)
-  const allPayments = read('sppPayments')
+  const sekolah = readCached('sekolah').find(s => s.id === target.sekolahId)
+  const allPayments = readCached('sppPayments')
   const sppLunas = computeSppLunas(siswaId, allPayments, sekolah?.spp || 0)
   const updated = { ...target, sppLunas }
   write('siswa', siswaList.map(s => (s.id === siswaId ? updated : s)))

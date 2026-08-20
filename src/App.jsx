@@ -11,7 +11,7 @@ import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
-import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
+import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
 import RolePicker from './features/auth/RolePicker.jsx'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
@@ -101,6 +101,23 @@ export default function App() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [backupModalOpen, setBackupModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus())
+  const [syncing, setSyncing] = useState(false)
+
+  useEffect(() => {
+    const refreshSync = () => setSyncStatus(getSyncStatus())
+    const unsubscribe = subscribeStore(refreshSync)
+    hydrateServerData().then(refreshSync)
+    return unsubscribe
+  }, [])
+
+  async function handleSync() {
+    setSyncing(true)
+    await syncPending()
+    await hydrateServerData()
+    setSyncStatus(getSyncStatus())
+    setSyncing(false)
+  }
 
   function setActiveTab(tabId) {
     setActiveTabState(tabId)
@@ -255,6 +272,17 @@ export default function App() {
 
         <div className="px-3 py-4 border-t border-blue-800">
           <button
+            onClick={handleSync}
+            disabled={syncing || syncStatus.pending === 0}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${sidebarCollapsed ? 'justify-center' : ''} ${syncStatus.pending > 0 ? 'text-yellow-300 hover:bg-blue-800' : 'text-blue-300/60'} disabled:cursor-default`}
+            title={sidebarCollapsed ? 'Sinkronisasi' : undefined}
+          >
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
+            </svg>
+            {!sidebarCollapsed && `${syncing ? 'Menyinkronkan...' : 'Sinkronisasi'}${syncStatus.pending > 0 ? ` (${syncStatus.pending})` : ''}`}
+          </button>
+          <button
             onClick={() => setBackupModalOpen(true)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
             title={sidebarCollapsed ? 'Backup & Restore' : undefined}
@@ -309,6 +337,16 @@ export default function App() {
             </div>
             <NavList onNavigate={() => setMobileDrawerOpen(false)} />
             <div className="px-3 py-4 border-t border-blue-800">
+              <button
+                onClick={() => { handleSync(); setMobileDrawerOpen(false) }}
+                disabled={syncing || syncStatus.pending === 0}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold ${syncStatus.pending > 0 ? 'text-yellow-300 hover:bg-blue-800' : 'text-blue-300/60'} disabled:cursor-default`}
+              >
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
+                </svg>
+                {`${syncing ? 'Menyinkronkan...' : 'Sinkronisasi'}${syncStatus.pending > 0 ? ` (${syncStatus.pending})` : ''}`}
+              </button>
               <button
                 onClick={() => { setBackupModalOpen(true); setMobileDrawerOpen(false) }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white"

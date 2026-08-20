@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react'
-import { read, upsert, write, usePeriod } from '../../lib/store.js'
+import { readCached, upsert, write, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newHonorPayment } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
@@ -9,8 +9,8 @@ import SlipHonor from '../reports/SlipHonor.jsx'
 
 export default function PaymentTable() {
   const period = usePeriod()
-  const [trainers] = useState(() => read('trainer'))
-  const [payments, setPayments] = useState(() => read('honorPayments'))
+  const [trainers] = useState(() => readCached('trainer'))
+  const [payments, setPayments] = useState(() => readCached('honorPayments'))
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedTrainer, setSelectedTrainer] = useState(null)
   const [payForm, setPayForm] = useState({ nominal: '', tanggalBayar: new Date().toISOString().slice(0, 10) })
@@ -20,9 +20,9 @@ export default function PaymentTable() {
   const [confirmOnConfirm, setConfirmOnConfirm] = useState(null)
   const [printEntry, setPrintEntry] = useState(null)
 
-  const sekolah = read('sekolah')
-  const cabang = read('cabang')
-  const absensi = read('absensi')
+  const sekolah = readCached('sekolah')
+  const cabang = readCached('cabang')
+  const absensi = readCached('absensi')
   const periode = period.periodeKey()
 
   function cabangKodeForTrainer(trainer) {
@@ -32,11 +32,11 @@ export default function PaymentTable() {
 
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
-  const data = financialData({ sekolah, siswa: read('siswa'), trainer: trainers, absensi, honorPayments: payments, sppPayments: read('sppPayments'), periode })
+  const data = financialData({ sekolah, siswa: readCached('siswa'), trainer: trainers, absensi, honorPayments: payments, sppPayments: readCached('sppPayments'), periode })
   const financeByTrainerId = Object.fromEntries(data.trainerFinance.map(t => [t.id, t]))
 
   function refreshPayments() {
-    setPayments(read('honorPayments'))
+    setPayments(readCached('honorPayments'))
   }
 
   function openPay(trainer) {

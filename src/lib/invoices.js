@@ -1,4 +1,4 @@
-import { read, write } from './store.js'
+import { readCached, write } from './store.js'
 import { generateId, DEFAULT_CABANG_KODE } from './constants.js'
 
 export function newInvoice({
@@ -32,15 +32,15 @@ export function newInvoice({
 }
 
 export function listInvoices() {
-  return read('invoices')
+  return readCached('invoices')
 }
 
 export function invoicesForSekolah(sekolahId) {
-  return read('invoices').filter(inv => inv.sekolahId === sekolahId)
+  return readCached('invoices').filter(inv => inv.sekolahId === sekolahId)
 }
 
 export function addInvoice(invoice) {
-  const all = read('invoices')
+  const all = readCached('invoices')
   write('invoices', [...all, invoice])
   return invoice
 }
@@ -51,15 +51,15 @@ export function addInvoice(invoice) {
  * Reset ke 0001 tiap ganti tahun kalender (dihitung dari tanggalTerbit).
  */
 export function generateInvoiceNumber(tanggal, sekolahId) {
-  const all = read('invoices')
+  const all = readCached('invoices')
   const year = tanggal.slice(0, 4)
-  const sekolah = read('sekolah').find(s => s.id === sekolahId)
-  const cabang = read('cabang').find(c => c.id === sekolah?.cabangId)
+  const sekolah = readCached('sekolah').find(s => s.id === sekolahId)
+  const cabang = readCached('cabang').find(c => c.id === sekolah?.cabangId)
   const branch = cabang?.kode || DEFAULT_CABANG_KODE
   const countThisYearAndBranch = all.filter(inv => {
     if (!inv.nomor || inv.tanggalTerbit?.slice(0, 4) !== year) return false
-    const invoiceSchool = read('sekolah').find(s => s.id === inv.sekolahId)
-    const invoiceBranch = read('cabang').find(c => c.id === invoiceSchool?.cabangId)
+    const invoiceSchool = readCached('sekolah').find(s => s.id === inv.sekolahId)
+    const invoiceBranch = readCached('cabang').find(c => c.id === invoiceSchool?.cabangId)
     return (invoiceBranch?.kode || DEFAULT_CABANG_KODE) === branch
   }).length
   const seq = countThisYearAndBranch + 1
@@ -67,7 +67,7 @@ export function generateInvoiceNumber(tanggal, sekolahId) {
 }
 
 export function setInvoiceStatus(id, status) {
-  const all = read('invoices')
+  const all = readCached('invoices')
   const updated = all.map(inv => {
     if (inv.id !== id) return inv
     const next = { ...inv, status }
@@ -81,7 +81,7 @@ export function setInvoiceStatus(id, status) {
 }
 
 export function deleteInvoice(id) {
-  const all = read('invoices').filter(inv => inv.id !== id)
+  const all = readCached('invoices').filter(inv => inv.id !== id)
   write('invoices', all)
   return all
 }

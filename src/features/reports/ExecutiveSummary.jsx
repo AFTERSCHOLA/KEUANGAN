@@ -1,4 +1,4 @@
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { financialData } from '../../lib/finance.js'
 import { elapsedPeriods, sppPaidForPeriode } from '../../lib/tunggakan.js'
@@ -49,12 +49,12 @@ function findOldestTunggakan(siswa, sekolah, elapsed, sppPayments) {
 
 export default function ExecutiveSummary() {
   const period = usePeriod()
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
-  const trainer = read('trainer')
-  const absensi = read('absensi')
-  const honorPayments = read('honorPayments')
-  const sppPayments = read('sppPayments')
+  const sekolah = readCached('sekolah')
+  const siswa = readCached('siswa')
+  const trainer = readCached('trainer')
+  const absensi = readCached('absensi')
+  const honorPayments = readCached('honorPayments')
+  const sppPayments = readCached('sppPayments')
 
   const periode = period.periodeKey()
   const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode })

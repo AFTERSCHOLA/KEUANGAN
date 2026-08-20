@@ -2,7 +2,7 @@
 // Contract-only: reads/writes go exclusively through store.js (R2).
 // This IS the D8 future cloud-import format — keep shape stable.
 
-import { read, write, getKeys } from './store'
+import { readCached, write, getKeys } from './store'
 
 export const BACKUP_VERSION = 2
 
@@ -11,7 +11,7 @@ const ENTITY_KEYS = ['sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 
 /**
  * Build the backup object from current localStorage state.
  * settings is stored as a single object (not an array) in store.js's own
- * key, so we read it directly via getKeys() rather than read() (which
+ * key, so we read it directly via getKeys() rather than readCached() (which
  * always returns an array).
  */
 function collectData() {
@@ -25,11 +25,11 @@ function collectData() {
   }
 
   return {
-    sekolah: read('sekolah'),
-    trainer: read('trainer'),
-    siswa: read('siswa'),
-    absensi: read('absensi'),
-    honorPayments: read('honorPayments'),
+    sekolah: readCached('sekolah'),
+    trainer: readCached('trainer'),
+    siswa: readCached('siswa'),
+    absensi: readCached('absensi'),
+    honorPayments: readCached('honorPayments'),
     settings,
   }
 }

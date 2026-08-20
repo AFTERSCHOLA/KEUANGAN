@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { read, write, upsert, usePeriod } from '../../lib/store.js'
+import { readCached, write, upsert, usePeriod } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa, defaultCabang } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
@@ -9,7 +9,7 @@ import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SppPaymentModal from '../payments/SppPaymentModal.jsx'
 
 export default function StudentList({ readOnly = false }) {
-  const [siswa, setSiswa] = useState(() => read('siswa'))
+  const [siswa, setSiswa] = useState(() => readCached('siswa'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [onlyTunggakan, setOnlyTunggakan] = useState(false)
@@ -18,9 +18,9 @@ export default function StudentList({ readOnly = false }) {
   const [pendingRemoveId, setPendingRemoveId] = useState(null)
   const [sppPaymentSiswaId, setSppPaymentSiswaId] = useState(null)
 
-  const sekolah = read('sekolah')
-  const absensi = read('absensi')
-  const sppPayments = read('sppPayments')
+  const sekolah = readCached('sekolah')
+  const absensi = readCached('absensi')
+  const sppPayments = readCached('sppPayments')
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
   const stats = attendanceStats(absensi, period.periodeKey())
@@ -46,12 +46,12 @@ export default function StudentList({ readOnly = false }) {
   const visibleSiswa = onlyTunggakan ? siswa.filter(s => isBillable(s) && isTunggakan(s, elapsed, sppPayments, sppTarifOf(s))) : siswa
 
   function refresh() {
-    setSiswa(read('siswa'))
+    setSiswa(readCached('siswa'))
   }
 
   function openAdd() {
     const defaultSekolah = sekolah.length > 0 ? sekolah[0] : null
-    const branch = defaultSekolah ? read('cabang').find(c => c.id === defaultSekolah.cabangId) : null
+    const branch = defaultSekolah ? readCached('cabang').find(c => c.id === defaultSekolah.cabangId) : null
     setForm(newSiswa(defaultSekolah?.id || '', defaultSekolah?.nama || '', branch?.kode || defaultCabang().kode))
     setModalOpen(true)
   }

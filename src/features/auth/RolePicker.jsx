@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { read } from '../../lib/store.js'
+import { readCached } from '../../lib/store.js'
 
 export default function RolePicker({ onSelect }) {
   const [role, setRole] = useState(null)
   const [trainerId, setTrainerId] = useState('')
-  const trainers = read('trainer')
+  const trainers = readCached('trainer')
 
   const canSubmit =
     role === 'admin' ||
