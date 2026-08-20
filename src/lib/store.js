@@ -334,10 +334,11 @@ export function setUiState(partial) {
 // ============================================
 // PERIOD CONTEXT (M1.1, persisted per M4.3)
 // ============================================
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { periodeKey, periodeFromDate, calYear, defaultAcademicYear, defaultMonth } from './constants'
 
 const PeriodContext = createContext(null)
+const BranchContext = createContext(null)
 
 export function PeriodProvider({ children }) {
   const saved = getUiState()
@@ -375,5 +376,33 @@ export function PeriodProvider({ children }) {
 export function usePeriod() {
   const ctx = useContext(PeriodContext)
   if (!ctx) throw new Error('usePeriod harus dipakai di dalam <PeriodProvider>')
+  return ctx
+}
+
+export function BranchProvider({ children }) {
+  const [branches, setBranches] = useState(() => readCached('cabang'))
+  const [selectedCabangId, setSelectedCabangIdState] = useState(() => getUiState().selectedCabangId || '')
+  const refresh = useCallback(() => {
+    setBranches(readCached('cabang'))
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeStore(refresh)
+    refresh()
+    return unsubscribe
+  }, [refresh])
+
+  const setSelectedCabangId = useCallback((id) => {
+    setSelectedCabangIdState(id)
+    setUiState({ selectedCabangId: id })
+  }, [])
+
+  const value = { branches, selectedCabangId, setSelectedCabangId }
+  return React.createElement(BranchContext.Provider, { value }, children)
+}
+
+export function useBranch() {
+  const ctx = useContext(BranchContext)
+  if (!ctx) throw new Error('useBranch harus dipakai di dalam <BranchProvider>')
   return ctx
 }

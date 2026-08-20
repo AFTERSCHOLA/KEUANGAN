@@ -9,6 +9,7 @@ tests/*
 !tests/m63-verify.spec.js
 !tests/m64-verify.spec.js
 !tests/m71-verify.spec.js
+!tests/m73-verify.spec.js
 test-results
 .playwright-mcp
 .commandcode
