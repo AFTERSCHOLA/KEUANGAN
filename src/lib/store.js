@@ -156,7 +156,7 @@ export function write(key, records) {
 export function upsert(key, record) {
   const ctx = getRoleContext()
   if (ctx.role === 'trainer' && !isWithinScope(key, record, ctx)) return
-  const records = readCached(key)
+  const records = readRaw(key)
   const idx = records.findIndex(r => r.id === record.id)
   let saved
   if (idx >= 0) {
@@ -166,7 +166,7 @@ export function upsert(key, record) {
     records.push(record)
     saved = record
   }
-  write(key, records)
+  writeRaw(key, records)
   queueSync(key, saved)
 }
 

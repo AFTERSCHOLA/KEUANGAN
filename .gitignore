@@ -10,6 +10,7 @@ tests/*
 !tests/m64-verify.spec.js
 !tests/m71-verify.spec.js
 !tests/m73-verify.spec.js
+!tests/phase567-exit-gate.spec.js
 test-results
 .playwright-mcp
 .commandcode

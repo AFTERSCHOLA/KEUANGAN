@@ -15,5 +15,5 @@ export function setRole(role) {
 }
 
 export function canVerify(role) {
-  return role === 'admin' || role === 'head-trainer'
+  return role === 'admin' || role === 'head-trainer' || role === 'superadmin'
 }
