@@ -21,8 +21,14 @@ export default function PaymentTable() {
   const [printEntry, setPrintEntry] = useState(null)
 
   const sekolah = read('sekolah')
+  const cabang = read('cabang')
   const absensi = read('absensi')
   const periode = period.periodeKey()
+
+  function cabangKodeForTrainer(trainer) {
+    const school = sekolah.find(s => (trainer.sekolahIds || []).includes(s.id))
+    return cabang.find(c => c.id === school?.cabangId)?.kode
+  }
 
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
@@ -44,7 +50,7 @@ export default function PaymentTable() {
     // hasil parsing tanggalBayar) — "Lunaskan" & pembayaran manual sama-sama
     // melunasi Beban Honor periode berjalan, terlepas kapan uangnya
     // secara fisik dibayarkan.
-    upsert('honorPayments', newHonorPayment({ trainerId: selectedTrainer.id, periode, nominal: Number(nominal), tanggalBayar: payForm.tanggalBayar }))
+    upsert('honorPayments', newHonorPayment({ trainerId: selectedTrainer.id, periode, nominal: Number(nominal), tanggalBayar: payForm.tanggalBayar, cabangKode: cabangKodeForTrainer(selectedTrainer) }))
     setModalOpen(false)
     refreshPayments()
   }
@@ -70,7 +76,7 @@ export default function PaymentTable() {
     setConfirmMsg(`Bayar sisa ${formatRupiah(sisa)} kepada ${trainer.nama} untuk ${bulanLabel}?`)
     setConfirmOnConfirm(() => () => {
       setSelectedTrainer(trainer)
-      upsert('honorPayments', newHonorPayment({ trainerId: trainer.id, periode, nominal: sisa, tanggalBayar: new Date().toISOString().slice(0, 10) }))
+      upsert('honorPayments', newHonorPayment({ trainerId: trainer.id, periode, nominal: sisa, tanggalBayar: new Date().toISOString().slice(0, 10), cabangKode: cabangKodeForTrainer(trainer) }))
       refreshPayments()
     })
     setConfirmOpen(true)

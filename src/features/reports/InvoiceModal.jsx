@@ -22,6 +22,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
 
   if (!open || !sekolah) return null
 
+  const cabangKode = read('cabang').find(c => c.id === sekolah.cabangId)?.kode
   const siswaAktif = read('siswa').filter(s => s.sekolahId === sekolah.id && s.status !== 'Trial')
   const jumlahSiswa = siswaAktif.length
 
@@ -48,6 +49,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
       pjSekolah,
       uraian: uraian || defaultUraian,
       tanggalTerbit: new Date().toISOString().slice(0, 10),
+      cabangKode,
     })
     addInvoice(inv)
     setPjSekolah('')

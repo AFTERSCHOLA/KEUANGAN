@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { read, write, upsert, usePeriod } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
-import { newSiswa } from '../../lib/constants.js'
+import { newSiswa, defaultCabang } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
 import { elapsedPeriods, isTunggakan, sppPaidForPeriode, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
@@ -51,7 +51,8 @@ export default function StudentList({ readOnly = false }) {
 
   function openAdd() {
     const defaultSekolah = sekolah.length > 0 ? sekolah[0] : null
-    setForm(newSiswa(defaultSekolah?.id || '', defaultSekolah?.nama || ''))
+    const branch = defaultSekolah ? read('cabang').find(c => c.id === defaultSekolah.cabangId) : null
+    setForm(newSiswa(defaultSekolah?.id || '', defaultSekolah?.nama || '', branch?.kode || defaultCabang().kode))
     setModalOpen(true)
   }
 

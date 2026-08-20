@@ -12,6 +12,7 @@ const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
 export default function SppPaymentModal({ open, onClose, siswaId, sekolah, period, onSaved }) {
   const siswa = read('siswa').find(s => s.id === siswaId)
   const sekolahSiswa = sekolah?.find(s => s.id === siswa?.sekolahId)
+  const cabangKode = read('cabang').find(c => c.id === sekolahSiswa?.cabangId)?.kode
   const defaultNominal = sekolahSiswa?.spp || 0
 
   const [periodeSelected, setPeriodeSelected] = useState(period?.periodeKey ? period.periodeKey() : '')
@@ -51,6 +52,7 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
       metode,
       diterimaOleh,
       bukti,
+      cabangKode,
     })
     addSppPayment(payment)
     recomputeSppLunasForSiswa(siswaId)

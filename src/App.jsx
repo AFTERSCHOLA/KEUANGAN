@@ -29,9 +29,14 @@ const TABS = [
   { id: 'riwayat', label: 'Riwayat Absensi', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'pembayaran', label: 'Data Pembayaran', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'keuangan', label: 'Data Keuangan', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'cabang', label: 'Data Cabang', icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V13a1 1 0 011-1h4a1 1 0 011 1v8M9 9h1m-1 4h1m4-4h1m-1 4h1' },
-]
+   { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+ ]
+
+const CABANG_TAB = {
+  id: 'cabang',
+  label: 'Data Cabang',
+  icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V13a1 1 0 011-1h4a1 1 0 011 1v8M9 9h1m-1 4h1m4-4h1m-1 4h1',
+}
 
 // Trainer melihat 4 tab saja (M5.1.2): Absensi, Riwayat, Siswa read-only,
 // dan Rekap Saya sebagai landing view. Objek tab di-reuse dari TABS.
@@ -121,10 +126,10 @@ export default function App() {
   // M5.1.2: trainer yang mendarat di tab admin-only (mis. direct load dengan
   // activeTab tersimpan 'keuangan') di-redirect ke dashboard trainer (rekap).
   useEffect(() => {
-    if (role !== 'trainer') return
-    const allowed = new Set(TRAINER_TABS.map(t => t.id))
+    if (role === 'superadmin') return
+    const allowed = new Set((role === 'trainer' ? TRAINER_TABS : TABS).map(t => t.id))
     if (!allowed.has(activeTab)) {
-      setActiveTab('rekap')
+      setActiveTab(role === 'trainer' ? 'rekap' : 'overview')
     }
   }, [role, activeTab])
 
@@ -139,7 +144,7 @@ export default function App() {
 
   const NavList = ({ onNavigate }) => (
     <nav className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
-      {(role === 'trainer' ? TRAINER_TABS : TABS).map(tab => {
+      {(role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS).map(tab => {
         const isActive = activeTab === tab.id
         if (tab.comingSoon) {
           return (

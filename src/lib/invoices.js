@@ -11,9 +11,10 @@ export function newInvoice({
   pjSekolah = '',
   uraian = '',
   tanggalTerbit,
+  cabangKode,
 }) {
   return {
-    id: generateId('inv'),
+    id: generateId('inv', cabangKode),
     nomor: null, // diisi otomatis saat status berubah jadi 'Terbit' (lihat setInvoiceStatus)
     sekolahId,
     mode,

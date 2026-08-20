@@ -15,67 +15,43 @@ export const monthsUntilJune = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
 ]
 
-// M7.1.2 — branch-prefixed IDs. cabangKode is optional so every existing
-// call site keeps working unchanged (old shape: prefix-timestamp-random);
-// passing a kode produces the new shape: prefix-KODE-timestamp-random.
+// M7.1.2 — branch-prefixed IDs: prefix-BRANCH-Date.now-random.
 export function generateId(prefix, cabangKode) {
-  const branch = cabangKode ? `${cabangKode}-` : ''
+  const branch = cabangKode ? `${String(cabangKode).trim().toUpperCase()}-` : ''
   return `${prefix}-${branch}${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-// ============================================
-// M7.1 — CABANG (branch) ENTITY
-// ============================================
-
 export function newCabang({ nama = '', kode = '' } = {}) {
-  return {
-    id: generateId('cbg'),
-    nama,
-    kode,
-  }
+  return { id: generateId('cbg'), nama, kode: String(kode).trim().toUpperCase() }
 }
 
-// Seed branch used before any cabang has been created via BranchManager
-// (M7.1.3), and as the fallback target for newSekolah()/migrateIds() below.
 export const DEFAULT_CABANG_KODE = 'PST'
 
 export function defaultCabang() {
-  return {
-    id: `cbg-${DEFAULT_CABANG_KODE}-default`,
-    nama: 'Cabang Pusat',
-    kode: DEFAULT_CABANG_KODE,
-  }
+  return { id: `cbg-${DEFAULT_CABANG_KODE}-default`, nama: 'Cabang Pusat', kode: DEFAULT_CABANG_KODE }
 }
 
-export function newSekolah(cabangId) {
+export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
+  const branchId = cabangId || defaultCabang().id
   return {
-    id: generateId('skl'),
+    id: generateId('skl', cabangKode),
     nama: '',
     alamat: '',
     foto: '',
     jadwal: '',
     spp: 0,
     trainerIds: [],
-    // M7.1.1 — required field; falls back to the seed branch when the
-    // caller (SekolahForm) doesn't yet pass a selected cabangId.
-    cabangId: cabangId || defaultCabang().id,
+    cabangId: branchId,
   }
 }
 
-export function newTrainer() {
-  return {
-    id: generateId('trn'),
-    nama: '',
-    wa: '',
-    jadwal: '',
-    sekolahIds: [],
-    honor: 0,
-  }
+export function newTrainer(cabangKode) {
+  return { id: generateId('trn', cabangKode), nama: '', wa: '', jadwal: '', sekolahIds: [], honor: 0 }
 }
 
-export function newSiswa(sekolahId, sekolahNama) {
+export function newSiswa(sekolahId, sekolahNama, cabangKode) {
   const siswa = {
-    id: generateId('sw'),
+    id: generateId('sw', cabangKode),
     nama: '',
     wa: '',
     kelas: '',
@@ -84,18 +60,9 @@ export function newSiswa(sekolahId, sekolahNama) {
     foto: '',
     status: 'Aktif',
     trialMulai: null,
-    // Derived from sppPayments ledger — never edit directly
-    // M6.1.2 — Recompute lewat computeSppLunas() di lib/sppPayments.js.
-    // (Objek ini masih dibaca seperti biasa di finance.js/tunggakan.js;
-    // yang berubah cuma cara MENULISNYA — tidak lagi manual toggle.)
     sppLunas: {},
   }
 
-  // Dev-only guard: peringatkan kalau ada yang nulis ulang sppLunas
-  // langsung di objek baru (misal lewat checkbox lama yang belum dicabut).
-  // Catatan: proteksi ini hilang begitu objek di-serialize ke localStorage
-  // dan dibaca ulang (JSON.parse menghasilkan objek polos, bukan Proxy) —
-  // ini cuma jaring pengaman dev-time, bukan enforcement permanen.
   if (import.meta.env?.MODE !== 'production') {
     return new Proxy(siswa, {
       set(target, prop, value) {
@@ -114,104 +81,163 @@ export function newSiswa(sekolahId, sekolahNama) {
   return siswa
 }
 
-// ============================================
-// M7.1.2 — ONE-TIME ID MIGRATION
-// ============================================
-// Rewrites existing sekolah/trainer/siswa/absensi IDs to the branch-prefixed
-// shape so pre-Phase-C records line up with new ones. Idempotent: an ID
-// already carrying a recognized cabang kode as its 2nd segment is skipped.
-// Takes the store's { read, write, getKeys } as arguments (rather than
-// importing lib/store.js) to avoid a circular import between the two files,
-// and so the caller — App.jsx bootstrap, per M7.1.2 — controls exactly when
-// migration runs.
-
-function isAlreadyBranched(id, knownKodes) {
-  const parts = id.split('-')
-  return parts.length >= 4 && knownKodes.has(parts[1])
+function branchId(id, prefix, kode, usedIds) {
+  const pattern = new RegExp(`^${prefix}-${kode}-\\d+-[a-z0-9]+$`, 'i')
+  if (pattern.test(id) && !usedIds.has(id)) {
+    usedIds.add(id)
+    return id
+  }
+  let next = generateId(prefix, kode)
+  while (usedIds.has(next)) next = generateId(prefix, kode)
+  usedIds.add(next)
+  return next
 }
 
-function resolveCabangKode(sekolahId, sekolahById, cabangById, fallbackKode) {
-  const sekolah = sekolahById.get(sekolahId)
-  const cabang = sekolah && sekolah.cabangId ? cabangById.get(sekolah.cabangId) : null
-  return (cabang && cabang.kode) || fallbackKode
+function mapId(map, id) {
+  return map.get(id) || id
 }
 
-export function migrateIds({ read, write, getKeys }) {
-  const keys = getKeys()
-  if (!keys.cabang) {
-    throw new Error('migrateIds: store.getKeys() belum punya key "cabang" — tambahkan dulu (M7.1.2).')
+function unique(values) {
+  return [...new Set(values)]
+}
+
+function branchForSchool(school, branchesById, fallback) {
+  return branchesById.get(school?.cabangId)?.kode || fallback.kode
+}
+
+function trainerBranchCode(trainer, schoolsById, branchesById, fallback) {
+  const codes = unique((trainer.sekolahIds || [])
+    .map(id => branchForSchool(schoolsById.get(id), branchesById, fallback)))
+    .sort()
+  return codes[0] || fallback.kode
+}
+
+function assertUniqueIds(collections) {
+  const seen = new Set()
+  collections.flat().forEach(record => {
+    if (!record.id || seen.has(record.id)) throw new Error(`migrateIds: duplicate ID ${record.id}`)
+    seen.add(record.id)
+  })
+}
+
+function assertReferences({ sekolah, trainer, siswa, absensi, honorPayments, sppPayments, invoices }) {
+  const schools = new Set(sekolah.map(s => s.id))
+  const trainers = new Set(trainer.map(t => t.id))
+  const students = new Set(siswa.map(s => s.id))
+  const has = (set, id, label) => {
+    if (id && !set.has(id)) throw new Error(`migrateIds: missing ${label} reference ${id}`)
   }
+  sekolah.forEach(s => (s.trainerIds || []).forEach(id => has(trainers, id, 'trainer')))
+  trainer.forEach(t => (t.sekolahIds || []).forEach(id => has(schools, id, 'sekolah')))
+  siswa.forEach(s => has(schools, s.sekolahId, 'sekolah'))
+  absensi.forEach(a => {
+    has(schools, a.sekolahId, 'sekolah')
+    has(trainers, a.trainerId, 'trainer')
+    ;(a.siswaList || []).forEach(s => has(students, s.siswaId, 'siswa'))
+  })
+  honorPayments.forEach(p => has(trainers, p.trainerId, 'trainer'))
+  sppPayments.forEach(p => has(students, p.siswaId, 'siswa'))
+  invoices.forEach(i => has(schools, i.sekolahId, 'sekolah'))
+}
 
-  let cabangList = read('cabang')
-  if (cabangList.length === 0) {
-    cabangList = [defaultCabang()]
-    write('cabang', cabangList)
+export function migrateIds({ read, write, getKeys, getMigrationState, setMigrationState }) {
+  if (getMigrationState?.().m71BranchSchema?.completedAt) return { skipped: true }
+  if (!getKeys().cabang) throw new Error('migrateIds: store.getKeys() belum punya key "cabang".')
+
+  const cabang = read('cabang').length ? read('cabang') : [defaultCabang()]
+  const fallback = cabang[0]
+  const branchesById = new Map(cabang.map(c => [c.id, c]))
+  const knownCodes = new Set(cabang.map(c => c.kode))
+  const raw = {
+    sekolah: read('sekolah'),
+    trainer: read('trainer'),
+    siswa: read('siswa'),
+    absensi: read('absensi'),
+    honorPayments: read('honorPayments'),
+    sppPayments: read('sppPayments'),
+    invoices: read('invoices'),
   }
-  const cabangById = new Map(cabangList.map(c => [c.id, c]))
-  const knownKodes = new Set(cabangList.map(c => c.kode))
-  const fallback = cabangList[0]
-
-  // 1) Every sekolah needs a cabangId before branch codes can resolve.
-  const sekolahList = read('sekolah')
-  let sekolahDirty = false
-  const sekolahWithCabang = sekolahList.map(s => {
-    if (s.cabangId) return s
-    sekolahDirty = true
-    return { ...s, cabangId: fallback.id }
+  const usedIds = new Set(cabang.map(c => c.id))
+  const schoolSeed = raw.sekolah.map(s => ({ ...s, cabangId: s.cabangId || fallback.id }))
+  const oldSchools = new Map(schoolSeed.map(s => [s.id, s]))
+  const schoolIdMap = new Map()
+  const sekolah = schoolSeed.map(s => {
+    const id = branchId(s.id, 'skl', branchForSchool(s, branchesById, fallback), usedIds)
+    schoolIdMap.set(s.id, id)
+    return { ...s, id }
   })
-  if (sekolahDirty) write('sekolah', sekolahWithCabang)
+  const schoolsById = new Map(schoolSeed.map(s => [s.id, s]))
+  const migratedSchoolsById = new Map(sekolah.map(s => [s.id, s]))
 
-  // 2) Re-ID sekolah itself (branch is its own cabangId).
-  const sekolahIdMap = new Map()
-  const migratedSekolah = sekolahWithCabang.map(s => {
-    if (isAlreadyBranched(s.id, knownKodes)) return s
-    const kode = (cabangById.get(s.cabangId) || fallback).kode
-    const newId = generateId('skl', kode)
-    sekolahIdMap.set(s.id, newId)
-    return { ...s, id: newId }
+  const trainerIdMap = new Map()
+  const trainer = raw.trainer.map(t => {
+    const sekolahIds = unique((t.sekolahIds || []).map(id => mapId(schoolIdMap, id)))
+    const id = branchId(t.id, 'trn', trainerBranchCode({ ...t, sekolahIds: t.sekolahIds || [] }, schoolsById, branchesById, fallback), usedIds)
+    trainerIdMap.set(t.id, id)
+    return { ...t, id, sekolahIds }
   })
-  write('sekolah', migratedSekolah)
-  const sekolahById = new Map(migratedSekolah.map(s => [s.id, s]))
+  const trainersById = new Map(raw.trainer.map(t => [t.id, t]))
+  const migratedTrainersById = new Map(trainer.map(t => [t.id, t]))
 
-  // 3) Re-ID collections that join to sekolah, remapping any sekolahId
-  //    references that changed in step 2 along the way.
-  const remapSekolahRefs = (sekolahId) => sekolahIdMap.get(sekolahId) || sekolahId
-
-  const migratedTrainer = read('trainer').map(t => {
-    const sekolahIds = (t.sekolahIds || []).map(remapSekolahRefs)
-    if (isAlreadyBranched(t.id, knownKodes)) return { ...t, sekolahIds }
-    const kode = resolveCabangKode(sekolahIds[0], sekolahById, cabangById, fallback.kode)
-    return { ...t, id: generateId('trn', kode), sekolahIds }
+  const siswaIdMap = new Map()
+  const siswa = raw.siswa.map(s => {
+    const sekolahId = mapId(schoolIdMap, s.sekolahId)
+    const id = branchId(s.id, 'sw', branchForSchool(schoolsById.get(s.sekolahId), branchesById, fallback), usedIds)
+    siswaIdMap.set(s.id, id)
+    return { ...s, id, sekolahId }
   })
-  write('trainer', migratedTrainer)
+  const studentsById = new Map(raw.siswa.map(s => [s.id, s]))
 
-  const migratedSiswa = read('siswa').map(s => {
-    const sekolahId = remapSekolahRefs(s.sekolahId)
-    if (isAlreadyBranched(s.id, knownKodes)) return { ...s, sekolahId }
-    const kode = resolveCabangKode(sekolahId, sekolahById, cabangById, fallback.kode)
-    return { ...s, id: generateId('sw', kode), sekolahId }
+  const absensiIds = new Set()
+  const absensi = raw.absensi.map((a, index) => {
+    const sekolahId = mapId(schoolIdMap, a.sekolahId)
+    const trainerId = mapId(trainerIdMap, a.trainerId)
+    let id = `${a.tanggal}_${sekolahId}_${trainerId}`
+    if (absensiIds.has(id)) id = `${id}_${a.sesiKe || index + 1}`
+    absensiIds.add(id)
+    return {
+      ...a,
+      id,
+      sekolahId,
+      trainerId,
+      siswaList: (a.siswaList || []).map(s => ({ ...s, siswaId: mapId(siswaIdMap, s.siswaId) })),
+    }
   })
-  write('siswa', migratedSiswa)
 
-  // Absensi IDs are deterministic (`${tanggal}_${sekolahId}_${trainerId}`),
-  // not generateId()-based, so only the embedded sekolahId reference needs
-  // remapping — the ID format itself stays untouched by design (R5).
-  const migratedAbsensi = read('absensi').map(a => ({
-    ...a,
-    sekolahId: remapSekolahRefs(a.sekolahId),
+  const honorPayments = raw.honorPayments.map(p => ({
+    ...p,
+    id: branchId(p.id, 'pay', trainerBranchCode(trainersById.get(p.trainerId) || {}, schoolsById, branchesById, fallback), usedIds),
+    trainerId: mapId(trainerIdMap, p.trainerId),
   }))
-  write('absensi', migratedAbsensi)
+  const sppPayments = raw.sppPayments.map(p => ({
+    ...p,
+    id: branchId(p.id, 'spp', branchForSchool(schoolsById.get(studentsById.get(p.siswaId)?.sekolahId), branchesById, fallback), usedIds),
+    siswaId: mapId(siswaIdMap, p.siswaId),
+  }))
+  const invoices = raw.invoices.map(i => ({
+    ...i,
+    id: branchId(i.id, 'inv', branchForSchool(schoolsById.get(i.sekolahId), branchesById, fallback), usedIds),
+    sekolahId: mapId(schoolIdMap, i.sekolahId),
+  }))
 
-  return {
-    cabang: cabangList,
-    sekolahIdMap,
-    counts: {
-      sekolah: migratedSekolah.length,
-      trainer: migratedTrainer.length,
-      siswa: migratedSiswa.length,
-      absensi: migratedAbsensi.length,
-    },
-  }
+  const remappedSchools = sekolah.map(s => ({
+    ...s,
+    trainerIds: unique((s.trainerIds || []).map(id => mapId(trainerIdMap, id))),
+  }))
+  assertUniqueIds([remappedSchools, trainer, siswa, absensi, honorPayments, sppPayments, invoices])
+  assertReferences({ sekolah: remappedSchools, trainer, siswa, absensi, honorPayments, sppPayments, invoices })
+
+  write('cabang', cabang)
+  write('sekolah', remappedSchools)
+  write('trainer', trainer)
+  write('siswa', siswa)
+  write('absensi', absensi)
+  write('honorPayments', honorPayments)
+  write('sppPayments', sppPayments)
+  write('invoices', invoices)
+  setMigrationState?.({ ...(getMigrationState?.() || {}), m71BranchSchema: { completedAt: new Date().toISOString(), version: 1 } })
+
+  return { skipped: false, counts: Object.fromEntries(Object.entries(raw).map(([key, records]) => [key, records.length])) }
 }
 
 function todayISO() {
@@ -223,9 +249,10 @@ export function newHonorPayment({
   periode,
   nominal,
   tanggalBayar,
+  cabangKode,
 }) {
   return {
-    id: generateId('pay'),
+    id: generateId('pay', cabangKode),
     trainerId,
     periode,
     nominal: Number(nominal),

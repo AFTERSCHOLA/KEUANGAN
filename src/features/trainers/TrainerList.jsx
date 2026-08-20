@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { read, write, upsert } from '../../lib/store.js'
 import { formatRupiah, waNormalize } from '../../lib/format.js'
-import { newTrainer } from '../../lib/constants.js'
+import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
@@ -18,7 +18,8 @@ export default function TrainerList() {
   }
 
   function openAdd() {
-    setForm(newTrainer())
+    const firstBranch = read('cabang')[0] || defaultCabang()
+    setForm(newTrainer(firstBranch.kode))
     setModalOpen(true)
   }
 

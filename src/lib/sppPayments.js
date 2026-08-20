@@ -13,9 +13,10 @@ export function newSppPayment({
   diterimaOleh,
   bukti = null,
   sudahDisetor = false,
+  cabangKode,
 }) {
   return {
-    id: generateId('spp'),
+    id: generateId('spp', cabangKode),
     siswaId,
     periode,
     nominal: Number(nominal),

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { read, write, upsert } from '../../lib/store.js'
+import { read, write, upsert, getRoleContext } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
-import { newSekolah } from '../../lib/constants.js'
+import { newSekolah, defaultCabang } from '../../lib/constants.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -12,6 +12,11 @@ import InvoiceTemplate from '../reports/InvoiceTemplate.jsx'
 
 export default function SchoolList() {
   const [sekolah, setSekolah] = useState(() => read('sekolah'))
+  const [cabang, setCabang] = useState(() => {
+    const list = read('cabang')
+    return list.length ? list : [defaultCabang()]
+  })
+  const [selectedCabangId, setSelectedCabangId] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newSekolah())
   const [alertOpen, setAlertOpen] = useState(false)
@@ -23,12 +28,18 @@ export default function SchoolList() {
   const [invoiceModalSchool, setInvoiceModalSchool] = useState(null)
   const [printInvoice, setPrintInvoice] = useState(null)
 
+  const role = getRoleContext().role
+  const visibleSekolah = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah
+
   function refresh() {
     setSekolah(read('sekolah'))
+    const nextCabang = read('cabang')
+    if (nextCabang.length) setCabang(nextCabang)
   }
 
   function openAdd() {
-    setForm(newSekolah())
+    const first = cabang[0] || defaultCabang()
+    setForm(newSekolah(first.id, first.kode))
     setModalOpen(true)
   }
 
@@ -143,7 +154,7 @@ export default function SchoolList() {
     return <InvoiceTemplate invoice={printInvoice.invoice} sekolah={printInvoice.sekolah} onBack={() => setPrintInvoice(null)} />
   }
 
-  if (sekolah.length === 0 && !modalOpen) {
+  if (visibleSekolah.length === 0 && !modalOpen) {
     return (
       <div className="space-y-6 animate-fadeIn">
         <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
@@ -151,13 +162,16 @@ export default function SchoolList() {
             <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
             <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
           </div>
-          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
+          <div className="flex items-center gap-2">
+            <BranchFilter cabang={cabang} value={selectedCabangId} onChange={setSelectedCabangId} role={role} />
+            <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
+          </div>
         </div>
         <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
           <p className="text-slate-400 text-sm">Belum ada data sekolah mitra. Klik "Tambah Sekolah Mitra" untuk memulai.</p>
         </div>
         <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && sekolah.find(s => s.id === form.id) ? 'Edit Sekolah' : 'Tambah Sekolah'}>
-          <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
+          <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} cabang={cabang} />
         </Modal>
         <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
         <ConfirmDialog
@@ -181,16 +195,19 @@ export default function SchoolList() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
-          <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
+        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
+            <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <BranchFilter cabang={cabang} value={selectedCabangId} onChange={setSelectedCabangId} role={role} />
+            <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
+          </div>
         </div>
-        <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sekolah.map(sch => (
+        {visibleSekolah.map(sch => (
           <div key={sch.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100 flex flex-col hover:shadow-md transition">
             <div className="h-44 relative bg-slate-200">
               <img
@@ -211,6 +228,7 @@ export default function SchoolList() {
             <div className="p-5 flex-1 flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-bold text-slate-800 line-clamp-1">{sch.nama}</h3>
+                <p className="text-[10px] text-blue-600 font-bold uppercase mt-1">{cabang.find(c => c.id === sch.cabangId)?.kode || 'PST'}</p>
                 <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
                   <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   <span className="line-clamp-1">{sch.alamat}</span>
@@ -243,7 +261,7 @@ export default function SchoolList() {
       </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && sekolah.find(s => s.id === form.id) ? 'Edit Sekolah' : 'Tambah Sekolah'}>
-        <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} />
+        <SchoolForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} cabang={cabang} />
       </Modal>
       <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
       <ConfirmDialog
@@ -271,9 +289,28 @@ export default function SchoolList() {
   )
 }
 
-function SchoolForm({ form, setForm, save, onClose }) {
+function BranchFilter({ cabang, value, onChange, role }) {
+  if (role === 'trainer') return null
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} aria-label="Filter Cabang" className="rounded-lg border p-2 text-sm bg-white">
+      <option value="">Semua Cabang</option>
+      {cabang.map(c => <option key={c.id} value={c.id}>{c.nama} ({c.kode})</option>)}
+    </select>
+  )
+}
+
+function SchoolForm({ form, setForm, save, onClose, cabang }) {
   return (
     <>
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Cabang</label>
+        <select value={form.cabangId || cabang[0]?.id || defaultCabang().id} onChange={e => {
+          const next = cabang.find(c => c.id === e.target.value) || cabang[0] || defaultCabang()
+          setForm({ ...form, cabangId: next.id })
+        }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">
+          {cabang.map(c => <option key={c.id} value={c.id}>{c.nama} ({c.kode})</option>)}
+        </select>
+      </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Nama Sekolah</label>
         <input value={form.nama} onChange={e => setForm({ ...form, nama: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />

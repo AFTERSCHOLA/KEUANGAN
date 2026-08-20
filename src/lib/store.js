@@ -73,28 +73,53 @@ export function getKeys() {
   }
 }
 
-export function read(key) {
-  const keys = getKeys()
-  const json = localStorage.getItem(keys[key])
+function readCollection(key) {
+  const json = localStorage.getItem(getKeys()[key])
   if (!json) return []
   try {
     const parsed = JSON.parse(json)
-    if (!Array.isArray(parsed)) return []
-    const ctx = getRoleContext()
-    return ctx.role === 'trainer' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
 }
 
+export function readRaw(key) {
+  return readCollection(key)
+}
+
+export function writeRaw(key, records) {
+  localStorage.setItem(getKeys()[key], JSON.stringify(records))
+}
+
+export function getMigrationState() {
+  try {
+    const json = localStorage.getItem(getKeys().settings)
+    const settings = json ? JSON.parse(json) : {}
+    return settings?.migrations || {}
+  } catch {
+    return {}
+  }
+}
+
+export function setMigrationState(migrations) {
+  const current = getSettings()
+  localStorage.setItem(getKeys().settings, JSON.stringify({ ...current, migrations }))
+}
+
+export function read(key) {
+  const parsed = readCollection(key)
+  const ctx = getRoleContext()
+  return ctx.role === 'trainer' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
+}
+
 export function write(key, records) {
-  const keys = getKeys()
   const ctx = getRoleContext()
   let out = records
   if (ctx.role === 'trainer' && Array.isArray(records)) {
     out = records.filter(r => isWithinScope(key, r, ctx))
   }
-  localStorage.setItem(keys[key], JSON.stringify(out))
+  writeRaw(key, out)
 }
 
 export function upsert(key, record) {
