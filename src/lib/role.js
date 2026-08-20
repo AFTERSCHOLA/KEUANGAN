@@ -1,12 +1,13 @@
 const ROLE_KEY = 'afterschola_v4_role'
+const UI_STATE_KEY = 'afterschola_v4_ui'
 
-/**
- * Stub role — TIDAK ADA auth beneran (D5: no auth work now). Cuma dipakai
- * buat gating tampilan tombol verify/edit/delete di UI. Ganti ke sistem
- * auth beneran nanti pas fase Hostinger+login.
- */
 export function getRole() {
-  return localStorage.getItem(ROLE_KEY) || 'admin' // 'admin' | 'head-trainer' | 'trainer'
+  try {
+    const ui = JSON.parse(localStorage.getItem(UI_STATE_KEY) || '{}')
+    if (ui.role) return ui.role
+  } catch {
+  }
+  return localStorage.getItem(ROLE_KEY) || 'admin'
 }
 
 export function setRole(role) {
@@ -14,5 +15,5 @@ export function setRole(role) {
 }
 
 export function canVerify(role) {
-  return role === 'admin' || role === 'head-trainer'
+  return role === 'admin' || role === 'head-trainer' || role === 'superadmin'
 }

@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react'
-import { read, upsert, write, usePeriod } from '../../lib/store.js'
+import { readCached, upsert, write, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newHonorPayment } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
@@ -9,8 +9,8 @@ import SlipHonor from '../reports/SlipHonor.jsx'
 
 export default function PaymentTable() {
   const period = usePeriod()
-  const [trainers] = useState(() => read('trainer'))
-  const [payments, setPayments] = useState(() => read('honorPayments'))
+  const [trainers] = useState(() => readCached('trainer'))
+  const [payments, setPayments] = useState(() => readCached('honorPayments'))
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedTrainer, setSelectedTrainer] = useState(null)
   const [payForm, setPayForm] = useState({ nominal: '', tanggalBayar: new Date().toISOString().slice(0, 10) })
@@ -20,17 +20,23 @@ export default function PaymentTable() {
   const [confirmOnConfirm, setConfirmOnConfirm] = useState(null)
   const [printEntry, setPrintEntry] = useState(null)
 
-  const sekolah = read('sekolah')
-  const absensi = read('absensi')
+  const sekolah = readCached('sekolah')
+  const cabang = readCached('cabang')
+  const absensi = readCached('absensi')
   const periode = period.periodeKey()
+
+  function cabangKodeForTrainer(trainer) {
+    const school = sekolah.find(s => (trainer.sekolahIds || []).includes(s.id))
+    return cabang.find(c => c.id === school?.cabangId)?.kode
+  }
 
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
-  const data = financialData({ sekolah, siswa: read('siswa'), trainer: trainers, absensi, honorPayments: payments, periode })
+  const data = financialData({ sekolah, siswa: readCached('siswa'), trainer: trainers, absensi, honorPayments: payments, sppPayments: readCached('sppPayments'), periode })
   const financeByTrainerId = Object.fromEntries(data.trainerFinance.map(t => [t.id, t]))
 
   function refreshPayments() {
-    setPayments(read('honorPayments'))
+    setPayments(readCached('honorPayments'))
   }
 
   function openPay(trainer) {
@@ -44,7 +50,7 @@ export default function PaymentTable() {
     // hasil parsing tanggalBayar) — "Lunaskan" & pembayaran manual sama-sama
     // melunasi Beban Honor periode berjalan, terlepas kapan uangnya
     // secara fisik dibayarkan.
-    upsert('honorPayments', newHonorPayment({ trainerId: selectedTrainer.id, periode, nominal: Number(nominal), tanggalBayar: payForm.tanggalBayar }))
+    upsert('honorPayments', newHonorPayment({ trainerId: selectedTrainer.id, periode, nominal: Number(nominal), tanggalBayar: payForm.tanggalBayar, cabangKode: cabangKodeForTrainer(selectedTrainer) }))
     setModalOpen(false)
     refreshPayments()
   }
@@ -70,7 +76,7 @@ export default function PaymentTable() {
     setConfirmMsg(`Bayar sisa ${formatRupiah(sisa)} kepada ${trainer.nama} untuk ${bulanLabel}?`)
     setConfirmOnConfirm(() => () => {
       setSelectedTrainer(trainer)
-      upsert('honorPayments', newHonorPayment({ trainerId: trainer.id, periode, nominal: sisa, tanggalBayar: new Date().toISOString().slice(0, 10) }))
+      upsert('honorPayments', newHonorPayment({ trainerId: trainer.id, periode, nominal: sisa, tanggalBayar: new Date().toISOString().slice(0, 10), cabangKode: cabangKodeForTrainer(trainer) }))
       refreshPayments()
     })
     setConfirmOpen(true)

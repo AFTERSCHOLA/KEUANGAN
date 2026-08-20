@@ -11,9 +11,10 @@ import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
-import { usePeriod, getUiState, setUiState, getSettings } from './lib/store'
+import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
 import RolePicker from './features/auth/RolePicker.jsx'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
+import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
 
 
@@ -28,9 +29,14 @@ const TABS = [
   { id: 'riwayat', label: 'Riwayat Absensi', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'pembayaran', label: 'Data Pembayaran', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'keuangan', label: 'Data Keuangan', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'cabang', label: 'Data Cabang', icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V13a1 1 0 011-1h4a1 1 0 011 1v8M9 9h1m-1 4h1m4-4h1m-1 4h1' },
-]
+   { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+ ]
+
+const CABANG_TAB = {
+  id: 'cabang',
+  label: 'Data Cabang',
+  icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V13a1 1 0 011-1h4a1 1 0 011 1v8M9 9h1m-1 4h1m4-4h1m-1 4h1',
+}
 
 // Trainer melihat 4 tab saja (M5.1.2): Absensi, Riwayat, Siswa read-only,
 // dan Rekap Saya sebagai landing view. Objek tab di-reuse dari TABS.
@@ -95,6 +101,23 @@ export default function App() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [backupModalOpen, setBackupModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus())
+  const [syncing, setSyncing] = useState(false)
+
+  useEffect(() => {
+    const refreshSync = () => setSyncStatus(getSyncStatus())
+    const unsubscribe = subscribeStore(refreshSync)
+    hydrateServerData().then(refreshSync)
+    return unsubscribe
+  }, [])
+
+  async function handleSync() {
+    setSyncing(true)
+    await syncPending()
+    await hydrateServerData()
+    setSyncStatus(getSyncStatus())
+    setSyncing(false)
+  }
 
   function setActiveTab(tabId) {
     setActiveTabState(tabId)
@@ -120,10 +143,10 @@ export default function App() {
   // M5.1.2: trainer yang mendarat di tab admin-only (mis. direct load dengan
   // activeTab tersimpan 'keuangan') di-redirect ke dashboard trainer (rekap).
   useEffect(() => {
-    if (role !== 'trainer') return
-    const allowed = new Set(TRAINER_TABS.map(t => t.id))
+    if (role === 'superadmin') return
+    const allowed = new Set((role === 'trainer' ? TRAINER_TABS : TABS).map(t => t.id))
     if (!allowed.has(activeTab)) {
-      setActiveTab('rekap')
+      setActiveTab(role === 'trainer' ? 'rekap' : 'overview')
     }
   }, [role, activeTab])
 
@@ -138,7 +161,7 @@ export default function App() {
 
   const NavList = ({ onNavigate }) => (
     <nav className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
-      {(role === 'trainer' ? TRAINER_TABS : TABS).map(tab => {
+      {(role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS).map(tab => {
         const isActive = activeTab === tab.id
         if (tab.comingSoon) {
           return (
@@ -249,6 +272,17 @@ export default function App() {
 
         <div className="px-3 py-4 border-t border-blue-800">
           <button
+            onClick={handleSync}
+            disabled={syncing || syncStatus.pending === 0}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${sidebarCollapsed ? 'justify-center' : ''} ${syncStatus.pending > 0 ? 'text-yellow-300 hover:bg-blue-800' : 'text-blue-300/60'} disabled:cursor-default`}
+            title={sidebarCollapsed ? 'Sinkronisasi' : undefined}
+          >
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
+            </svg>
+            {!sidebarCollapsed && `${syncing ? 'Menyinkronkan...' : 'Sinkronisasi'}${syncStatus.pending > 0 ? ` (${syncStatus.pending})` : ''}`}
+          </button>
+          <button
             onClick={() => setBackupModalOpen(true)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
             title={sidebarCollapsed ? 'Backup & Restore' : undefined}
@@ -304,6 +338,16 @@ export default function App() {
             <NavList onNavigate={() => setMobileDrawerOpen(false)} />
             <div className="px-3 py-4 border-t border-blue-800">
               <button
+                onClick={() => { handleSync(); setMobileDrawerOpen(false) }}
+                disabled={syncing || syncStatus.pending === 0}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold ${syncStatus.pending > 0 ? 'text-yellow-300 hover:bg-blue-800' : 'text-blue-300/60'} disabled:cursor-default`}
+              >
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
+                </svg>
+                {`${syncing ? 'Menyinkronkan...' : 'Sinkronisasi'}${syncStatus.pending > 0 ? ` (${syncStatus.pending})` : ''}`}
+              </button>
+              <button
                 onClick={() => { setBackupModalOpen(true); setMobileDrawerOpen(false) }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white"
               >
@@ -348,7 +392,7 @@ export default function App() {
           {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'absensi' && <AttendanceTab />}
-          {activeTab === 'riwayat' && <AttendanceTab initialView="riwayat" />}
+          {activeTab === 'riwayat' && (role === 'trainer' ? <TrainerHistory trainerId={trainerId} /> : <AttendanceTab initialView="riwayat" />)}
           {activeTab === 'pembayaran' && <PaymentTable />}
           {activeTab === 'keuangan' && <FinanceReport />}
           {activeTab === 'aging' && <AgingReport />}

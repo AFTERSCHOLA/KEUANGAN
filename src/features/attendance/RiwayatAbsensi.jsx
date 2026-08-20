@@ -1,25 +1,25 @@
 import React, { useMemo, useState } from 'react'
-import { read, upsert, usePeriod } from '../../lib/store'
+import { readCached, upsert, usePeriod } from '../../lib/store'
 import { buildReviewQueue } from '../../lib/attendance'
 import { getRole, canVerify } from '../../lib/role'
 
 export default function RiwayatAbsensi({ onLoadForCorrection }) {
   const { periodeKey } = usePeriod()
   const [tick, setTick] = useState(0)
-  const sekolah = useMemo(() => read('sekolah'), [tick])
-  const trainer = useMemo(() => read('trainer'), [tick])
-  const absensi = useMemo(() => read('absensi'), [tick])
+  const sekolah = useMemo(() => readCached('sekolah'), [tick])
+  const absensi = useMemo(() => readCached('absensi'), [tick])
   const [filterSekolahId, setFilterSekolahId] = useState('')
   const [showAll, setShowAll] = useState(false)
 
   const role = getRole()
   const periode = periodeKey()
-  const periodeAbsensi = absensi.filter(a => a.periode === periode)
 
-  const queue = useMemo(() => buildReviewQueue(periodeAbsensi, trainer), [periodeAbsensi, trainer])
-  const filteredQueue = filterSekolahId ? queue.filter(q => q.record.sekolahId === filterSekolahId) : queue
+  const queue = useMemo(() => buildReviewQueue(absensi), [absensi])
+  const filteredQueue = queue
+    .filter(q => q.record.periode === periode)
+    .filter(q => !filterSekolahId || q.record.sekolahId === filterSekolahId)
 
-  const allRecords = periodeAbsensi
+  const allRecords = absensi
     .filter(a => !filterSekolahId || a.sekolahId === filterSekolahId)
     .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
 
@@ -30,6 +30,7 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
     return (record.siswaList || []).filter(s => s.status === 'Hadir').length
   }
   function handleVerify(record) {
+    if (!canVerify(role)) return
     upsert('absensi', { ...record, statusVerifikasi: { by: role, at: new Date().toISOString() } })
     setTick(t => t + 1)
   }
@@ -96,7 +97,7 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
                   <td className="py-4 px-6 text-center font-bold text-blue-700">{hadirCount(r)}</td>
                   {!showAll && <td className="py-4 px-6 text-[11px] text-slate-500">{reasons.join('; ')}</td>}
                   <td className="py-4 px-6 text-center">
-                    {r.statusVerifikasi ? (
+                    {r.statusVerifikasi?.at ? (
                       <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
                         ✓ {r.statusVerifikasi.at.slice(0, 10)}
                       </span>

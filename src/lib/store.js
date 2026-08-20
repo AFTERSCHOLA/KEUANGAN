@@ -1,4 +1,10 @@
 const STORE_KEY = 'afterschola_v4'
+const STORE_EVENT = 'afterschola_v4_changed'
+const SERVER_KEYS = new Set(['absensi', 'sppPayments', 'honorPayments'])
+
+function notifyStoreChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(STORE_EVENT))
+}
 
 // ============================================
 // ROLE CONTEXT (M5.1.3) — cabang-aware filtering
@@ -73,34 +79,84 @@ export function getKeys() {
   }
 }
 
-export function read(key) {
-  const keys = getKeys()
-  const json = localStorage.getItem(keys[key])
+function readCollection(key) {
+  const json = localStorage.getItem(getKeys()[key])
   if (!json) return []
   try {
     const parsed = JSON.parse(json)
-    if (!Array.isArray(parsed)) return []
-    const ctx = getRoleContext()
-    return ctx.role === 'trainer' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
 }
 
+export function readRaw(key) {
+  return readCollection(key)
+}
+
+export function writeRaw(key, records) {
+  localStorage.setItem(getKeys()[key], JSON.stringify(records))
+}
+
+export function getMigrationState() {
+  try {
+    const json = localStorage.getItem(getKeys().settings)
+    const settings = json ? JSON.parse(json) : {}
+    return settings?.migrations || {}
+  } catch {
+    return {}
+  }
+}
+
+export function setMigrationState(migrations) {
+  const current = getSettings()
+  localStorage.setItem(getKeys().settings, JSON.stringify({ ...current, migrations }))
+}
+
+export function readCached(key) {
+  const parsed = readCollection(key)
+  const ctx = getRoleContext()
+  return ctx.role === 'trainer' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
+}
+
+export async function read(key) {
+  if (!SERVER_KEYS.has(key)) return readCached(key)
+  try {
+    const res = await fetch(`/api/read.php?entity=${encodeURIComponent(key)}`)
+    if (!res.ok) throw new Error(`read ${key}: ${res.status}`)
+    const remote = await res.json()
+    if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
+    writeRaw(key, remote)
+    notifyStoreChanged()
+    return readCached(key)
+  } catch {
+    return readCached(key)
+  }
+}
+
+export function subscribeStore(listener) {
+  if (typeof window === 'undefined') return () => {}
+  window.addEventListener(STORE_EVENT, listener)
+  return () => window.removeEventListener(STORE_EVENT, listener)
+}
+
+export async function hydrateServerData() {
+  await Promise.all([...SERVER_KEYS].map(key => read(key)))
+}
+
 export function write(key, records) {
-  const keys = getKeys()
   const ctx = getRoleContext()
   let out = records
   if (ctx.role === 'trainer' && Array.isArray(records)) {
     out = records.filter(r => isWithinScope(key, r, ctx))
   }
-  localStorage.setItem(keys[key], JSON.stringify(out))
+  writeRaw(key, out)
 }
 
 export function upsert(key, record) {
   const ctx = getRoleContext()
   if (ctx.role === 'trainer' && !isWithinScope(key, record, ctx)) return
-  const records = read(key)
+  const records = readRaw(key)
   const idx = records.findIndex(r => r.id === record.id)
   let saved
   if (idx >= 0) {
@@ -110,7 +166,7 @@ export function upsert(key, record) {
     records.push(record)
     saved = record
   }
-  write(key, records)
+  writeRaw(key, records)
   queueSync(key, saved)
 }
 
@@ -126,11 +182,10 @@ export function upsert(key, record) {
 // this section adds a *parallel* sync layer on the same localStorage
 // source of truth:
 //   - upsert() (above) also queues the saved record for server push
-//   - syncPending() flushes the queue to the PHP endpoints (M7.2.2) when
-//     online — this is what a "Sync" button (UI, out of this file's
-//     scope) calls to show a pending count and trigger a push
+//   - syncPending() flushes the queue to /api/sync.php (M7.2.2) when
+//     online — this is what the "Sinkronisasi" button calls
 //   - pullRemote() opportunistically refreshes the local cache from the
-//     server in the background; it never blocks or replaces read()
+//     server in the background; it never blocks or replaces readCached()
 // This matches the microtask's own VERIFY line: "Network off → app still
 // works from cache → network on → sync button shows pending count → sync
 // resolves" — a queue-and-sync-button pattern, not a request/response
@@ -142,12 +197,6 @@ const SYNC_LOG_KEY = `${STORE_KEY}_syncLog`
 // endpoint (M7.2.2). Everything else (sekolah, trainer, siswa, cabang,
 // settings) stays localStorage-only for now — unchanged from before this
 // microtask, and out of scope to wire up here.
-const SYNC_ENDPOINTS = {
-  absensi: '/api/absensi.php',
-  sppPayments: '/api/sppPayments.php',
-  honorPayments: '/api/honorPayments.php',
-}
-
 function readSyncLog() {
   try {
     const json = localStorage.getItem(SYNC_LOG_KEY)
@@ -160,13 +209,14 @@ function readSyncLog() {
 
 function writeSyncLog(entries) {
   localStorage.setItem(SYNC_LOG_KEY, JSON.stringify(entries))
+  notifyStoreChanged()
 }
 
 // Queues a record for push to its PHP endpoint. Silently no-ops for keys
 // without one (sekolah, trainer, siswa, cabang, ...) so upsert() can call
 // this unconditionally without callers needing to know which keys sync.
 function queueSync(key, record) {
-  if (!SYNC_ENDPOINTS[key] || !record?.id) return
+  if (!SERVER_KEYS.has(key) || !record?.id) return
   const log = readSyncLog()
   // Replace any existing queued entry for the same record — the queue
   // holds at most one pending push per record (last write wins locally;
@@ -191,37 +241,26 @@ export function getSyncStatus() {
 // server, nothing left to push.
 export async function syncPending() {
   const log = readSyncLog()
-  const remaining = []
-  let synced = 0
-  let stoppedOnFailure = false
-
-  for (const entry of log) {
-    if (stoppedOnFailure) {
-      remaining.push(entry)
-      continue
+  if (log.length === 0) return { synced: 0, pending: 0 }
+  try {
+    const res = await fetch('/api/sync.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: log }),
+    })
+    if (res.status === 409) {
+      writeSyncLog([])
+      return { synced: log.length, pending: 0 }
     }
-    const url = SYNC_ENDPOINTS[entry.key]
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry.record),
-      })
-      if (res.ok || res.status === 409) {
-        synced++
-      } else {
-        remaining.push(entry)
-        stoppedOnFailure = true
-      }
-    } catch {
-      // Offline or unreachable — stop here, keep this and the rest queued.
-      remaining.push(entry)
-      stoppedOnFailure = true
-    }
+    if (!res.ok) return { synced: 0, pending: log.length }
+    const result = await res.json()
+    const failed = new Set((result.failed || []).map(item => item.id))
+    const remaining = log.filter(entry => failed.has(entry.id))
+    writeSyncLog(remaining)
+    return { synced: log.length - remaining.length, pending: remaining.length }
+  } catch {
+    return { synced: 0, pending: log.length }
   }
-
-  writeSyncLog(remaining)
-  return { synced, pending: remaining.length }
 }
 
 // Best-effort background refresh of the local cache from the server.
@@ -239,7 +278,7 @@ export async function pullRemote(key) {
     if (!res.ok) return false
     const remote = await res.json()
     if (!Array.isArray(remote)) return false
-    const local = read(key)
+    const local = readCached(key)
     const localIds = new Set(local.map(r => r.id))
     const merged = local.concat(remote.filter(r => !localIds.has(r.id)))
     write(key, merged)
@@ -295,10 +334,11 @@ export function setUiState(partial) {
 // ============================================
 // PERIOD CONTEXT (M1.1, persisted per M4.3)
 // ============================================
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { periodeKey, periodeFromDate, calYear, defaultAcademicYear, defaultMonth } from './constants'
 
 const PeriodContext = createContext(null)
+const BranchContext = createContext(null)
 
 export function PeriodProvider({ children }) {
   const saved = getUiState()
@@ -336,5 +376,33 @@ export function PeriodProvider({ children }) {
 export function usePeriod() {
   const ctx = useContext(PeriodContext)
   if (!ctx) throw new Error('usePeriod harus dipakai di dalam <PeriodProvider>')
+  return ctx
+}
+
+export function BranchProvider({ children }) {
+  const [branches, setBranches] = useState(() => readCached('cabang'))
+  const [selectedCabangId, setSelectedCabangIdState] = useState(() => getUiState().selectedCabangId || '')
+  const refresh = useCallback(() => {
+    setBranches(readCached('cabang'))
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeStore(refresh)
+    refresh()
+    return unsubscribe
+  }, [refresh])
+
+  const setSelectedCabangId = useCallback((id) => {
+    setSelectedCabangIdState(id)
+    setUiState({ selectedCabangId: id })
+  }, [])
+
+  const value = { branches, selectedCabangId, setSelectedCabangId }
+  return React.createElement(BranchContext.Provider, { value }, children)
+}
+
+export function useBranch() {
+  const ctx = useContext(BranchContext)
+  if (!ctx) throw new Error('useBranch harus dipakai di dalam <BranchProvider>')
   return ctx
 }

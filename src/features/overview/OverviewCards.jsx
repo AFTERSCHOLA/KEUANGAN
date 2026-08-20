@@ -1,7 +1,8 @@
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, useBranch, usePeriod, getRoleContext } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { MONTHS, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
+import { filterEntitiesByBranch } from '../../lib/branchScope.js'
 import ExecutiveSummary from '../reports/ExecutiveSummary.jsx'
 
 // M4.2 — Overview graphs (Person 5). Pure SVG/CSS, no chart library.
@@ -13,13 +14,21 @@ const CHART_H = 220
 
 export default function OverviewCards() {
   const period = usePeriod()
-  const entities = {
-    sekolah: read('sekolah'),
-    siswa: read('siswa'),
-    trainer: read('trainer'),
-    absensi: read('absensi'),
-    honorPayments: read('honorPayments'),
+  const { branches, selectedCabangId, setSelectedCabangId } = useBranch()
+  const role = getRoleContext().role
+  const allEntities = {
+    cabang: readCached('cabang'),
+    sekolah: readCached('sekolah'),
+    siswa: readCached('siswa'),
+    trainer: readCached('trainer'),
+    absensi: readCached('absensi'),
+    honorPayments: readCached('honorPayments'),
+    sppPayments: readCached('sppPayments'),
+    invoices: readCached('invoices'),
   }
+  const entities = role === 'superadmin'
+    ? filterEntitiesByBranch(allEntities, selectedCabangId)
+    : allEntities
 
   const noData = entities.sekolah.length === 0 && entities.siswa.length === 0 && entities.trainer.length === 0
 
@@ -60,13 +69,31 @@ export default function OverviewCards() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="bg-white p-4 rounded-2xl shadow-sm border">
-        <h2 className="text-xl font-bold text-slate-800">Overview</h2>
-        <p className="text-xs text-slate-500">Ringkasan operasional & keuangan — {MONTHS[selectedIdx]} {period.selectedYear}/{period.selectedYear + 1}</p>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Overview</h2>
+          <p className="text-xs text-slate-500">Ringkasan operasional & keuangan — {MONTHS[selectedIdx]} {period.selectedYear}/{period.selectedYear + 1}</p>
+        </div>
+        {role === 'superadmin' && (
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+            Cabang
+            <select
+              aria-label="Cabang"
+              value={selectedCabangId}
+              onChange={e => setSelectedCabangId(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="">Semua Cabang</option>
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.nama} ({branch.kode})</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {/* M6.3.3 — Executive Summary: Laba/Rugi + kolektibilitas + red flags */}
-      <ExecutiveSummary />
+      <ExecutiveSummary entities={entities} />
 
       {/* Summary cards — cash rows vs memo rows visually distinct (D1) */}
       <div className="bg-gradient-to-br from-blue-900 to-slate-950 text-white rounded-2xl p-6 shadow-md grid grid-cols-1 md:grid-cols-4 gap-4 animate-scaleIn">

@@ -1,7 +1,7 @@
 // src/lib/sppPayments.js
 // Ledger pembayaran SPP siswa — mirror pola honorPayments (append-only).
 // Koreksi dilakukan lewat hapus-entry, bukan edit di tempat.
-import { read, write } from './store.js'
+import { readCached, write } from './store.js'
 import { generateId } from './constants.js'
 
 export function newSppPayment({
@@ -13,12 +13,13 @@ export function newSppPayment({
   diterimaOleh,
   bukti = null,
   sudahDisetor = false,
+  cabangKode,
 }) {
   return {
-    id: generateId('spp'),
+    id: generateId('spp', cabangKode),
     siswaId,
     periode,
-    nominal,
+    nominal: Number(nominal),
     tanggalBayar,
     metode,
     diterimaOleh,
@@ -28,53 +29,58 @@ export function newSppPayment({
 }
 
 export function listSppPayments() {
-  return read('sppPayments')
+  return readCached('sppPayments')
 }
 
 export function sppPaymentsForSiswa(siswaId) {
-  return read('sppPayments').filter(p => p.siswaId === siswaId)
+  return readCached('sppPayments').filter(p => p.siswaId === siswaId)
 }
 
 export function sppPaymentsForPeriode(periode) {
-  return read('sppPayments').filter(p => p.periode === periode)
+  return readCached('sppPayments').filter(p => p.periode === periode)
 }
 
 /** Tambah entry baru ke ledger (append-only — tidak ada fungsi "update") */
 export function addSppPayment(payment) {
-  const all = read('sppPayments')
+  const all = readCached('sppPayments')
   write('sppPayments', [...all, payment])
   return payment
 }
 
 /** Hapus 1 entry — ini satu-satunya jalur koreksi */
 export function deleteSppPayment(id) {
-  const all = read('sppPayments').filter(p => p.id !== id)
-  write('sppPayments', all)
-  return all
+  const all = readCached('sppPayments')
+  const deleted = all.find(p => p.id === id)
+  const remaining = all.filter(p => p.id !== id)
+  write('sppPayments', remaining)
+  if (deleted) recomputeSppLunasForSiswa(deleted.siswaId)
+  return remaining
 }
 
-/**
- * M6.1.3 — Turunkan sppLunas dari ledger: satu periode dianggap "lunas"
- * kalau ada MINIMAL 1 entry pembayaran untuk periode itu (bukan jumlah
- * nominal — keputusan desain: sppLunas tetap boolean sederhana seperti
- * semula, bukan tracking pembayaran sebagian).
- */
-export function computeSppLunas(siswaId, allPayments) {
+/** Turunkan sppLunas dari jumlah nominal ledger terhadap tarif sekolah. */
+export function computeSppLunas(siswaId, allPayments, sppTarif = 0) {
   const map = {}
+  const totalsByPeriode = {}
   allPayments
     .filter(p => p.siswaId === siswaId)
-    .forEach(p => { map[p.periode] = true })
+    .forEach(p => {
+      totalsByPeriode[p.periode] = (totalsByPeriode[p.periode] || 0) + Number(p.nominal || 0)
+    })
+  Object.entries(totalsByPeriode).forEach(([periode, total]) => {
+    if (total >= Number(sppTarif)) map[periode] = true
+  })
   return map
 }
 
-/** Hitung ulang sppLunas siswa dari ledger, lalu simpan ke record siswa */
+/** Hitung ulang sppLunas siswa dari ledger, lalu simpan ke record siswa. */
 export function recomputeSppLunasForSiswa(siswaId) {
-  const siswaList = read('siswa')
+  const siswaList = readCached('siswa')
   const target = siswaList.find(s => s.id === siswaId)
   if (!target) return null
 
-  const allPayments = read('sppPayments')
-  const sppLunas = computeSppLunas(siswaId, allPayments)
+  const sekolah = readCached('sekolah').find(s => s.id === target.sekolahId)
+  const allPayments = readCached('sppPayments')
+  const sppLunas = computeSppLunas(siswaId, allPayments, sekolah?.spp || 0)
   const updated = { ...target, sppLunas }
   write('siswa', siswaList.map(s => (s.id === siswaId ? updated : s)))
   return updated

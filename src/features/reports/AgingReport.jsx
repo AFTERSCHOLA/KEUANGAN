@@ -1,6 +1,6 @@
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
-import { elapsedPeriods } from '../../lib/tunggakan.js'
+import { elapsedPeriods, sppPaidForPeriode } from '../../lib/tunggakan.js'
 
 /**
  * M6.3.1 — Aging report. Setiap siswa yang nunggak diklasifikasi berdasarkan
@@ -9,16 +9,16 @@ import { elapsedPeriods } from '../../lib/tunggakan.js'
  * tertuanya — konvensi standar aging report.
  * distance 0 = bulan berjalan, 1 = 1 bulan lalu, 2+ = 2 bulan lalu atau lebih.
  */
-function computeAging(sekolah, siswa, elapsed) {
+function computeAging(sekolah, siswa, elapsed, sppPayments) {
   const lastIdx = elapsed.length - 1
 
   return sekolah.map(sch => {
     const buckets = { bulanIni: 0, satuBulan: 0, duaBulanPlus: 0 }
-    const siswaSekolah = siswa.filter(s => s.sekolahId === sch.id)
+    const siswaSekolah = siswa.filter(s => s.sekolahId === sch.id && s.status !== 'Trial')
 
     siswaSekolah.forEach(s => {
       const unpaidIdx = elapsed
-        .map((e, i) => ({ i, paid: !!s.sppLunas?.[e.periode] }))
+        .map((e, i) => ({ i, paid: sppPaidForPeriode(s, e.periode, sppPayments, sch.spp) }))
         .filter(x => !x.paid)
         .map(x => x.i)
 
@@ -40,11 +40,12 @@ function computeAging(sekolah, siswa, elapsed) {
 
 export default function AgingReport() {
   const period = usePeriod()
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
+  const sekolah = readCached('sekolah')
+  const siswa = readCached('siswa')
+  const sppPayments = readCached('sppPayments')
 
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
-  const rows = computeAging(sekolah, siswa, elapsed)
+  const rows = computeAging(sekolah, siswa, elapsed, sppPayments)
 
   const totals = rows.reduce((acc, r) => ({
     bulanIni: acc.bulanIni + r.bulanIni,

@@ -2,8 +2,8 @@
 // M5.3.1 — Review queue logic
 // Flags: no-photo, >20% deviation from school trailing average,
 // first-ever student appearance, edited-after-verification.
-// Plus deterministic (non-re-randomizing-on-rerender) weekly sample:
-// up to 3 unreviewed records per trainer per ISO week.
+// Plus a stable randomized weekly sample: 2–3 unreviewed records per
+// trainer per ISO week when enough records are available.
 // ============================================
 
 function isoWeekKey(dateStr) {
@@ -27,21 +27,24 @@ function simpleHash(str) {
   return h
 }
 
+function hasPhoto(record) {
+  return !!record.foto || (record.dokumentasi || []).some(Boolean)
+}
+
 /**
  * Returns [{ record, reasons: string[] }] — flagged records first, then
  * the weekly sample (reasons: ['Sampel acak mingguan untuk verifikasi']).
  */
-export function buildReviewQueue(absensi, trainer) {
+export function buildReviewQueue(absensi) {
   const sorted = [...absensi].sort((a, b) => (a.tanggal < b.tanggal ? -1 : 1))
   const seenStudent = new Set()
-  const bySchoolTrailing = {} // sekolahId -> hadirCount trailing window
-
+  const bySchoolTrailing = {}
   const flagged = []
 
   sorted.forEach(record => {
     const reasons = []
 
-    if (!record.foto) reasons.push('Tanpa foto bukti sesi')
+    if (!hasPhoto(record)) reasons.push('Tanpa foto bukti sesi')
 
     const trail = bySchoolTrailing[record.sekolahId] || []
     if (trail.length >= 3) {
@@ -65,17 +68,15 @@ export function buildReviewQueue(absensi, trainer) {
       reasons.push('Diedit setelah diverifikasi sebelumnya')
     }
 
-    // update trailing average SETELAH dievaluasi (biar gak masukin diri sendiri)
     bySchoolTrailing[record.sekolahId] = [...trail, hadirCount(record)].slice(-5)
 
     if (reasons.length > 0) flagged.push({ record, reasons })
   })
 
-  // Sampel mingguan: 3 record belum-diverifikasi & belum-keflag per trainer per minggu
   const flaggedIds = new Set(flagged.map(f => f.record.id))
   const byTrainerWeek = {}
   sorted.forEach(record => {
-    if (record.statusVerifikasi || flaggedIds.has(record.id)) return
+    if (record.statusVerifikasi?.at || flaggedIds.has(record.id)) return
     const key = `${record.trainerId}|${isoWeekKey(record.tanggal)}`
     if (!byTrainerWeek[key]) byTrainerWeek[key] = []
     byTrainerWeek[key].push(record)
@@ -84,7 +85,8 @@ export function buildReviewQueue(absensi, trainer) {
   const sampled = []
   Object.values(byTrainerWeek).forEach(records => {
     const ranked = [...records].sort((a, b) => simpleHash(a.id) - simpleHash(b.id))
-    ranked.slice(0, 3).forEach(record => {
+    const sampleCount = Math.min(3, records.length >= 2 ? Math.max(2, Math.floor(records.length / 2)) : 1)
+    ranked.slice(0, sampleCount).forEach(record => {
       sampled.push({ record, reasons: ['Sampel acak mingguan untuk verifikasi'] })
     })
   })

@@ -66,7 +66,7 @@ flowchart LR
 - **A1.** Role-based UI split (Admin vs Trainer view, soft-login)
 - **A2.** Attendance upgrade: assistant dropdown, photo documentation (2 slots), `catatan` field
 - **A3.** Quick-session flow ("Semua Hadir" button + tap exceptions)
-- **A4.** Trainer-only views: view-only student list, own attendance history, "rekap saya"
+- **A4.** Trainer-only views: view-only student list, own attendance history, and a **working "Rekap Saya" landing page** (today's schedule + pending status + own honor summary), not a placeholder
 - **A5.** Tiered verification: save-time sanity prompt + trainer weekly self-certification + exception-filtered review queue (Head reviews anomalies and a random sample, not every record); paper retention policy printed in-app as dispute backstop
 
 ### Phase B — Head Trainer / Finance Wins (Priority 2)
@@ -113,6 +113,7 @@ flowchart LR
 - **"What's pending today"** — indicator showing scheduled schools not yet attended
 - **Roster drift warning** — alert when new students appear not covered by past attendance
 - **View-only student list** — searchable, shows SPP status, no edit buttons
+- **Proof-visible own history** — trainer sees `asisten`, `dokumentasi`, and `catatan` on their own attendance rows BEFORE self-certifying (the capture fields must not vanish after save)
 
 ---
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { read, write, upsert, getRoleContext } from '../../lib/store.js'
+import { readCached, write, upsert, getRoleContext } from '../../lib/store.js'
 import { newCabang, defaultCabang } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -7,16 +7,10 @@ import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 // M7.1.3 — Branch CRUD (superadmin only).
 //
-// The app's role system (RolePicker.jsx / store.js getRoleContext()) only
-// distinguishes 'admin' | 'trainer' — there is no separate 'superadmin'
-// tier yet. Introducing one is out of scope here (it would mean editing
-// RolePicker.jsx and store.js, outside this microtask's file ownership —
-// R7). Until that tier exists, 'admin' IS this app's superadmin: branch
-// management is gated on role === 'admin', same as every other
-// admin-only surface (see StudentList.jsx hiding Edit/Delete for trainer).
+// Branch management is restricted to the explicit superadmin role.
 
 function seedCabangIfEmpty() {
-  let list = read('cabang')
+  let list = readCached('cabang')
   if (list.length === 0) {
     list = [defaultCabang()]
     write('cabang', list)
@@ -27,7 +21,7 @@ function seedCabangIfEmpty() {
 export default function BranchManager() {
   const ctx = getRoleContext()
   const [cabang, setCabang] = useState(() => seedCabangIfEmpty())
-  const [sekolah, setSekolah] = useState(() => read('sekolah'))
+  const [sekolah, setSekolah] = useState(() => readCached('sekolah'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newCabang())
   const [alertOpen, setAlertOpen] = useState(false)
@@ -37,8 +31,8 @@ export default function BranchManager() {
   const [assignPickerFor, setAssignPickerFor] = useState(null)
 
   function refresh() {
-    setCabang(read('cabang'))
-    setSekolah(read('sekolah'))
+    setCabang(readCached('cabang'))
+    setSekolah(readCached('sekolah'))
   }
 
   function openAdd() {
@@ -52,6 +46,7 @@ export default function BranchManager() {
   }
 
   function save() {
+    if (ctx.role !== 'superadmin') return
     if (!form.nama.trim()) {
       setAlertMsg('Nama cabang tidak boleh kosong.')
       setAlertOpen(true)
@@ -75,6 +70,7 @@ export default function BranchManager() {
   }
 
   function requestDelete(id) {
+    if (ctx.role !== 'superadmin') return
     const c = cabang.find(x => x.id === id)
     if (c && c.id === defaultCabang().id) {
       setAlertMsg('Cabang default (seed) tidak bisa dihapus — cabang ini dipakai sebagai fallback sistem.')
@@ -100,6 +96,7 @@ export default function BranchManager() {
   }
 
   function assignSchool(schoolId, branchId) {
+    if (ctx.role !== 'superadmin') return
     const sch = sekolah.find(s => s.id === schoolId)
     if (!sch) return
     upsert('sekolah', { ...sch, cabangId: branchId })
@@ -107,7 +104,7 @@ export default function BranchManager() {
     refresh()
   }
 
-  if (ctx.role !== 'admin') {
+  if (ctx.role !== 'superadmin') {
     return (
       <div className="bg-white rounded-2xl p-8 shadow-sm border text-center animate-fadeIn">
         <p className="text-slate-400 text-sm">Halaman ini khusus Admin.</p>

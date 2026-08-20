@@ -1,7 +1,7 @@
-import { read, usePeriod } from '../../lib/store.js'
+import { usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { financialData } from '../../lib/finance.js'
-import { elapsedPeriods } from '../../lib/tunggakan.js'
+import { elapsedPeriods, sppPaidForPeriode } from '../../lib/tunggakan.js'
 
 function findWorstCollection(sekolahFinance) {
   const withTarget = sekolahFinance.filter(s => s.targetSpp > 0)
@@ -19,13 +19,15 @@ function findMostUnpaidTrainer(trainerFinance) {
   return withDebt.reduce((worst, t) => (t.sisaHonor > worst.sisaHonor ? t : worst))
 }
 
-function findOldestTunggakan(siswa, sekolah, elapsed) {
+function findOldestTunggakan(siswa, sekolah, elapsed, sppPayments) {
   const lastIdx = elapsed.length - 1
   let oldest = null
 
   siswa.forEach(s => {
+    if (s.status === 'Trial') return
+    const sppTarif = sekolah.find(sc => sc.id === s.sekolahId)?.spp || 0
     const unpaidIdx = elapsed
-      .map((e, i) => ({ i, paid: !!s.sppLunas?.[e.periode] }))
+      .map((e, i) => ({ i, paid: sppPaidForPeriode(s, e.periode, sppPayments, sppTarif) }))
       .filter(x => !x.paid)
       .map(x => x.i)
     if (unpaidIdx.length === 0) return
@@ -45,23 +47,18 @@ function findOldestTunggakan(siswa, sekolah, elapsed) {
   return oldest
 }
 
-export default function ExecutiveSummary() {
+export default function ExecutiveSummary({ entities }) {
   const period = usePeriod()
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
-  const trainer = read('trainer')
-  const absensi = read('absensi')
-  const honorPayments = read('honorPayments')
-
   const periode = period.periodeKey()
-  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode })
+  const { sekolah, siswa, trainer, absensi, honorPayments, sppPayments } = entities
+  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode })
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
 
   const collectionRate = data.potensiSpp > 0 ? (data.pemasukanSpp / data.potensiSpp) * 100 : null
 
   const worstSchool = findWorstCollection(data.sekolahFinance)
   const worstTrainer = findMostUnpaidTrainer(data.trainerFinance)
-  const oldestTunggakan = findOldestTunggakan(siswa, sekolah, elapsed)
+  const oldestTunggakan = findOldestTunggakan(siswa, sekolah, elapsed, sppPayments)
 
   const redFlags = []
   if (worstSchool) {

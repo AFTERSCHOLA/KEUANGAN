@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { read, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { financialData } from '../../lib/finance.js'
 import { shiftPeriode, monthLabel, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
@@ -82,19 +82,20 @@ const RANGE_ROWS = [
 
 export default function FinanceReport() {
   const period = usePeriod()
-  const sekolah = read('sekolah')
-  const siswa = read('siswa')
-  const trainer = read('trainer')
-  const absensi = read('absensi')
-  const honorPayments = read('honorPayments')
+  const sekolah = readCached('sekolah')
+  const siswa = readCached('siswa')
+  const trainer = readCached('trainer')
+  const absensi = readCached('absensi')
+  const honorPayments = readCached('honorPayments')
+  const sppPayments = readCached('sppPayments')
 
   const periode = period.periodeKey()
   const periodePrevBulan = shiftPeriode(periode, -1)
   const periodePrevTahun = shiftPeriode(periode, -12)
 
-  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode })
-  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode: periodePrevBulan })
-  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode: periodePrevTahun })
+  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode })
+  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: periodePrevBulan })
+  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: periodePrevTahun })
 
   const comparisonRows = [
     { label: 'Potensi SPP', key: 'potensiSpp', tag: 'Memo' },
@@ -122,7 +123,7 @@ export default function FinanceReport() {
   }
 
   const rangeDataByPeriode = Object.fromEntries(
-    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, honorPayments, periode: p })])
+    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: p })])
   )
   const rangeTotals = Object.fromEntries(
     RANGE_ROWS.map(row => [row.key, rangePeriods.reduce((sum, p) => sum + rangeDataByPeriode[p][row.key], 0)])

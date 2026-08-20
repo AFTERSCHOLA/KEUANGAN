@@ -42,7 +42,7 @@ export function honorPaidByTrainer(honorPayments = [], periode) {
   return result
 }
 
-export function financialData({ sekolah = [], siswa = [], trainer = [], absensi = [], honorPayments = [], periode }) {
+export function financialData({ sekolah = [], siswa = [], trainer = [], absensi = [], honorPayments = [], sppPayments = [], periode }) {
   const stats = attendanceStats(absensi, periode)
   const dibayarByTrainer = honorPaidByTrainer(honorPayments, periode)
 
@@ -55,7 +55,9 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     // and Trial is a billing-status, not attendance/list-membership filter)
     const siswaBilling = siswaSekolah.filter(s => s.status !== 'Trial')
     const targetSpp = siswaBilling.length * sch.spp
-    const realisasiSpp = siswaBilling.filter(s => s.sppLunas?.[periode]).length * sch.spp
+    const realisasiSpp = siswaBilling.reduce((sum, s) => sum + sppPayments
+      .filter(p => p.siswaId === s.id && p.periode === periode)
+      .reduce((studentSum, p) => studentSum + Number(p.nominal || 0), 0), 0)
 
     potensiSpp += targetSpp
     pemasukanSpp += realisasiSpp

@@ -1,5 +1,5 @@
-import { read, write } from './store.js'
-import { generateId } from './constants.js'
+import { readCached, write } from './store.js'
+import { generateId, DEFAULT_CABANG_KODE } from './constants.js'
 
 export function newInvoice({
   sekolahId,
@@ -11,9 +11,10 @@ export function newInvoice({
   pjSekolah = '',
   uraian = '',
   tanggalTerbit,
+  cabangKode,
 }) {
   return {
-    id: generateId('inv'),
+    id: generateId('inv', cabangKode),
     nomor: null, // diisi otomatis saat status berubah jadi 'Terbit' (lihat setInvoiceStatus)
     sekolahId,
     mode,
@@ -31,15 +32,15 @@ export function newInvoice({
 }
 
 export function listInvoices() {
-  return read('invoices')
+  return readCached('invoices')
 }
 
 export function invoicesForSekolah(sekolahId) {
-  return read('invoices').filter(inv => inv.sekolahId === sekolahId)
+  return readCached('invoices').filter(inv => inv.sekolahId === sekolahId)
 }
 
 export function addInvoice(invoice) {
-  const all = read('invoices')
+  const all = readCached('invoices')
   write('invoices', [...all, invoice])
   return invoice
 }
@@ -49,22 +50,29 @@ export function addInvoice(invoice) {
  * (Draft -> Terbit) — supaya draft yang dihapus tidak "membakar" nomor urut.
  * Reset ke 0001 tiap ganti tahun kalender (dihitung dari tanggalTerbit).
  */
-export function generateInvoiceNumber(tanggal) {
-  const all = read('invoices')
+export function generateInvoiceNumber(tanggal, sekolahId) {
+  const all = readCached('invoices')
   const year = tanggal.slice(0, 4)
-  const yearMonth = tanggal.slice(0, 7).replace('-', '')
-  const countThisYear = all.filter(inv => inv.nomor && inv.tanggalTerbit?.slice(0, 4) === year).length
-  const seq = countThisYear + 1
-  return `AFS-${yearMonth}-${String(seq).padStart(4, '0')}`
+  const sekolah = readCached('sekolah').find(s => s.id === sekolahId)
+  const cabang = readCached('cabang').find(c => c.id === sekolah?.cabangId)
+  const branch = cabang?.kode || DEFAULT_CABANG_KODE
+  const countThisYearAndBranch = all.filter(inv => {
+    if (!inv.nomor || inv.tanggalTerbit?.slice(0, 4) !== year) return false
+    const invoiceSchool = readCached('sekolah').find(s => s.id === inv.sekolahId)
+    const invoiceBranch = readCached('cabang').find(c => c.id === invoiceSchool?.cabangId)
+    return (invoiceBranch?.kode || DEFAULT_CABANG_KODE) === branch
+  }).length
+  const seq = countThisYearAndBranch + 1
+  return `INV/${year}/${tanggal.slice(5, 7)}/${branch}-${String(seq).padStart(4, '0')}`
 }
 
 export function setInvoiceStatus(id, status) {
-  const all = read('invoices')
+  const all = readCached('invoices')
   const updated = all.map(inv => {
     if (inv.id !== id) return inv
     const next = { ...inv, status }
     if (status === 'Terbit' && !inv.nomor) {
-      next.nomor = generateInvoiceNumber(inv.tanggalTerbit)
+      next.nomor = generateInvoiceNumber(inv.tanggalTerbit, inv.sekolahId)
     }
     return next
   })
@@ -73,7 +81,7 @@ export function setInvoiceStatus(id, status) {
 }
 
 export function deleteInvoice(id) {
-  const all = read('invoices').filter(inv => inv.id !== id)
+  const all = readCached('invoices').filter(inv => inv.id !== id)
   write('invoices', all)
   return all
 }
