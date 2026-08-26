@@ -7,4 +7,5 @@ dist
 .gitignore
 scratch
 invoice-template.pdf
-server/config.php
+frontend-style
+test-results

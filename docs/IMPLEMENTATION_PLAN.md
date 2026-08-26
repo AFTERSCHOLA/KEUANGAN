@@ -322,6 +322,6 @@ Total: ~28 microtasks, each independently falsifiable. If the implementer is one
 
 ---
 
-## Part 9 — Deferred (explicitly out of scope here)
+## Part 9 — Deferred and superseded items
 
-Login/auth & access control (arrives with Hostinger) · backend tech choice (PHP/MySQL vs Node — confirm Hostinger plan first) · `dev-setup` merge decision · soft-delete/trash · multi-operator concurrency. The M3 backup format is the bridge to all of these.
+Login/auth and access control are promoted into the approved production track in `PRODUCTION_PLAN.md` and `PRODUCTION_MILESTONES.md` gates G0–M5. The backend is fixed as plain PHP 8.2+ with PDO/MySQL for cPanel production. JWT, signed-header auth, per-branch `.htaccess` protection, soft-delete/trash, real-time updates, self-service email reset, and multi-operator features beyond explicit version conflicts remain outside the first release.

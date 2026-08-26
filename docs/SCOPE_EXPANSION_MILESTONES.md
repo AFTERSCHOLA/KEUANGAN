@@ -193,13 +193,14 @@ Add "Cabang" filter dropdown (superadmin only) switching all data views.
 
 ---
 
-## Milestone M8 — Auth Hardening (Phase D — Deferred)
+## Milestone M8 — Auth Hardening (superseded by production gates)
 
-**Deferred until cPanel phase complete and business case proven.**
+Authentication is promoted into the production track and is no longer deferred. Implement the approved PHP session, RBAC, CSRF, branch-scope, and API contract in `PRODUCTION_MILESTONES.md` gates G0–M5. JWT, signed-header auth, and per-branch `.htaccess` password protection remain non-goals.
 
-- `.htaccess` per-branch password protection
-- PHP session-based auth with `cabangId` claim
-- Token-based API auth (JWT or signed headers)
+- Contract and roles: G0.2, M1.1, M2.1–M2.4
+- Server authorization and protected APIs: M3.1–M3.5
+- Authenticated React mode: M4.1–M4.3
+- Security and operational hardening: M5.1–M5.4
 
 ---
 

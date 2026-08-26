@@ -1,6 +1,18 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/auth/session.php';
+require_once __DIR__ . '/auth/authorize.php';
+
+function securityHeaders(): void {
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-Frame-Options: DENY');
+    header('Content-Security-Policy: default-src \'self\'; img-src \'self\' data: blob: https:; style-src \'self\' \'unsafe-inline\'; script-src \'self\'; connect-src \'self\'; frame-ancestors \'none\'; base-uri \'self\'; form-action \'self\'');
+}
+
+securityHeaders();
+
 function jsonResponse(mixed $body, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
@@ -9,18 +21,23 @@ function jsonResponse(mixed $body, int $status = 200): never {
 }
 
 function requestJson(): array {
+    if (($_SERVER['CONTENT_TYPE'] ?? '') !== '' && stripos((string) $_SERVER['CONTENT_TYPE'], 'application/json') !== 0) {
+        jsonResponse(['error' => 'Content-Type harus application/json'], 422);
+    }
+    if (isset($_SERVER['CONTENT_LENGTH']) && (int) $_SERVER['CONTENT_LENGTH'] > 2 * 1024 * 1024) {
+        jsonResponse(['error' => 'Payload terlalu besar'], 422);
+    }
     $raw = file_get_contents('php://input');
     $data = json_decode($raw ?: '', true);
-    if (!is_array($data)) jsonResponse(['error' => 'JSON tidak valid'], 400);
+    if (!is_array($data)) jsonResponse(['error' => 'JSON tidak valid'], 422);
     return $data;
 }
 
 function database(): PDO {
     static $pdo;
     if ($pdo instanceof PDO) return $pdo;
-    $configFile = __DIR__ . '/config.php';
-    if (!is_file($configFile)) jsonResponse(['error' => 'Konfigurasi server belum tersedia'], 500);
-    $config = require $configFile;
+    $config = serverConfig();
+    if (!isset($config['dsn'], $config['username'], $config['password'])) jsonResponse(['error' => 'Konfigurasi database tidak lengkap'], 500);
     $pdo = new PDO($config['dsn'], $config['username'], $config['password'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -43,11 +60,14 @@ function requireRecord(array $data): array {
     if (!isset($data['id']) || !is_string($data['id']) || trim($data['id']) === '') {
         jsonResponse(['error' => 'Record membutuhkan id'], 422);
     }
+    if (!isset($data['cabangId']) || !is_string($data['cabangId']) || trim($data['cabangId']) === '') {
+        jsonResponse(['error' => 'Record membutuhkan cabangId'], 422);
+    }
     return $data;
 }
 
-function recordBranchId(array $record): ?string {
-    return isset($record['cabangId']) && is_string($record['cabangId']) ? $record['cabangId'] : null;
+function recordBranchId(array $record): string {
+    return trim((string) $record['cabangId']);
 }
 
 function isDuplicate(PDOException $error): bool {

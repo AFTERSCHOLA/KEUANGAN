@@ -17,7 +17,7 @@ export const test = base.extend({
 export async function loginAsAdmin(page) {
   const picker = page.getByText('Pilih Peran Masuk')
   if ((await picker.count()) > 0) {
-    await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+    await page.getByRole('button', { name: 'Pilih peran Superadmin' }).click()
     await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   }
 }
