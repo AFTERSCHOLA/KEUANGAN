@@ -1,0 +1,233 @@
+
+Running 52 tests using 2 workers
+
+  ✓   2 tests\e2e.spec.js:195:3 › #1 Boot › boot: page.goto + zero console errors + favicon-404 tolerance (29.5s)
+  ✓   1 tests\flow-simulation.spec.js:189:1 › flow simulation: Trainer day + Head Trainer month-end exposes handoff gaps (34.2s)
+  ✓   3 tests\e2e.spec.js:230:3 › #2 Roundtrip — add sekolah+trainer+siswa, refresh, all persist › school, trainer and siswa survive a full page reload (7.9s)
+  ✓   4 tests\m51-verify.spec.js:3:1 › M5.1.1: role picker blocks boot, persists across refresh (3.4s)
+  ✓   5 tests\e2e.spec.js:268:3 › #3 Inverse arrays › assign via trainer form, assert both detail cards, delete propagates (9.0s)
+  ✓   6 tests\m512-verify.spec.js:48:1 › M5.1.2: role-branched tab registry (admin 8 / trainer 4) + hidden-tab redirect (8.5s)
+  ✓   7 tests\e2e.spec.js:322:3 › #4 Rename integrity › renamed trainer: absensi honor unchanged, history shows cached name (9.0s)
+  ✓   8 tests\m513-verify.spec.js:69:1 › M5.1.3: trainer sees only own assigned school data (role-context filtered read) (13.6s)
+  ✓  10 tests\m52-verify.spec.js:90:1 › M5.2.1: newAbsensi() factory carries all six new fields with sparse defaults (2.4s)
+  ✓   9 tests\e2e.spec.js:378:3 › #5 Same-day sessions › two sessions, one school, one day, two trainers → both persist in Riwayat (9.1s)
+  ✓  12 tests\e2e.spec.js:403:3 › #6 Load-to-correct › resubmit corrected absensi → one updated record, honor recomputed (13.3s)
+  ✓  13 tests\e2e.spec.js:443:3 › #7 Ledger › partial → Lunaskan → delete entry → Sisa restores; history lists entries (13.3s)
+  ✓  14 tests\e2e.spec.js:497:3 › #8 Basis › unpaid sessions move memo rows only, never Laba/Rugi (15.7s)
+  ✓  11 tests\m52-verify.spec.js:134:1 › M5.2.2: assistant dropdown excludes main trainer; catatan saves round-trip (44.8s)
+  ✓  15 tests\e2e.spec.js:544:3 › #9 Delete-trainer safety › delete trainer after payments → Keuangan totals unchanged (8.7s)
+  ✓  17 tests\e2e.spec.js:599:3 › #10 Sparse maps › new siswa starts unpaid; ledger payment derives one paid period (9.6s)
+  ✓  18 tests\e2e.spec.js:632:3 › #11 Year boundary › 2027/2028 + Januari → empty-but-correct; 2028-01-10 → periode 2028-01 (13.8s)
+  ✓  19 tests\e2e.spec.js:676:3 › #12 Backup roundtrip › export → wipe → restore → identical; corrupt file refused (12.1s)
+  ✓  20 tests\e2e.spec.js:763:3 › #13 Tunggakan › filter matches spot-check; WA tagihan link prefilled (5.0s)
+  ✓  21 tests\e2e.spec.js:822:3 › #14 CSV › six exports open; filenames carry year+month keys; honor figures match UI (5.3s)
+  ✓  22 tests\e2e.spec.js:853:3 › #15 Persisted UI › refresh mid-tab → same tab/period state (1.9s)
+  ✓  23 tests\m53-verify.spec.js:44:1 › M5.3.1: queue uses persisted proof, historical context, verification gate, and Semua history (2.4s)
+  ✓  24 tests\m53-verify.spec.js:105:1 › M5.3.1b/M5.3.2: trainer inspects proof, certifies own week, and sees schedule plus honor summary (2.7s)
+  ✓  25 tests\m53-verify.spec.js:157:1 › M5.3.3: trainer student list is read-only and Trial badge remains visible (3.3s)
+  ✓  26 tests\m54-verify.spec.js:76:1 › M5.4.1/M5.4.2: factory defaults and Trial status/date persist after reload (3.6s)
+  ✘  16 tests\m52-verify.spec.js:180:1 › M5.2.2 (negative): asistenId === trainerId is blocked with alert (1.1m)
+  ✓  27 tests\m54-verify.spec.js:117:1 › M5.4.3: 30 Active plus 2 Trial students bill only 30 (1.6s)
+  ✓  28 tests\m54-verify.spec.js:157:1 › M5.4 exit gate: trainer capture/certification reaches admin verification without changing finance (9.3s)
+  ✘  29 tests\m52-verify.spec.js:205:1 › M5.2.3b: save-time sanity prompt blocks until confirmed; Cek Ulang cancels (1.1m)
+  ✘  30 tests\m61-verify.spec.js:52:1 › M6.1 SPP ledger: collect, derive, finance, correct, persist (1.2m)
+  ✘  31 tests\m52-verify.spec.js:253:1 › M5.2.3: two photo slots persist with slot tags; thumbnail re-renders on reload (18.1s)
+[WebServer] ^C[WebServer] ^C
+  ✘  32 tests\m62-verify.spec.js:70:1 › M6.2.1 Slip Honor prints the selected payment entry (7.0s)
+
+
+  1) tests\m52-verify.spec.js:180:1 › M5.2.2 (negative): asistenId === trainerId is blocked with alert 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Simpan', exact: true })
+        - locator resolved to <button class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>
+      - attempting click action
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - done scrolling
+
+
+      84 |     await field(page, 'Kelas').fill('5A')
+      85 |     await field(page, 'Sekolah').selectOption({ label: SCH })
+    > 86 |     await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+         |                                                                     ^
+      87 |   }
+      88 | }
+      89 |
+        at seedBase (C:\Users\lenopo\KEUANGAN\tests\m52-verify.spec.js:86:69)
+        at C:\Users\lenopo\KEUANGAN\tests\m52-verify.spec.js:186:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-2-negative-992e2-nerId-is-blocked-with-alert\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-2-negative-992e2-nerId-is-blocked-with-alert\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m52-verify-M5-2-2-negative-992e2-nerId-is-blocked-with-alert\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-2-negative-992e2-nerId-is-blocked-with-alert\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m52-verify-M5-2-2-negative-992e2-nerId-is-blocked-with-alert\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests\m52-verify.spec.js:205:1 › M5.2.3b: save-time sanity prompt blocks until confirmed; Cek Ulang cancels 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Simpan', exact: true })
+        - locator resolved to <button class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>
+      - attempting click action
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - done scrolling
+      - element was detached from the DOM, retrying
+        - waiting for "http://localhost:5173/" navigation to finish...
+        - navigated to "http://localhost:5173/"
+
+
+      84 |     await field(page, 'Kelas').fill('5A')
+      85 |     await field(page, 'Sekolah').selectOption({ label: SCH })
+    > 86 |     await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+         |                                                                     ^
+      87 |   }
+      88 | }
+      89 |
+        at seedBase (C:\Users\lenopo\KEUANGAN\tests\m52-verify.spec.js:86:69)
+        at C:\Users\lenopo\KEUANGAN\tests\m52-verify.spec.js:211:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-3b-save-ti-c525b-confirmed-Cek-Ulang-cancels\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-3b-save-ti-c525b-confirmed-Cek-Ulang-cancels\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m52-verify-M5-2-3b-save-ti-c525b-confirmed-Cek-Ulang-cancels\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-3b-save-ti-c525b-confirmed-Cek-Ulang-cancels\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m52-verify-M5-2-3b-save-ti-c525b-confirmed-Cek-Ulang-cancels\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests\m61-verify.spec.js:52:1 › M6.1 SPP ledger: collect, derive, finance, correct, persist ───
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Simpan', exact: true })
+        - waiting for navigation to finish...
+        - navigated to "http://localhost:5173/"
+
+
+      36 |   await field(page, 'Nama Sekolah').fill(SCHOOL)
+      37 |   await field(page, 'SPP Bulanan').fill(String(SPP))
+    > 38 |   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+         |                                                                   ^
+      39 |
+      40 |   await openTab(page, 'Data Siswa')
+      41 |   await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
+        at seedStudent (C:\Users\lenopo\KEUANGAN\tests\m61-verify.spec.js:38:67)
+        at C:\Users\lenopo\KEUANGAN\tests\m61-verify.spec.js:57:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m61-verify-M6-1-SPP-ledger-b0bcb-ive-finance-correct-persist\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m61-verify-M6-1-SPP-ledger-b0bcb-ive-finance-correct-persist\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m61-verify-M6-1-SPP-ledger-b0bcb-ive-finance-correct-persist\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m61-verify-M6-1-SPP-ledger-b0bcb-ive-finance-correct-persist\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m61-verify-M6-1-SPP-ledger-b0bcb-ive-finance-correct-persist\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests\m52-verify.spec.js:253:1 › M5.2.3: two photo slots persist with slot tags; thumbnail re-renders on reload 
+
+    Test was interrupted.
+
+    Error: locator.fill: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('div:has(> label:text("Nama Siswa")) input, div:has(> label:text("Nama Siswa")) textarea, div:has(> label:text("Nama Siswa")) select').first()
+        - locator resolved to <input value="" class="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"/>
+
+
+      81 |   for (let i = 1; i <= 30; i++) {
+      82 |     await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
+    > 83 |     await field(page, 'Nama Siswa').fill(`Siswa ${i}`)
+         |                                     ^
+      84 |     await field(page, 'Kelas').fill('5A')
+      85 |     await field(page, 'Sekolah').selectOption({ label: SCH })
+      86 |     await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+        at seedBase (C:\Users\lenopo\KEUANGAN\tests\m52-verify.spec.js:83:37)
+        at C:\Users\lenopo\KEUANGAN\tests\m52-verify.spec.js:259:3
+
+    Error: apiRequestContext._wrapApiCall: Target page, context or browser has been closed
+
+    Error Context: test-results\m52-verify-M5-2-3-two-phot-d22f2-mbnail-re-renders-on-reload\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m52-verify-M5-2-3-two-phot-d22f2-mbnail-re-renders-on-reload\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m52-verify-M5-2-3-two-phot-d22f2-mbnail-re-renders-on-reload\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests\m62-verify.spec.js:70:1 › M6.2.1 Slip Honor prints the selected payment entry ───────────
+
+    Test was interrupted.
+
+    Error: browserContext.close: Test ended.
+    Browser logs:
+
+    <launching> C:\Users\lenopo\AppData\Local\ms-playwright\chromium_headless_shell-1234\chrome-headless-shell-win64\chrome-headless-shell.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=C:\Users\lenopo\AppData\Local\Temp\playwright_chromiumdev_profile-OhTjzL --remote-debugging-pipe --no-startup-window
+    <launched> pid=12000
+    [pid=12000][err] [0821/104056.137:INFO:CONSOLE:789] "[vite] connecting...", source: http://localhost:5173/@vite/client (789)
+    [pid=12000][err] [0821/104056.698:INFO:CONSOLE:912] "[vite] connected.", source: http://localhost:5173/@vite/client (912)
+    [pid=12000][err] [0821/104057.285:INFO:CONSOLE:20103] "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold", source: http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=c415c860 (20103)
+    [pid=12000][err] [0821/104059.103:INFO:CONSOLE:14205] "An empty string ("") was passed to the %s attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to %s instead of an empty string. src src", source: http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=c415c860 (14205)
+    [pid=12000][err] [0821/104100.293:INFO:CONSOLE:789] "[vite] connecting...", source: http://localhost:5173/@vite/client (789)
+    [pid=12000][err] [0821/104100.614:INFO:CONSOLE:912] "[vite] connected.", source: http://localhost:5173/@vite/client (912)
+    [pid=12000][err] [0821/104100.757:INFO:CONSOLE:20103] "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold", source: http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=c415c860 (20103)
+    [pid=12000] <gracefully close start>
+
+    attachment #1: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m62-verify-M6-2-1-Slip-Hon-6c569--the-selected-payment-entry\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m62-verify-M6-2-1-Slip-Hon-6c569--the-selected-payment-entry\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests\m52-verify.spec.js:180:1 › M5.2.2 (negative): asistenId === trainerId is blocked with alert 
+    tests\m52-verify.spec.js:205:1 › M5.2.3b: save-time sanity prompt blocks until confirmed; Cek Ulang cancels 
+    tests\m61-verify.spec.js:52:1 › M6.1 SPP ledger: collect, derive, finance, correct, persist ────
+  2 interrupted
+    tests\m52-verify.spec.js:253:1 › M5.2.3: two photo slots persist with slot tags; thumbnail re-renders on reload 
+    tests\m62-verify.spec.js:70:1 › M6.2.1 Slip Honor prints the selected payment entry ────────────
+  20 did not run
+  27 passed (4.8m)
