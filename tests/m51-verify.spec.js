@@ -17,15 +17,15 @@ test('M5.1.1: role picker blocks boot, persists across refresh', async ({ page, 
   await expect(page.getByText('Pilih Peran Masuk')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Overview' })).toHaveCount(0)
 
-  // Select Admin -> Masuk -> dashboard appears.
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  // Select Superadmin -> Masuk -> dashboard appears.
+  await page.getByRole('button', { name: 'Pilih peran Superadmin' }).click()
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible()
   await expect(page.getByText('Pilih Peran Masuk')).toHaveCount(0)
 
   // UI state persisted.
   const ui = await page.evaluate(() => JSON.parse(localStorage.getItem('afterschola_v4_ui')))
-  expect(ui.role).toBe('admin')
+  expect(ui.role).toBe('superadmin')
   expect(ui.trainerId).toBe(null)
 
   // Refresh -> still logged in, no picker.

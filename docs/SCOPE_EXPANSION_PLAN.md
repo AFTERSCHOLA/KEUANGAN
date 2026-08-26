@@ -257,11 +257,25 @@ src/
 
 ### Immediate Next Steps (Team Action Items)
 
-- [ ] Complete detailed flow documentation for Trainer and Head Trainer
-- [ ] Finalize billing rule for trial students (back-billed or free?)
-- [ ] Approve privilege matrix for Admin Cabang vs Superadmin
-- [ ] Begin Phase A implementation
-- [ ] Decide cPanel PHP stack (plain PHP vs. lightweight framework)
+- [ ] Complete detailed flow documentation for Trainer and Head Trainer — Product integration; existing visual/handoff gate
+- [ ] Finalize billing rule for trial students (back-billed or free?) — Product/business approver; M5.4 decision gate
+- [ ] Begin Phase A implementation — Product integration; M1.1–M1.4
+
+### Deferred and Superseded Disposition
+
+This table is synchronized with `PRODUCTION_PLAN.md` §12. Each item has one owner and one resolving boundary; these entries are not open implementation scope for Phase A–C unless the linked milestone explicitly starts.
+
+| Item | Disposition | Owner | Resolving milestone / boundary |
+|---|---|---|---|
+| Self-service email password reset | Deferred | Platform/auth | Post-release P1: transactional email infrastructure |
+| Real-time updates / WebSocket infrastructure | Deferred | Platform/auth | Post-release P2: realtime infrastructure |
+| Soft-delete / trash | Deferred | Product integration + Data/release | Post-release P3: retention and recovery decision |
+| Flexible branch-specific honor matrix | Deferred pending business case | Product/business approver | Post-release P4: approved business case |
+| Prototype cleanup and handoff | Deferred until visual parity | Product integration | Existing visual gate, before release handoff |
+| Trial conversion billing rule | Open business decision | Product/business approver | M5.4 decision gate, before trial release |
+| cPanel hosting access and capability confirmation | Blocked prerequisite | Data/release | D7.1, then D7.2–D8.3 |
+| JWT, signed-header auth, per-branch `.htaccess` protection | Explicit non-goal | Platform/auth | Excluded from first release; revisit only through a new architecture decision |
+| Firebase, `afterschola_v3_*`, prototype credentials, and Node production backend | Explicit non-goal | Platform/auth + Data/release | Excluded from first release and migration source |
 
 ---
 

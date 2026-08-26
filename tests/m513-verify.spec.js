@@ -72,7 +72,7 @@ test('M5.1.3: trainer sees only own assigned school data (role-context filtered 
 
   // ---- Seed as admin: two schools, trainer A on school A, trainer B on school B,
   //      one siswa per school, one session per trainer. ----
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  await page.getByRole('button', { name: 'Pilih peran Superadmin' }).click()
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
 
   await openTab(page, 'Data Sekolah')

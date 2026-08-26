@@ -11,11 +11,12 @@ import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
-import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
+import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData, getRoleContext } from './lib/store'
 import RolePicker from './features/auth/RolePicker.jsx'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
+import { bootstrapAuth, getCurrentUser, isProductionAuthRequired, logout } from './lib/auth.js'
 
 
 
@@ -88,8 +89,9 @@ function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
-  const [role, setRole] = useState(() => getUiState().role || null)
-  const [trainerId, setTrainerId] = useState(() => getUiState().trainerId || null)
+  const [role, setRole] = useState(() => getRoleContext().role)
+  const [trainerId, setTrainerId] = useState(() => getRoleContext().trainerId)
+  const [cabangId, setCabangId] = useState(() => getRoleContext().cabangId)
 
   // <title> index.html mengikuti judul dari Settings (M-R6.4).
   useEffect(() => {
@@ -133,11 +135,12 @@ export default function App() {
     })
   }
 
-  function handleRoleSelected({ role: selectedRole, trainerId: selectedTrainerId }) {
+  function handleRoleSelected({ role: selectedRole, trainerId: selectedTrainerId, cabangId: selectedCabangId }) {
     setRole(selectedRole)
     setTrainerId(selectedTrainerId || null)
-    setUiState({ role: selectedRole, trainerId: selectedTrainerId || null })
-    setActiveTab('overview')
+    setCabangId(selectedCabangId || null)
+    setUiState({ role: selectedRole, trainerId: selectedTrainerId || null, cabangId: selectedCabangId || null })
+    setActiveTab(selectedRole === 'trainer' ? 'rekap' : 'overview')
   }
 
   // M5.1.2: trainer yang mendarat di tab admin-only (mis. direct load dengan
@@ -304,7 +307,7 @@ export default function App() {
             {!sidebarCollapsed && 'Pengaturan'}
           </button>
           <button
-            onClick={() => { setRole(null); setTrainerId(null); setUiState({ role: null, trainerId: null }); setActiveTab('overview') }}
+            onClick={() => { setRole(null); setTrainerId(null); setCabangId(null); setUiState({ role: null, trainerId: null, cabangId: null }); setActiveTab('overview') }}
             className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
             title={sidebarCollapsed ? 'Ganti Peran' : undefined}
           >

@@ -127,7 +127,7 @@ test('M6.2.2 Invoice totals 30 students and transitions Draft to Terbit to Lunas
   await expect(page.locator('span').filter({ hasText: 'Draft' }).last()).toBeVisible()
   await page.getByRole('button', { name: 'Terbitkan', exact: true }).click()
   await page.getByRole('button', { name: 'Ya, Lanjutkan', exact: true }).click()
-  await expect(page.getByText(/INV\/\d{4}\/\d{2}\/[^\s]+/)).toBeVisible()
+  await expect(page.getByText(/[A-Z0-9]+-\d{6}-\d{4}/)).toBeVisible()
   await expect(page.getByText('Terbit', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Tandai Lunas', exact: true }).click()

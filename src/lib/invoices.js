@@ -63,7 +63,7 @@ export function generateInvoiceNumber(tanggal, sekolahId) {
     return (invoiceBranch?.kode || DEFAULT_CABANG_KODE) === branch
   }).length
   const seq = countThisYearAndBranch + 1
-  return `INV/${year}/${tanggal.slice(5, 7)}/${branch}-${String(seq).padStart(4, '0')}`
+  return `${branch}-${year}${tanggal.slice(5, 7)}-${String(seq).padStart(4, '0')}`
 }
 
 export function setInvoiceStatus(id, status) {

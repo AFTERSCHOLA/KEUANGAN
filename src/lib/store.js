@@ -1,3 +1,5 @@
+import { normalizeRole } from './role.js'
+
 const STORE_KEY = 'afterschola_v4'
 const STORE_EVENT = 'afterschola_v4_changed'
 const SERVER_KEYS = new Set(['absensi', 'sppPayments', 'honorPayments'])
@@ -6,62 +8,88 @@ function notifyStoreChanged() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(STORE_EVENT))
 }
 
-// ============================================
-// ROLE CONTEXT (M5.1.3) — cabang-aware filtering
-// ============================================
-// The persisted UI state (afterschola_v4_ui) holds the active soft-login
-// context: `role` ('admin' | 'trainer') and `trainerId`. The trainer's
-// branch scope is the set of sekolahIds they are assigned to (the cabang
-// entity is Phase C; until then the trainer's own assignment set is the
-// branch boundary). Reads silently narrow to that scope; writes outside it
-// are blocked, so a trainer can never accidentally mutate another branch's
-// records. This is a UI convenience layer, not a security boundary.
-
 const UI_STATE_KEY = `${STORE_KEY}_ui`
 
-export function getRoleContext() {
+function readUiRoleState() {
   try {
     const json = localStorage.getItem(UI_STATE_KEY)
-    const ui = json ? JSON.parse(json) : {}
-    if (ui.role !== 'trainer' || !ui.trainerId) {
-      return { role: ui.role || 'admin', trainerId: ui.trainerId || null, cabangId: null }
-    }
-    const trainers = JSON.parse(localStorage.getItem(getKeys().trainer) || '[]')
-    const trainer = Array.isArray(trainers) ? trainers.find(t => t.id === ui.trainerId) : undefined
-    // Synthetic branch id until the Phase C `cabang` entity lands: a trainer
-    // belongs to the branch covering their assigned schools.
-    const cabangId = (trainer && trainer.sekolahIds.length > 0)
-      ? trainer.sekolahIds.slice().sort().join('|')
-      : null
-    return { role: 'trainer', trainerId: ui.trainerId, cabangId }
+    return json ? JSON.parse(json) : {}
   } catch {
-    return { role: 'admin', trainerId: null, cabangId: null }
+    return {}
   }
 }
 
-// A record belongs to the active trainer context if it is reachable from
-// the trainer's own assignment set (sekolahIds). Everything joins through
-// sekolah; honorPayments joins through trainerId.
-function isWithinScope(key, record, ctx) {
-  if (ctx.role !== 'trainer' || !ctx.trainerId || !record) return true
-  const sekolahIds = ctx.cabangId ? ctx.cabangId.split('|') : []
-  switch (key) {
-    case 'sekolah':
-      return sekolahIds.includes(record.id) || (record.trainerIds || []).includes(ctx.trainerId)
-    case 'trainer':
-      return record.id === ctx.trainerId
-    case 'absensi':
-      return sekolahIds.includes(record.sekolahId)
-    case 'siswa':
-      return sekolahIds.includes(record.sekolahId)
-        case 'honorPayments':
-      return record.trainerId === ctx.trainerId
-    case 'invoices':
-      // Trainer tidak punya akses ke invoice sama sekali (lihat SCOPE_EXPANSION_PRIVILEGES.md)
-      return false
-    default:
-      return true
+function schoolIdsForBranch(cabangId) {
+  return new Set(readCollection('sekolah').filter(s => s.cabangId === cabangId).map(s => s.id))
+}
+
+function trainerBranchIds(trainer) {
+  const schools = readCollection('sekolah')
+  return [...new Set((trainer?.sekolahIds || [])
+    .map(id => schools.find(s => s.id === id)?.cabangId)
+    .filter(Boolean))]
+}
+
+export function getRoleContext() {
+  const ui = readUiRoleState()
+  const role = normalizeRole(ui.role)
+  if (!role) return { role: null, trainerId: null, cabangId: null }
+  if (role === 'superadmin') return { role, trainerId: null, cabangId: null }
+
+  const branches = readCollection('cabang')
+  if (role === 'admin_cabang') {
+    const cabangId = typeof ui.cabangId === 'string' && branches.some(c => c.id === ui.cabangId)
+      ? ui.cabangId
+      : null
+    return { role: cabangId ? role : null, trainerId: null, cabangId }
   }
+
+  if (!ui.trainerId) return { role: null, trainerId: null, cabangId: null }
+  const trainer = readCollection('trainer').find(t => t.id === ui.trainerId)
+  const branchIds = trainerBranchIds(trainer)
+  const cabangId = typeof ui.cabangId === 'string' && branchIds.includes(ui.cabangId)
+    ? ui.cabangId
+    : branchIds.length === 1 ? branchIds[0] : null
+  return { role, trainerId: ui.trainerId, cabangId }
+}
+
+function isWithinScope(key, record, ctx) {
+  if (!record || ctx.role === 'superadmin') return true
+
+  if (ctx.role === 'admin_cabang') {
+    if (!ctx.cabangId) return false
+    const schoolIds = schoolIdsForBranch(ctx.cabangId)
+    const studentIds = new Set(readCollection('siswa').filter(s => schoolIds.has(s.sekolahId)).map(s => s.id))
+    const trainerIds = new Set(readCollection('trainer').filter(t => (t.sekolahIds || []).some(id => schoolIds.has(id))).map(t => t.id))
+    switch (key) {
+      case 'cabang': return record.id === ctx.cabangId
+      case 'sekolah': return record.cabangId === ctx.cabangId
+      case 'trainer': return trainerIds.has(record.id) || record.cabangId === ctx.cabangId
+      case 'siswa': return studentIds.has(record.id) || schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
+      case 'absensi': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
+      case 'sppPayments': return studentIds.has(record.siswaId) || record.cabangId === ctx.cabangId
+      case 'honorPayments': return trainerIds.has(record.trainerId) || record.cabangId === ctx.cabangId
+      case 'invoices': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
+      default: return false
+    }
+  }
+
+  if (ctx.role === 'trainer') {
+    if (!ctx.trainerId) return false
+    const trainer = readCollection('trainer').find(t => t.id === ctx.trainerId)
+    const schoolIds = new Set(trainer?.sekolahIds || [])
+    switch (key) {
+      case 'sekolah': return schoolIds.has(record.id)
+      case 'trainer': return record.id === ctx.trainerId
+      case 'absensi': return record.trainerId === ctx.trainerId && schoolIds.has(record.sekolahId)
+      case 'siswa': return schoolIds.has(record.sekolahId)
+      case 'honorPayments': return record.trainerId === ctx.trainerId
+      case 'invoices': return false
+      default: return false
+    }
+  }
+
+  return false
 }
 
 export function getKeys() {
@@ -116,7 +144,7 @@ export function setMigrationState(migrations) {
 export function readCached(key) {
   const parsed = readCollection(key)
   const ctx = getRoleContext()
-  return ctx.role === 'trainer' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
+  return ctx.role && ctx.role !== 'superadmin' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
 }
 
 export async function read(key) {
@@ -146,16 +174,21 @@ export async function hydrateServerData() {
 
 export function write(key, records) {
   const ctx = getRoleContext()
-  let out = records
-  if (ctx.role === 'trainer' && Array.isArray(records)) {
-    out = records.filter(r => isWithinScope(key, r, ctx))
+  if (!Array.isArray(records)) return
+  if (!ctx.role || ctx.role === 'superadmin') {
+    writeRaw(key, records)
+    return
   }
-  writeRaw(key, out)
+  const scoped = new Map(records.filter(record => isWithinScope(key, record, ctx)).map(record => [record.id, record]))
+  const merged = readRaw(key).map(record => scoped.get(record.id) || record)
+  const existingIds = new Set(merged.map(record => record.id))
+  records.filter(record => isWithinScope(key, record, ctx) && !existingIds.has(record.id)).forEach(record => merged.push(record))
+  writeRaw(key, merged)
 }
 
 export function upsert(key, record) {
   const ctx = getRoleContext()
-  if (ctx.role === 'trainer' && !isWithinScope(key, record, ctx)) return
+  if (!ctx.role || !isWithinScope(key, record, ctx)) return
   const records = readRaw(key)
   const idx = records.findIndex(r => r.id === record.id)
   let saved
