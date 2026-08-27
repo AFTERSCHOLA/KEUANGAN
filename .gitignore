@@ -10,3 +10,4 @@ invoice-template.pdf
 frontend-style
 test-results
 test-results/
+server/config.php
