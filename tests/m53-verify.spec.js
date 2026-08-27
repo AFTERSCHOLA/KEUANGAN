@@ -18,6 +18,7 @@ async function resetStorage(page) {
 
 async function loginAdmin(page) {
   await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  await page.getByLabel('Pilih Cabang Anda').selectOption({ index: 1 })
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
 }
 

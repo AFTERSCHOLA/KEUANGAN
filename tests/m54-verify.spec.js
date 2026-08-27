@@ -28,6 +28,7 @@ async function resetStorage(page, token) {
 
 async function loginAdmin(page) {
   await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  await page.getByLabel('Pilih Cabang Anda').selectOption({ index: 1 })
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
 }
 
@@ -234,6 +235,7 @@ test('M5.4 exit gate: trainer capture/certification reaches admin verification w
 
   await page.getByRole('button', { name: 'Ganti Peran' }).click()
   await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  await page.getByLabel('Pilih Cabang Anda').selectOption({ index: 1 })
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await openTab(page, 'Riwayat Absensi')
   await expect(page.getByText('Antrian Verifikasi')).toBeVisible()

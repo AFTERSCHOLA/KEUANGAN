@@ -16,6 +16,12 @@ const SCH2 = 'SD Mentari Pagi'
 const TRAINER = 'Budi Santoso'
 const TRAINER2 = 'Dewi Lestari'
 
+async function loginAdminCabang(page) {
+  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  await page.getByLabel('Pilih Cabang Anda').selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+}
+
 async function resetStorage(page) {
   await page.addInitScript(() => {
     if (sessionStorage.getItem('__m52_reset_done')) return
@@ -90,8 +96,7 @@ async function seedBase(page) {
 test('M5.2.1: newAbsensi() factory carries all six new fields with sparse defaults', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginAdminCabang(page)
 
   // Drive the FACTORY directly via the browser bundle — pure invariant check,
   // independent of which fields the form actually writes.
@@ -134,8 +139,7 @@ test('M5.2.1: newAbsensi() factory carries all six new fields with sparse defaul
 test('M5.2.2: assistant dropdown excludes main trainer; catatan saves round-trip', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginAdminCabang(page)
 
   await seedBase(page)
 
@@ -180,8 +184,7 @@ test('M5.2.2: assistant dropdown excludes main trainer; catatan saves round-trip
 test('M5.2.2 (negative): asistenId === trainerId is blocked with alert', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginAdminCabang(page)
 
   await seedBase(page)
 
@@ -205,8 +208,7 @@ test('M5.2.2 (negative): asistenId === trainerId is blocked with alert', async (
 test('M5.2.3b: save-time sanity prompt blocks until confirmed; Cek Ulang cancels', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginAdminCabang(page)
 
   await seedBase(page)
 
@@ -253,8 +255,7 @@ test('M5.2.3b: save-time sanity prompt blocks until confirmed; Cek Ulang cancels
 test('M5.2.3: two photo slots persist with slot tags; thumbnail re-renders on reload', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginAdminCabang(page)
 
   await seedBase(page)
 
@@ -325,8 +326,7 @@ test('M5.2.3: two photo slots persist with slot tags; thumbnail re-renders on re
 test('M5.2.4: QuickSession "Semua Hadir?" marks all; tap exceptions flips back', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginAdminCabang(page)
 
   await seedBase(page)
 
