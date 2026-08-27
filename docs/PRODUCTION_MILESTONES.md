@@ -87,6 +87,25 @@ MICROTASK: Gate soft flow
   VERIFY:  existing M5 and Phase 5–7 exit-gate tests pass with zero page errors
   DONE-IF: verify passes; only intended files changed
 ```
+**Status: BLOCKED — not done.**
+
+Progress: fixed stale M5 test login helpers (`m52`/`m53`/`m54-verify.spec.js`) to select
+a branch before submitting, since Admin Cabang login now requires `cabangId` (M7.1).
+Reduced M5/Phase 5-7 gate failures from 13/16 to 8/16.
+
+Two remaining failures are test-only defects (in scope for M1.4, not yet applied):
+- `m53-verify.spec.js:178-180` — one inline re-login site still missing branch selection.
+- `m53` M5.3.1 / `m54` exit gate — seed data injects `role: 'admin'`, which
+  `normalizeRole()` rejects (only `superadmin`/`admin_cabang`/`trainer` are canonical
+  per M1.1/G0.2). Fix is to seed `role: 'admin_cabang'` with a valid `cabangId`.
+
+Five remaining failures (`m52-verify.spec.js`) are **not test defects** — they expose
+a real application bug, out of M1.4's scope to fix. See "Known issues" below and the
+corresponding row in `PRODUCTION_PLAN.md` section 12.
+
+M1.4 cannot be marked DONE until either (a) the app bug is fixed upstream in M3.1 and
+all 16 tests pass, or (b) an explicit scope decision is made to route around it (e.g.
+running the affected M5.2 tests as Superadmin) with sign-off recorded here.
 
 ## Gate 2 — PHP authentication foundation
 
@@ -401,6 +420,33 @@ MICROTASK: Exercise rollback
   VERIFY:  rollback rehearsal and post-release checks complete with documented results
   DONE-IF: verify passes; only intended files changed
 ```
+
+## Known issues discovered during gate execution
+
+### KI-1: Admin Cabang cannot create new trainers (discovered during M1.4)
+
+`src/lib/constants.js`'s `newTrainer()` does not set a `cabangId` field on the created
+record. `src/lib/store.js`'s `isWithinScope()` for `admin_cabang` + `trainer` accepts a
+record only if it already exists in the trainer collection (`trainerIds.has(record.id)`)
+or if `record.cabangId === ctx.cabangId`. A brand-new trainer satisfies neither: it isn't
+in the collection yet, and its `cabangId` is `undefined`. `upsert()` silently no-ops when
+`isWithinScope()` returns false — no error, no alert; the form appears to save
+successfully but the record is never persisted.
+
+- **Reproduction**: log in as Admin Cabang with a valid branch selected → Data Trainer →
+  Tambah Trainer Baru → fill form → Simpan. The trainer never appears in
+  `afterschola_v4_trainer`.
+- **Impact**: Admin Cabang cannot onboard a new trainer through the UI at all. Confirmed
+  via `tests/m52-verify.spec.js` (5 tests fail with an empty Trainer dropdown downstream,
+  because the seeded trainer was never actually saved).
+- **Owner / resolving milestone**: Scope/policy, **M3.1 Implement authorization policy**.
+  `isWithinScope()` is the client-side precursor to `server/auth/authorize.php`; the fix
+  belongs with that work so the two stay consistent, not as an ad-hoc patch here.
+- **Suggested direction (not yet implemented)**: either (a) have `newTrainer()`/
+  `newSiswa()`-equivalent creation paths stamp `cabangId` derived from the creating
+  admin's context, or (b) extend `isWithinScope()` to also allow a new record when every
+  school it references is already within the actor's branch scope.
+
 
 ## Ownership and final acceptance
 
