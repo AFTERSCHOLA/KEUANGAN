@@ -177,6 +177,7 @@ export function write(key, records) {
   if (!Array.isArray(records)) return
   if (!ctx.role || ctx.role === 'superadmin') {
     writeRaw(key, records)
+    notifyStoreChanged()          // + 1 baris
     return
   }
   const scoped = new Map(records.filter(record => isWithinScope(key, record, ctx)).map(record => [record.id, record]))
@@ -184,6 +185,7 @@ export function write(key, records) {
   const existingIds = new Set(merged.map(record => record.id))
   records.filter(record => isWithinScope(key, record, ctx) && !existingIds.has(record.id)).forEach(record => merged.push(record))
   writeRaw(key, merged)
+  notifyStoreChanged()            // + 1 baris
 }
 
 export function upsert(key, record) {
@@ -200,6 +202,7 @@ export function upsert(key, record) {
     saved = record
   }
   writeRaw(key, records)
+  notifyStoreChanged()            // + 1 baris
   queueSync(key, saved)
 }
 

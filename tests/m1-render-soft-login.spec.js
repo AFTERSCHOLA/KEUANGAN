@@ -6,17 +6,28 @@ const APP = 'http://localhost:5173'
 // (guarded so a deliberate page.reload() inside a test doesn't re-wipe
 // state gained through the UI — same pattern as m71-verify.spec.js).
 async function seedStorage(page, collections = {}) {
-  await page.addInitScript((collections) => {
+  const payload = {
+    // Skip migrateIds() entirely by default: M1.2 tests soft-login
+    // behavior, not M7.1's migration/ID-prefix logic (already covered
+    // by tests/m71-verify.spec.js). Without this, migrateIds() runs on
+    // every boot after a storage reset and silently seeds a default
+    // branch / rewrites seeded trainer IDs before RolePicker ever
+    // renders. Individual tests can still override `settings` if a
+    // scenario specifically needs migration to run.
+    settings: { migrations: { m71BranchSchema: { completedAt: '2020-01-01T00:00:00.000Z', version: 1 } } },
+    ...collections,
+  }
+  await page.addInitScript((payload) => {
     if (sessionStorage.getItem('__m1_seed_done')) return
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i)
       if (key?.startsWith('afterschola_v4')) localStorage.removeItem(key)
     }
-    Object.entries(collections).forEach(([key, value]) => {
+    Object.entries(payload).forEach(([key, value]) => {
       localStorage.setItem(`afterschola_v4_${key}`, JSON.stringify(value))
     })
     sessionStorage.setItem('__m1_seed_done', '1')
-  }, collections)
+  }, payload)
 }
 
 function trainerSelect(page) {
