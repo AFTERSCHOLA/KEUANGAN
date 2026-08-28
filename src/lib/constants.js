@@ -45,8 +45,8 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
   }
 }
 
-export function newTrainer(cabangKode) {
-  return { id: generateId('trn', cabangKode), nama: '', wa: '', jadwal: '', sekolahIds: [], honor: 0 }
+export function newTrainer(cabangId, cabangKode) {
+  return { id: generateId('trn', cabangKode), nama: '', wa: '', jadwal: '', sekolahIds: [], honor: 0, cabangId: cabangId || null }
 }
 
 export function newSiswa(sekolahId, sekolahNama, cabangKode) {

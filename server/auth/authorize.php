@@ -10,13 +10,24 @@ function validServerRole(mixed $role): bool {
 function roleCanReadEntity(string $role, string $entity): bool {
     if ($role === 'superadmin') return true;
     if ($role === 'admin_cabang') return in_array($entity, [
-        'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments', 'honorPayments', 'invoices', 'settings', 'audit_log',
+        // 'settings' intentionally excluded — global settings/tariffs are
+        // Superadmin-only per PRODUCTION_PLAN.md section 5 (decision: kept
+        // closed entirely, not filtered).
+        'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
     ], true);
     if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi'], true);
     return false;
 }
 
-function recordOwnsBranch(array $data, array $user): bool {
+function recordOwnsBranch(string $resource, array $data, array $user): bool {
+    // `cabang` records don't carry a cabangId field pointing at themselves —
+    // the record's own `id` IS the branch id (see schema.sql: `cabang` has
+    // no cabang_id column, unlike every other branch-owned table). Special-
+    // case it so Admin Cabang can read their own branch record.
+    if ($resource === 'cabang') {
+        $recordId = $data['id'] ?? null;
+        return is_string($recordId) && $recordId !== '' && $recordId === ($user['cabangId'] ?? null);
+    }
     $targetBranch = $data['cabangId'] ?? $data['cabang_id'] ?? null;
     return is_string($targetBranch) && $targetBranch !== '' && $targetBranch === ($user['cabangId'] ?? null);
 }
@@ -39,10 +50,14 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
     }
 
     if ($role === 'admin_cabang') {
-        if ($resource === 'honorPayments' && in_array($action, ['create', 'update', 'delete', 'write'], true)) return false;
-        if ($action === 'read') return roleCanReadEntity($role, $resource) && recordOwnsBranch($data, $user);
+        // Honor payments: Admin Cabang is read-only (matrix: "Read own trainers").
+        // Invoices: Admin Cabang is read-only (matrix: "View/print own branch").
+        if (in_array($resource, ['honorPayments', 'invoices'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
+            return false;
+        }
+        if ($action === 'read') return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
         if (in_array($action, ['create', 'update', 'delete', 'write', 'verify'], true)) {
-            return roleCanReadEntity($role, $resource) && recordOwnsBranch($data, $user);
+            return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
         }
         return false;
     }

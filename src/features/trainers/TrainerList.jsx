@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { readCached, write, upsert } from '../../lib/store.js'
 import { formatRupiah, waNormalize } from '../../lib/format.js'
 import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
+import { readCached, write, upsert, getRoleContext } from '../../lib/store.js'
 
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => readCached('trainer'))
@@ -18,10 +18,14 @@ export default function TrainerList() {
   }
 
   function openAdd() {
-    const firstBranch = readCached('cabang')[0] || defaultCabang()
-    setForm(newTrainer(firstBranch.kode))
-    setModalOpen(true)
-  }
+  const ctx = getRoleContext()
+  const branches = readCached('cabang')
+  const branch = ctx.role === 'admin_cabang'
+    ? branches.find(c => c.id === ctx.cabangId) || defaultCabang()
+    : branches[0] || defaultCabang()
+  setForm(newTrainer(branch.id, branch.kode))
+  setModalOpen(true)
+}
 
   function openEdit(t) {
     setForm({ ...t })
