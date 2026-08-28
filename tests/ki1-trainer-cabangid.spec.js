@@ -113,14 +113,19 @@ test('KI-1: created trainer is visible again to the same Admin Cabang (round-tri
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
   await expect(page.getByText(TRAINER_NAME)).toBeVisible()
 
-  // Reload and log back in as the SAME Admin Cabang — readCached('trainer')
-  // filters through isWithinScope() on every read, so this only stays
-  // visible if the persisted record's cabangId truly matches this admin's
-  // own branch (not just "some" cabangId that happened to render once).
+  // Reload — soft-login role persists in localStorage (M1.2 OUTCOME: "a
+  // valid non-production context unlocks the dashboard"), so the app
+  // returns straight to this same Admin Cabang's dashboard, NOT the login
+  // screen. Re-clicking through loginAdminCabang() here would just hang
+  // waiting for a login button that never appears.
   await page.reload()
   await page.waitForLoadState('domcontentloaded')
-  await loginAdminCabang(page, 1)
   await openTab(page, 'Data Trainer')
+
+  // readCached('trainer') filters through isWithinScope() on every read,
+  // so this only stays visible if the persisted record's cabangId truly
+  // matches this admin's own branch (not just "some" cabangId that
+  // happened to render once before reload).
   await expect(page.getByText(TRAINER_NAME)).toBeVisible()
 
   expect(pageErrors).toHaveLength(0)

@@ -38,6 +38,45 @@ function trainerOwnsAttendance(array $data, array $user): bool {
         && $data['trainerId'] === ($user['trainerId'] ?? null);
 }
 
+/**
+ * Trainer-role read scoping (M3.1 gap 1). Trainer's canonical read entities
+ * are 'sekolah', 'trainer', 'siswa', 'absensi' (roleCanReadEntity) but each
+ * needs its own ownership check — trainer is assignment-based, not
+ * branch-based (trainer has no cabangId of its own in most cases).
+ *
+ *   - trainer:  own record only, matched by id.
+ *   - sekolah:  record.trainerIds must contain this trainer's id
+ *               (constants.js newSekolah() stores assignment there).
+ *   - absensi:  record.trainerId must match (reuses trainerOwnsAttendance,
+ *               same rule already enforced for write/certify).
+ *   - siswa:    siswa has no trainerId of its own — assignment is indirect
+ *               via siswa.sekolahId -> sekolah.trainerIds. authorize.php has
+ *               no DB handle here, so the caller (read.php, M3.3) MUST look
+ *               up the student's school and pass its trainerIds in under
+ *               $data['_sekolahTrainerIds'] before calling authorize().
+ *               Missing that key fails closed (returns false), not open.
+ */
+function trainerOwnsRecord(string $resource, array $data, array $user): bool {
+    $trainerId = $user['trainerId'] ?? null;
+    if (!is_string($trainerId) || $trainerId === '') return false;
+
+    if ($resource === 'trainer') {
+        $recordId = $data['id'] ?? null;
+        return is_string($recordId) && $recordId === $trainerId;
+    }
+    if ($resource === 'sekolah') {
+        return in_array($trainerId, $data['trainerIds'] ?? [], true);
+    }
+    if ($resource === 'absensi') {
+        return trainerOwnsAttendance($data, $user);
+    }
+    if ($resource === 'siswa') {
+        // See docblock above — fails closed if the caller didn't enrich $data.
+        return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
+    }
+    return false;
+}
+
 function authorize(string $action, string $resource, ?array $data = null, ?array $user = null): bool {
     $user ??= requireAuthenticatedUser();
     $role = $user['role'] ?? null;
@@ -50,6 +89,14 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
     }
 
     if ($role === 'admin_cabang') {
+        // Cabang record itself: read-only for admin_cabang. Mutation must go
+        // through the explicit 'manage_branch' action (already denied above)
+        // — this closes a generic 'update'/'write' call on resource 'cabang'
+        // slipping through recordOwnsBranch()'s self-match (record.id ===
+        // user.cabangId) and letting an admin edit their own branch record.
+        if ($resource === 'cabang' && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
+            return false;
+        }
         // Honor payments: Admin Cabang is read-only (matrix: "Read own trainers").
         // Invoices: Admin Cabang is read-only (matrix: "View/print own branch").
         if (in_array($resource, ['honorPayments', 'invoices'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
@@ -63,7 +110,7 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
     }
 
     if ($role === 'trainer') {
-        if ($action === 'read') return roleCanReadEntity($role, $resource);
+        if ($action === 'read') return roleCanReadEntity($role, $resource) && trainerOwnsRecord($resource, $data, $user);
         if ($resource === 'absensi' && $action === 'write') return trainerOwnsAttendance($data, $user);
         if ($resource === 'absensi' && $action === 'certify') return trainerOwnsAttendance($data, $user);
         return false;
