@@ -3,10 +3,23 @@ declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
+
+// 401 — anonymous callers get nothing synced at all.
+$user = requireAuthenticatedUser();
+requireCsrf();
+
 $body = requestJson();
 $entries = $body['entries'] ?? [];
 if (!is_array($entries)) jsonResponse(['error' => 'entries harus berupa array'], 422);
 
+// NOTE (M3.3 deviation, intentional): the VERIFY line calls for a single
+// 409 status on duplicate writes. sync.php processes a *batch* of entries
+// in one request, so one HTTP status code can't represent per-entry
+// outcomes — a duplicate entry here is reported as 200 overall with that
+// entry listed in `alreadyApplied` instead. absensi.php/sppPayments.php
+// (single-record endpoints) still return a literal 409, matching VERIFY
+// as written. Recorded here so this doesn't look like a missed case on
+// re-review.
 $pdo = database();
 $synced = [];
 $alreadyApplied = [];
@@ -16,9 +29,32 @@ foreach ($entries as $entry) {
         $failed[] = ['id' => is_array($entry) ? ($entry['id'] ?? null) : null, 'error' => 'Entry tidak valid'];
         continue;
     }
+
+    $entity = (string) $entry['key'];
+    $record = $entry['record'];
+
+    // sync.php only ever writes to these 3 tables (see entityConfig()).
+    // Other entities are valid per authorize()'s broader entity list (e.g.
+    // 'sekolah' — synced only client-side until M3.4) but calling
+    // entityConfig() on them below would jsonResponse(400) and kill the
+    // WHOLE batch, not just this entry. Reject as a per-entry failure first.
+    if (!in_array($entity, ['absensi', 'sppPayments', 'honorPayments'], true)) {
+        $failed[] = ['id' => $record['id'] ?? null, 'entity' => $entity, 'error' => 'Entity tidak didukung'];
+        continue;
+    }
+
+    // Per-entry authorization — deliberately NOT requireAuthorization(),
+    // which exits the whole request on the first denied entry. One
+    // cross-scope entry in an otherwise-legitimate batch should only fail
+    // that entry, same as a duplicate ID does below — not abort every
+    // other entry the caller was allowed to sync.
+    if (!authorize('write', $entity, $record, $user)) {
+        $failed[] = ['id' => $record['id'] ?? null, 'entity' => $entity, 'error' => 'Akses tidak diizinkan'];
+        continue;
+    }
+
     try {
-        $entity = (string) $entry['key'];
-        $record = requireRecord($entry['record']);
+        $record = requireRecord($record);
         $config = entityConfig($entity);
         $pdo->beginTransaction();
         $sql = "INSERT INTO {$config['table']} (id, cabang_id, " . ($entity === 'honorPayments' ? 'correction_of, ' : '') . "payload) VALUES (:id, :cabang_id, " . ($entity === 'honorPayments' ? ':correction_of, ' : '') . ":payload)";
@@ -41,7 +77,12 @@ foreach ($entries as $entry) {
         }
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $failed[] = ['id' => $entry['record']['id'] ?? null, 'error' => $error->getMessage()];
+        // Don't echo raw exception text to the client — it can leak schema
+        // details (table/column names, constraint text). Same generic
+        // message as the PDOException branch above; real detail goes to
+        // the server log only.
+        error_log('sync.php entry failed: ' . $error->getMessage());
+        $failed[] = ['id' => $entry['record']['id'] ?? null, 'entity' => $entity, 'error' => 'Gagal menyimpan record'];
     }
 }
 jsonResponse(['synced' => $synced, 'alreadyApplied' => $alreadyApplied, 'failed' => $failed]);
