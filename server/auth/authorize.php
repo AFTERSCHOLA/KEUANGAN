@@ -97,11 +97,13 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         if ($resource === 'cabang' && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
             return false;
         }
-        // Honor payments: Admin Cabang is read-only (matrix: "Read own trainers").
-        // Invoices: Admin Cabang is read-only (matrix: "View/print own branch").
-        if (in_array($resource, ['honorPayments', 'invoices'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
-            return false;
-        }
+// Honor payments: Admin Cabang is read-only (matrix: "Read own trainers").
+// Invoices: Admin Cabang is read-only (matrix: "View/print own branch").
+// Audit log: Admin Cabang is read-only (matrix section 5) — mutation must
+// never be attributable to a branch admin choosing what gets logged.
+if (in_array($resource, ['honorPayments', 'invoices', 'audit_log'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
+    return false;
+}
         if ($action === 'read') return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
         if (in_array($action, ['create', 'update', 'delete', 'write', 'verify'], true)) {
             return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);

@@ -447,6 +447,12 @@ successfully but the record is never persisted.
   admin's context, or (b) extend `isWithinScope()` to also allow a new record when every
   school it references is already within the actor's branch scope.
 
+**Status: RESOLVED (M3.1, commit 2f4b60e).** `newTrainer()` in
+src/lib/constants.js now stamps `cabangId` on new trainer records, and
+`TrainerList.jsx`'s openAdd() derives the branch from the logged-in
+Admin Cabang's own getRoleContext() instead of an arbitrary cabang[0].
+Verified by tests/ki1-trainer-cabangid.spec.js.
+
 
 ## Ownership and final acceptance
 
