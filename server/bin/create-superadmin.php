@@ -71,17 +71,15 @@ try {
         ':password_hash' => password_hash($password, PASSWORD_DEFAULT),
     ]);
 
-    // TODO(BLOCKED on server/schema.sql + bootstrap.php dari M2.1/M3.5):
-    // Insert audit event di sini, dalam transaksi yang sama, mis.:
-    //   recordAuditEvent($pdo, [
-    //       'event_type' => 'superadmin_bootstrap',
-    //       'actor_id'   => $userId,
-    //       'target_id'  => $userId,
-    //       'scope'      => null,
-    //   ]);
-    // Nama tabel/kolom dan helper audit belum dikonfirmasi -- JANGAN deploy
-    // sebelum baris ini diisi, karena RULES M2.4 mewajibkan audit event dan
-    // tanpanya DONE-IF tidak terpenuhi.
+    // Audit event, dalam transaksi yang sama dengan INSERT di atas — pakai
+    // helper auditEvent() dari server/auth/session.php, yang sudah didukung
+    // tabel audit_log sejak schema.sql M2.1. Blocker di TODO lama sudah
+    // selesai, cuma belum sempat di-cross-check ke sini.
+    auditEvent('superadmin_bootstrap', [
+        'id' => $userId,
+        'role' => 'superadmin',
+        'cabangId' => null,
+    ], 'user', $userId);
 
     $pdo->commit();
 } catch (\PDOException $e) {
