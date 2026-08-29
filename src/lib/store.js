@@ -1,8 +1,32 @@
 import { normalizeRole } from './role.js'
+import { apiRequest } from './api.js'
 
 const STORE_KEY = 'afterschola_v4'
 const STORE_EVENT = 'afterschola_v4_changed'
-const SERVER_KEYS = new Set(['absensi', 'sppPayments', 'honorPayments'])
+
+// Append-only ledgers, synced in a batch via /api/sync.php (M3.3). A
+// background queue-and-flush pattern is safe for these because inserts
+// are the only operation — there's no update/delete to lose track of.
+const LEDGER_KEYS = new Set(['absensi', 'sppPayments', 'honorPayments'])
+
+// Everything server-readable via the generic /api/read.php?entity=...
+// (M3.3) — the 3 ledgers above, plus the 4 full-CRUD entities M3.4 built
+// dedicated write endpoints for. 'settings'/'invoices' aren't included:
+// no server endpoint exists for them yet.
+const READABLE_SERVER_KEYS = new Set([
+  'absensi', 'sppPayments', 'honorPayments',
+  'sekolah', 'trainer', 'siswa', 'cabang',
+])
+
+// Dedicated write endpoints from M3.4 — full CRUD (action: create/update/
+// delete), NOT append-only, so they go through writeRemote() below
+// (direct call, immediate error feedback) rather than the ledger queue.
+const WRITE_ENDPOINTS = {
+  siswa: '/api/siswa.php',
+  sekolah: '/api/sekolah.php',
+  trainer: '/api/trainer.php',
+  cabang: '/api/cabang.php',
+}
 
 function notifyStoreChanged() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(STORE_EVENT))
@@ -102,7 +126,6 @@ export function getKeys() {
     sppPayments: `${STORE_KEY}_sppPayments`,
     invoices: `${STORE_KEY}_invoices`,
     settings: `${STORE_KEY}_settings`,
-    // M7.1.1 — branch entity, read/written like any other collection.
     cabang: `${STORE_KEY}_cabang`,
   }
 }
@@ -147,17 +170,26 @@ export function readCached(key) {
   return ctx.role && ctx.role !== 'superadmin' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
 }
 
+// UNVERIFIED ASSUMPTION (carried over from before this file was handed to
+// me, not something I introduced): read.php is assumed to accept
+// ?entity=<key> and answer with a bare JSON array. Never confirmed against
+// the actual read.php source — if the real shape differs, every read()
+// call below (old and new) fails closed to readCached() silently, with no
+// visible error. Get read.php's source and cross-check before relying on
+// this in production.
 export async function read(key) {
-  if (!SERVER_KEYS.has(key)) return readCached(key)
+  if (!READABLE_SERVER_KEYS.has(key)) return readCached(key)
   try {
-    const res = await fetch(`/api/read.php?entity=${encodeURIComponent(key)}`)
-    if (!res.ok) throw new Error(`read ${key}: ${res.status}`)
-    const remote = await res.json()
+    const remote = await apiRequest(`/api/read.php?entity=${encodeURIComponent(key)}`, { method: 'GET' })
     if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
     writeRaw(key, remote)
     notifyStoreChanged()
     return readCached(key)
   } catch {
+    // Offline, expired session (401 already handled by api.js's
+    // interceptor — auth state is reset by the time we get here), or a
+    // server error: fall back to whatever's in the local cache rather
+    // than surfacing a hard failure for a read.
     return readCached(key)
   }
 }
@@ -169,7 +201,7 @@ export function subscribeStore(listener) {
 }
 
 export async function hydrateServerData() {
-  await Promise.all([...SERVER_KEYS].map(key => read(key)))
+  await Promise.all([...READABLE_SERVER_KEYS].map(key => read(key)))
 }
 
 export function write(key, records) {
@@ -177,7 +209,7 @@ export function write(key, records) {
   if (!Array.isArray(records)) return
   if (!ctx.role || ctx.role === 'superadmin') {
     writeRaw(key, records)
-    notifyStoreChanged()          // + 1 baris
+    notifyStoreChanged()
     return
   }
   const scoped = new Map(records.filter(record => isWithinScope(key, record, ctx)).map(record => [record.id, record]))
@@ -185,9 +217,18 @@ export function write(key, records) {
   const existingIds = new Set(merged.map(record => record.id))
   records.filter(record => isWithinScope(key, record, ctx) && !existingIds.has(record.id)).forEach(record => merged.push(record))
   writeRaw(key, merged)
-  notifyStoreChanged()            // + 1 baris
+  notifyStoreChanged()
 }
 
+// Local-only write, unchanged in behavior from before this microtask.
+// Still synchronous by design (see note below) — existing callers
+// (TrainerList, BranchManager, StudentList, ...) call this expecting an
+// immediate return, inside useState initializers and render logic.
+// queueSync() below only fires for LEDGER_KEYS, exactly as before; for
+// the 4 new full-CRUD entities this remains purely local until M4.3
+// rewires those call sites to use writeRemote() instead (or in addition —
+// that coordination is M4.3's decision to make, not resolved here, to
+// avoid the same record getting submitted through two different paths).
 export function upsert(key, record) {
   const ctx = getRoleContext()
   if (!ctx.role || !isWithinScope(key, record, ctx)) return
@@ -202,37 +243,56 @@ export function upsert(key, record) {
     saved = record
   }
   writeRaw(key, records)
-  notifyStoreChanged()            // + 1 baris
+  notifyStoreChanged()
   queueSync(key, saved)
 }
 
 // ============================================
-// M7.2.1 — SERVER-FIRST SYNC LAYER (additive)
+// DIRECT CRUD — M3.4 full-CRUD entities (siswa/sekolah/trainer/cabang)
 // ============================================
-// Design note: read()/write()/upsert() above stay fully synchronous —
-// every existing caller (SchoolList, BranchManager, StudentList, ...)
-// calls read('sekolah') expecting an array back immediately, inside
-// useState initializers and render logic. Converting them to return a
-// Promise — a literal reading of "read() → fetch(...)" — breaks every one
-// of those call sites, files this microtask does not own (R7). Instead
-// this section adds a *parallel* sync layer on the same localStorage
-// source of truth:
-//   - upsert() (above) also queues the saved record for server push
-//   - syncPending() flushes the queue to /api/sync.php (M7.2.2) when
-//     online — this is what the "Sinkronisasi" button calls
-//   - pullRemote() opportunistically refreshes the local cache from the
-//     server in the background; it never blocks or replaces readCached()
-// This matches the microtask's own VERIFY line: "Network off → app still
-// works from cache → network on → sync button shows pending count → sync
-// resolves" — a queue-and-sync-button pattern, not a request/response
-// rewrite of read().
+// Unlike the ledger queue below, this calls the server immediately and
+// throws ApiError on failure (401/403/409/422) for the caller to handle —
+// matches M4.1's VERIFY line ("403 shows feedback", "409 remains
+// pending/conflicted") much better than a silent background retry would
+// for mutable master data. Nothing calls this yet; wiring real feature
+// components (TrainerList.jsx, BranchManager.jsx, ...) to use it instead
+// of the old local-only upsert() is M4.3's job, not this file's.
+export async function writeRemote(key, action, record) {
+  const url = WRITE_ENDPOINTS[key]
+  if (!url) throw new Error(`writeRemote: tidak ada endpoint untuk "${key}"`)
+
+  const result = await apiRequest(url, {
+    method: 'POST',
+    body: { ...record, action },
+  })
+
+  // Server is authoritative (M3.1-M3.4) — merge its response (e.g.
+  // server-derived cabangId, bumped version) into the local cache so
+  // readCached() reflects the true saved state, not just the optimistic
+  // payload that was sent.
+  if (action === 'delete') {
+    writeRaw(key, readRaw(key).filter(r => r.id !== record.id))
+  } else {
+    const merged = { ...record, ...result }
+    const records = readRaw(key)
+    const idx = records.findIndex(r => r.id === merged.id)
+    if (idx >= 0) records[idx] = { ...records[idx], ...merged }
+    else records.push(merged)
+    writeRaw(key, records)
+  }
+  notifyStoreChanged()
+  return result
+}
+
+// ============================================
+// LEDGER SYNC LAYER (absensi / sppPayments / honorPayments only)
+// ============================================
+// read()/write()/upsert() above stay fully synchronous for existing
+// callers; this section queues ledger writes for background push via
+// /api/sync.php, and flushes on demand (e.g. a "Sinkronisasi" button).
 
 const SYNC_LOG_KEY = `${STORE_KEY}_syncLog`
 
-// Only these collections are append-only ledgers with a matching PHP
-// endpoint (M7.2.2). Everything else (sekolah, trainer, siswa, cabang,
-// settings) stays localStorage-only for now — unchanged from before this
-// microtask, and out of scope to wire up here.
 function readSyncLog() {
   try {
     const json = localStorage.getItem(SYNC_LOG_KEY)
@@ -249,70 +309,58 @@ function writeSyncLog(entries) {
 }
 
 // Queues a record for push to its PHP endpoint. Silently no-ops for keys
-// without one (sekolah, trainer, siswa, cabang, ...) so upsert() can call
-// this unconditionally without callers needing to know which keys sync.
+// without one so upsert() can call this unconditionally without callers
+// needing to know which keys sync.
 function queueSync(key, record) {
-  if (!SERVER_KEYS.has(key) || !record?.id) return
+  if (!LEDGER_KEYS.has(key) || !record?.id) return
   const log = readSyncLog()
-  // Replace any existing queued entry for the same record — the queue
-  // holds at most one pending push per record (last write wins locally;
-  // only the latest version is ever POSTed), not a growing history.
   const next = log.filter(e => !(e.key === key && e.id === record.id))
   next.push({ key, id: record.id, record, queuedAt: Date.now() })
   writeSyncLog(next)
 }
 
-// Read-only status for a "Sync" button UI: how many records are waiting
-// to be pushed. Safe to call anytime (offline or online).
 export function getSyncStatus() {
   const log = readSyncLog()
   return { pending: log.length, entries: log }
 }
 
-// Pushes every queued entry to its PHP endpoint, in order. Stops at the
-// first network failure and leaves the remaining entries queued — a
-// flaky connection degrades to "still pending", never silent data loss.
-// A 409 (server already has this ID — append-only per M7.2.2) is treated
-// as success and dropped from the queue: the record is already on the
-// server, nothing left to push.
+// Pushes every queued entry to /api/sync.php in one batch. sync.php
+// always answers 200 with a per-entry breakdown ({synced, alreadyApplied,
+// failed}) — a whole-request 409 never happens (confirmed in M3.3:
+// duplicates land in `alreadyApplied`, not a request-level status code).
+// Anything not explicitly listed in `failed` is off the queue, whether it
+// was newly synced or already present server-side.
 export async function syncPending() {
   const log = readSyncLog()
   if (log.length === 0) return { synced: 0, pending: 0 }
   try {
-    const res = await fetch('/api/sync.php', {
+    const result = await apiRequest('/api/sync.php', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries: log }),
+      body: { entries: log },
     })
-    if (res.status === 409) {
-      writeSyncLog([])
-      return { synced: log.length, pending: 0 }
-    }
-    if (!res.ok) return { synced: 0, pending: log.length }
-    const result = await res.json()
     const failed = new Set((result.failed || []).map(item => item.id))
     const remaining = log.filter(entry => failed.has(entry.id))
     writeSyncLog(remaining)
     return { synced: log.length - remaining.length, pending: remaining.length }
   } catch {
+    // Network failure, 401 (interceptor already reset auth state), or an
+    // unexpected error — leave the queue exactly as it was; nothing here
+    // was confirmed synced. A flaky connection degrades to "still
+    // pending", never silent data loss.
     return { synced: 0, pending: log.length }
   }
 }
 
-// Best-effort background refresh of the local cache from the server.
-// Never blocks or replaces read() — a failed/offline pull just leaves the
-// existing localStorage cache in place, which read() keeps serving
-// synchronously regardless of this call's outcome. Merge is additive only
-// (remote records the local cache doesn't have yet get appended); it
-// never overwrites a local record, since append-only ledgers never change
-// an existing row server-side either (M7.2.2).
+// Best-effort background refresh of the local cache from the server for
+// any READABLE_SERVER_KEYS entity. Never blocks or replaces read() — a
+// failed/offline pull just leaves the existing localStorage cache in
+// place. Fixed from the previous version, which referenced an
+// undefined `SYNC_ENDPOINTS` and would throw a ReferenceError on every
+// call; now reuses the same /api/read.php path as read() itself.
 export async function pullRemote(key) {
-  const url = SYNC_ENDPOINTS[key]
-  if (!url) return false
+  if (!READABLE_SERVER_KEYS.has(key)) return false
   try {
-    const res = await fetch(url, { method: 'GET' })
-    if (!res.ok) return false
-    const remote = await res.json()
+    const remote = await apiRequest(`/api/read.php?entity=${encodeURIComponent(key)}`, { method: 'GET' })
     if (!Array.isArray(remote)) return false
     const local = readCached(key)
     const localIds = new Set(local.map(r => r.id))
@@ -320,8 +368,6 @@ export async function pullRemote(key) {
     write(key, merged)
     return true
   } catch {
-    // Offline or unreachable — local cache (already serving read())
-    // is left exactly as it was.
     return false
   }
 }
@@ -330,6 +376,8 @@ export async function pullRemote(key) {
 // SETTINGS (settings: { logoUrl, title })
 // ============================================
 // settings is a single object (not an array) under its own v4 key.
+// No server endpoint exists for this yet (M3.4 built siswa/sekolah/
+// trainer/cabang only) — stays localStorage-only for now.
 
 export function getSettings() {
   try {
@@ -349,9 +397,6 @@ export function setSettings(partial) {
 // ============================================
 // PERSISTED UI STATE (M4.3, row #15)
 // ============================================
-// Separate key from entity data (D7: only afterschola_v4_* keys) — this
-// is UI state, not domain data, but stays under the same v4 namespace.
-// (UI_STATE_KEY itself is defined with the role-context block at the top.)
 
 export function getUiState() {
   try {
