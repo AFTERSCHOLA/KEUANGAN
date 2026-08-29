@@ -27,15 +27,27 @@ declare(strict_types=1);
  * equals the referenced sekolah's cabangId — it does not derive it itself.
  */
 
-const MAX_RECORD_PAYLOAD_BYTES = 200 * 1024; // 200KB per record — generous
-// default pending sign-off; flag if a real record legitimately needs more
-// (e.g. embedded photo dataURLs, which PRODUCTION_PLAN.md section 8 says
-// should move to authorized upload endpoints instead of inline payload).
+const MAX_RECORD_PAYLOAD_BYTES = 200 * 1024; // 200KB per record — CONFIRMED, not
+// a guess. Photos never land in payload JSON: dokumentasi[] entries store
+// only an IndexedDB pointer ({key, size, slot, type: 'idb'}), never a
+// base64 dataURL (PRODUCTION_PLAN.md section 8 requires authorized upload
+// endpoints for photo bytes, not inline payload). The heaviest real
+// record observed (absensi with a 30-siswa siswaList + 2 photo pointers)
+// runs a few KB; a generated invoice with dozens of line items runs low
+// tens of KB. 200KB leaves roughly a 10-40x margin over anything actually
+// produced by this app's data shapes — kept as-is, not tightened or
+// loosened without a concrete record that needs it.
 
 const SISWA_STATUS_VALUES = ['Aktif', 'Trial', 'Berhenti'];
-// trainerStatus enum intentionally NOT validated yet — only 'Hadir' is
-// confirmed in use; other values (Izin/Sakit/Alpa?) are unverified. Add
-// here once confirmed, do not guess.
+
+const TRAINER_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
+// Confirmed from src/features/attendance/AttendanceForm.jsx (line ~232) —
+// the only three pill-button options the UI offers for trainer status.
+// No 'Sakit' value exists in the app today. finance.js only ever checks
+// `=== 'Hadir'` for honor eligibility, so this validation doesn't change
+// any finance behavior — it just stops a typo/garbage value (e.g. from a
+// future client bug or a hand-crafted API call) from silently landing in
+// the database and rendering as-is in RiwayatAbsensi.jsx/TrainerHistory.jsx.
 
 function requireNonEmptyString(mixed $value): bool {
     return is_string($value) && trim($value) !== '';
@@ -133,6 +145,10 @@ function validateAbsensi(array $data, PDO $pdo): array {
     }
     if (!requireNonEmptyString($data['trainerId'] ?? null) || !rowExists($pdo, 'trainer', $data['trainerId'])) {
         $errors[] = 'absensi: trainerId does not reference an existing trainer';
+    }
+    $trainerStatus = $data['trainerStatus'] ?? null;
+    if (!in_array($trainerStatus, TRAINER_STATUS_VALUES, true)) {
+        $errors[] = "absensi: trainerStatus '" . var_export($trainerStatus, true) . "' is not one of " . implode(', ', TRAINER_STATUS_VALUES);
     }
     return $errors;
 }
