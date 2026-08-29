@@ -51,6 +51,8 @@ function entityConfig(string $entity): array {
         'absensi' => ['table' => 'absensi', 'path' => 'absensi.php'],
         'sppPayments' => ['table' => 'spp_payments', 'path' => 'sppPayments.php'],
         'honorPayments' => ['table' => 'honor_payments', 'path' => 'honorPayments.php'],
+        'settings' => ['table' => 'settings'],   // <-- tambahin ini
+        'invoices' => ['table' => 'invoices'],
     ];
     if (!isset($config[$entity])) jsonResponse(['error' => 'Entity tidak didukung'], 400);
     return $config[$entity];

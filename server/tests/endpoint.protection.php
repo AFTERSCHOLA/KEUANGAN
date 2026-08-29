@@ -54,6 +54,7 @@ function cleanupFixtures(PDO $pdo, string $branchA, string $branchB): void {
     $pdo->exec("DELETE FROM honor_payments WHERE cabang_id IN ('$branchA', '$branchB')");
     $pdo->exec("DELETE FROM audit_log WHERE cabang_id IN ('$branchA', '$branchB') OR actor_user_id IN ('usr-test-admA', 'usr-test-admB', 'usr-test-super')"); // <-- baris baru
     $pdo->exec("DELETE FROM users WHERE username IN ('test_admin_a', 'test_admin_b', 'test_super')");
+    $pdo->exec("DELETE FROM settings WHERE id LIKE 'set-test-%'");
     $pdo->exec("DELETE FROM cabang WHERE id IN ('$branchA', '$branchB')");
 }
 
@@ -534,6 +535,122 @@ check('batch as admin A -> 200 (per-entry result, not global reject)', $status =
 check('same-branch entry -> synced', count($body['synced'] ?? []) === 1, json_encode($body));
 check('cross-branch entry -> failed, not silently written', count($body['failed'] ?? []) === 1, json_encode($body));
 
+// --- settings.php + read.php (?entity=settings): superadmin-only ------
+echo "\n--- settings.php ---\n";
+$setNew = ['id' => 'set-test-' . uniqid(), 'value' => 'foo'];
+
+[$status] = req('POST', "$base/server/api/settings.php", $setNew);
+check('anonymous create -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/settings.php", $setNew, $cookieAdminA);
+check('create without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/settings.php", $setNew, $cookieAdminA, $csrfAdminA);
+check('admin_cabang creating setting -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/settings.php", $setNew + ['cabangId' => 'cbg-does-not-exist'], $cookieSuper, $csrfSuper);
+check('superadmin with unknown cabangId -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/settings.php", $setNew, $cookieSuper, $csrfSuper);
+check('superadmin creating setting -> 201', $status === 201, "got $status");
+check('cabangId null (global setting)', array_key_exists('cabangId', $body) && $body['cabangId'] === null, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/settings.php", $setNew, $cookieSuper, $csrfSuper);
+check('duplicate id -> 409', $status === 409, "got $status");
+
+echo "\n--- settings.php (update) ---\n";
+$setUpdate = ['id' => $setNew['id'], 'action' => 'update', 'value' => 'bar'];
+
+[$status] = req('POST', "$base/server/api/settings.php", $setUpdate, $cookieAdminA, $csrfAdminA);
+check('admin_cabang updating setting -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/settings.php", $setUpdate, $cookieSuper, $csrfSuper);
+check('superadmin updating setting -> 200', $status === 200, "got $status");
+check('version incremented to 2', ($body['version'] ?? null) === 2, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/settings.php", ['id' => 'set-missing-' . uniqid(), 'action' => 'update', 'value' => 'x'], $cookieSuper, $csrfSuper);
+check('updating non-existent setting -> 422', $status === 422, "got $status");
+
+echo "\n--- read.php (?entity=settings) ---\n";
+[$status] = req('GET', "$base/server/api/read.php?entity=settings");
+check('anonymous GET settings -> 401', $status === 401, "got $status");
+
+[$status] = req('GET', "$base/server/api/read.php?entity=settings", null, $cookieAdminA);
+check('admin_cabang GET ?entity=settings -> 403', $status === 403, "got $status");
+
+[$status, $body] = req('GET', "$base/server/api/read.php?entity=settings", null, $cookieSuper);
+check('superadmin GET ?entity=settings -> 200', $status === 200, "got $status");
+check('created setting appears in list', is_array($body) && count(array_filter($body, static fn ($r) => ($r['id'] ?? null) === $setNew['id'])) === 1, json_encode($body));
+
+[$status, $body] = req('GET', "$base/server/api/read.php", null, $cookieAdminA);
+check('admin_cabang bulk read -> settings key present but empty', $status === 200 && ($body['settings'] ?? null) === [], json_encode($body['settings'] ?? null));
+
+echo "\n--- settings.php (delete) ---\n";
+[$status] = req('POST', "$base/server/api/settings.php", ['id' => $setNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin_cabang deleting setting -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/settings.php", ['id' => $setNew['id'], 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('superadmin deleting setting -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/settings.php", ['id' => $setNew['id'], 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('deleting already-deleted setting -> 422', $status === 422, "got $status");
+
+// --- invoices.php: admin_cabang read-only, superadmin writes ---------
+echo "\n--- invoices.php ---\n";
+$invNew = ['id' => 'inv-test-' . uniqid(), 'total' => 500000];
+
+[$status] = req('POST', "$base/server/api/invoices.php", $invNew);
+check('anonymous create -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", $invNew, $cookieAdminA);
+check('create without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", $invNew + ['cabangId' => $branchA], $cookieAdminA, $csrfAdminA);
+check('admin_cabang creating invoice -> 403 (read-only per matrix)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", $invNew, $cookieSuper, $csrfSuper);
+check('superadmin missing cabangId -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", $invNew + ['cabangId' => 'cbg-does-not-exist'], $cookieSuper, $csrfSuper);
+check('superadmin with unknown cabangId -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/invoices.php", $invNew + ['cabangId' => $branchA], $cookieSuper, $csrfSuper);
+check('superadmin creating invoice for branch A -> 201', $status === 201, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", $invNew + ['cabangId' => $branchA], $cookieSuper, $csrfSuper);
+check('duplicate id -> 409', $status === 409, "got $status");
+
+echo "\n--- invoices.php (update/delete) ---\n";
+$invUpdate = ['id' => $invNew['id'], 'action' => 'update', 'cabangId' => $branchA, 'total' => 750000];
+[$status] = req('POST', "$base/server/api/invoices.php", $invUpdate, $cookieAdminA, $csrfAdminA);
+check('admin_cabang updating invoice -> 403 (read-only per matrix)', $status === 403, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/invoices.php", $invUpdate, $cookieSuper, $csrfSuper);
+check('superadmin updating invoice -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", ['id' => $invNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin_cabang deleting invoice -> 403 (read-only per matrix)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices.php", ['id' => $invNew['id'], 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('superadmin deleting invoice -> 200', $status === 200, "got $status");
+
+echo "\n--- read.php (?entity=invoices) ---\n";
+$invRead = 'inv-read-' . uniqid();
+$pdo->prepare("INSERT INTO invoices (id, cabang_id, payload) VALUES (:id, :c, :p)")->execute([
+    ':id' => $invRead,
+    ':c' => $branchA,
+    ':p' => json_encode(['id' => $invRead, 'cabangId' => $branchA]),
+]);
+
+[$status, $body] = req('GET', "$base/server/api/read.php?entity=invoices", null, $cookieAdminA);
+check('admin_cabang GET ?entity=invoices -> 200 (read-only, not blocked)', $status === 200, "got $status");
+check('admin A sees own-branch invoice', is_array($body) && count(array_filter($body, static fn ($r) => ($r['id'] ?? null) === $invRead)) === 1, json_encode($body));
+
+[$status, $body] = req('GET', "$base/server/api/read.php?entity=invoices", null, $cookieAdminB);
+check('admin B does NOT see branch A invoice', is_array($body) && count(array_filter($body, static fn ($r) => ($r['id'] ?? null) === $invRead)) === 0, json_encode($body));
+
+$pdo->exec("DELETE FROM invoices WHERE id = '$invRead'");
+
 // --- audit_log: M3.5 ---------------------------------------------------
 echo "\n--- audit_log ---\n";
 
@@ -581,6 +698,16 @@ check('absensi_verified cabang_id matches branch A', $row && $row['cabang_id'] =
 $row = auditRow($pdo, 'honorPayments_recorded', $honorA['id']);
 check('honorPayments_recorded audit row exists', $row !== false);
 check('honorPayments_recorded actor is superadmin (only writer)', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+$row = auditRow($pdo, 'settings_created', $setNew['id']);
+check('settings_created audit row exists', $row !== false);
+check('settings_created actor_role is superadmin', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+$row = auditRow($pdo, 'settings_deleted', $setNew['id']);
+check('settings_deleted audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'invoices_created', $invNew['id']);
+check('invoices_created audit row exists', $row !== false);
 
 // sync.php writes through its own inline insert (not insertLedger()), so
 // this confirms that path is audited too, tagged distinctly via metadata.

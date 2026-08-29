@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method tidak
 $user = requireAuthenticatedUser();
 
 $entity = $_GET['entity'] ?? null;
-$allEntities = ['absensi', 'sppPayments', 'honorPayments'];
+$allEntities = ['absensi', 'sppPayments', 'honorPayments', 'settings', 'invoices'];
 
 // Validate the entity name itself first (400) before any permission check,
 // so an unknown ?entity= never leaks a 403 vs 400 distinction about
