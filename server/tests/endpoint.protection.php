@@ -46,9 +46,13 @@ $branchA = 'cbg-TEST-A';
 $branchB = 'cbg-TEST-B';
 
 function cleanupFixtures(PDO $pdo, string $branchA, string $branchB): void {
+    $pdo->exec("DELETE FROM trainer WHERE cabang_id IN ('$branchA', '$branchB')");
+    $pdo->exec("DELETE FROM siswa WHERE cabang_id IN ('$branchA', '$branchB')");
+    $pdo->exec("DELETE FROM sekolah WHERE cabang_id IN ('$branchA', '$branchB')");
     $pdo->exec("DELETE FROM absensi WHERE cabang_id IN ('$branchA', '$branchB')");
     $pdo->exec("DELETE FROM spp_payments WHERE cabang_id IN ('$branchA', '$branchB')");
     $pdo->exec("DELETE FROM honor_payments WHERE cabang_id IN ('$branchA', '$branchB')");
+    $pdo->exec("DELETE FROM audit_log WHERE cabang_id IN ('$branchA', '$branchB') OR actor_user_id IN ('usr-test-admA', 'usr-test-admB', 'usr-test-super')"); // <-- baris baru
     $pdo->exec("DELETE FROM users WHERE username IN ('test_admin_a', 'test_admin_b', 'test_super')");
     $pdo->exec("DELETE FROM cabang WHERE id IN ('$branchA', '$branchB')");
 }
@@ -74,6 +78,13 @@ function seedUser(PDO $pdo, string $id, string $username, string $role, ?string 
 seedUser($pdo, 'usr-test-admA', 'test_admin_a', 'admin_cabang', $branchA);
 seedUser($pdo, 'usr-test-admB', 'test_admin_b', 'admin_cabang', $branchB);
 seedUser($pdo, 'usr-test-super', 'test_super', 'superadmin', null);
+
+$sekolahA = 'skl-TEST-A';
+$sekolahB = 'skl-TEST-B';
+$pdo->prepare("INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :cabang_id, '{}')")
+    ->execute([':id' => $sekolahA, ':cabang_id' => $branchA]);
+$pdo->prepare("INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :cabang_id, '{}')")
+    ->execute([':id' => $sekolahB, ':cabang_id' => $branchB]);
 
 // --- spawn dev server -----------------------------------------------------
 $docroot = realpath(__DIR__ . '/../..');
@@ -206,6 +217,35 @@ check('duplicate id -> 409', $status === 409, "got $status");
 [$status] = req('POST', "$base/server/api/absensi.php", ['id' => 'abs-malformed-' . uniqid()], $cookieAdminA, $csrfAdminA);
 check('missing cabangId -> 422', $status === 422, "got $status");
 
+// --- absensi.php: verify action (separate from write/insertLedger) ---
+echo "\n--- absensi.php (verify) ---\n";
+$absVerify = ['id' => $absA['id'], 'action' => 'verify'];
+
+[$status] = req('POST', "$base/server/api/absensi.php", $absVerify);
+check('anonymous verify -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensi.php", $absVerify, $cookieAdminA);
+check('verify without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensi.php", $absVerify, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B verifying branch A record -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensi.php", ['action' => 'verify'], $cookieAdminA, $csrfAdminA);
+check('verify without id -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensi.php", ['id' => 'abs-missing-' . uniqid(), 'action' => 'verify'], $cookieAdminA, $csrfAdminA);
+check('verifying non-existent record -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/absensi.php", $absVerify, $cookieAdminA, $csrfAdminA);
+check('admin A verifying own-branch record -> 200', $status === 200, "got $status");
+check('response statusVerifikasi.by is server-derived role', ($body['statusVerifikasi']['by'] ?? null) === 'admin_cabang', json_encode($body));
+check('response statusVerifikasi.at looks like an ISO timestamp', is_string($body['statusVerifikasi']['at'] ?? null) && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $body['statusVerifikasi']['at']), json_encode($body));
+
+// Client cannot forge who verified or when — a caller-supplied
+// statusVerifikasi in the request body must be ignored, not trusted.
+[$status, $body] = req('POST', "$base/server/api/absensi.php", $absVerify + ['statusVerifikasi' => ['by' => 'superadmin', 'at' => '2000-01-01T00:00:00Z']], $cookieAdminA, $csrfAdminA);
+check('client-supplied statusVerifikasi is ignored, not trusted', $status === 200 && ($body['statusVerifikasi']['by'] ?? null) === 'admin_cabang', json_encode($body));
+
 // --- sppPayments.php: same shape --------------------------------------
 echo "\n--- sppPayments.php ---\n";
 $sppA = ['id' => 'spp-test-' . uniqid(), 'cabangId' => $branchA, 'nominal' => 100000];
@@ -235,6 +275,249 @@ check('admin_cabang writing own branch -> 403 (read-only per matrix)', $status =
 [$status] = req('POST', "$base/server/api/honorPayments.php", $honorA, $cookieSuper, $csrfSuper);
 check('superadmin writing -> 201', $status === 201, "got $status");
 
+// --- siswa.php: cabangId always server-derived from sekolahId --------
+echo "\n--- siswa.php ---\n";
+$swA = ['id' => 'sw-test-' . uniqid(), 'sekolahId' => $sekolahA, 'nama' => 'Siswa Test A'];
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swA);
+check('anonymous POST -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swA, $cookieAdminA);
+check('authenticated POST without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-cross-' . uniqid(), 'sekolahId' => $sekolahB], $cookieAdminA, $csrfAdminA);
+check('admin A creating student at branch B school -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-noskl-' . uniqid()], $cookieAdminA, $csrfAdminA);
+check('missing sekolahId -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swA + ['cabangId' => $branchA], $cookieAdminA, $csrfAdminA);
+check('client-supplied cabangId rejected -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/siswa.php", $swA, $cookieAdminA, $csrfAdminA);
+check('admin A creating student at own-branch school -> 201', $status === 201, "got $status");
+check('response cabangId matches school\'s branch (server-derived)', ($body['cabangId'] ?? null) === $branchA, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swA, $cookieAdminA, $csrfAdminA);
+check('duplicate id -> 409', $status === 409, "got $status");
+
+echo "\n--- siswa.php (update) ---\n";
+$swUpdate = ['id' => $swA['id'], 'action' => 'update', 'sekolahId' => $sekolahA, 'nama' => 'Siswa Test A (updated)'];
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swUpdate);
+check('anonymous update -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swUpdate, $cookieAdminA);
+check('update without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swUpdate + ['cabangId' => $branchA], $cookieAdminA, $csrfAdminA);
+check('update with client-supplied cabangId -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swUpdate, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B updating branch A student -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => $swA['id'], 'action' => 'update', 'sekolahId' => $sekolahB, 'nama' => 'moved'], $cookieAdminA, $csrfAdminA);
+check('admin A "moving" own student to branch B school -> 403', $status === 403, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/siswa.php", $swUpdate, $cookieAdminA, $csrfAdminA);
+check('admin A updating own-branch student -> 200', $status === 200, "got $status");
+check('version incremented to 2', ($body['version'] ?? null) === 2, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-missing-' . uniqid(), 'action' => 'update', 'sekolahId' => $sekolahA], $cookieAdminA, $csrfAdminA);
+check('updating non-existent student -> 422', $status === 422, "got $status");
+
+echo "\n--- siswa.php (delete) ---\n";
+$swDelete = ['id' => $swA['id'], 'action' => 'delete'];
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swDelete);
+check('anonymous delete -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swDelete, $cookieAdminA);
+check('delete without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-missing-' . uniqid(), 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('deleting non-existent student -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swDelete, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B deleting branch A student -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swDelete, $cookieAdminA, $csrfAdminA);
+check('admin A deleting own-branch student -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", $swDelete, $cookieAdminA, $csrfAdminA);
+check('deleting already-deleted student -> 422 (confirms hard delete happened)', $status === 422, "got $status");
+
+// --- sekolah.php: cabangId forced from session (admin_cabang) or ------
+// explicit+validated (superadmin) -- never trusted as-is from admin_cabang
+echo "\n--- sekolah.php (create) ---\n";
+$sklNew = ['id' => 'skl-new-' . uniqid(), 'nama' => 'Sekolah Baru A'];
+
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklNew);
+check('anonymous create -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklNew, $cookieAdminA);
+check('create without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklNew + ['cabangId' => $branchA], $cookieAdminA, $csrfAdminA);
+check('admin_cabang sending cabangId (even matching own) -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/sekolah.php", $sklNew, $cookieAdminA, $csrfAdminA);
+check('admin A creating school (cabangId forced from session) -> 201', $status === 201, "got $status");
+check('cabangId forced to admin A\'s own branch', ($body['cabangId'] ?? null) === $branchA, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklNew, $cookieAdminA, $csrfAdminA);
+check('duplicate id -> 409', $status === 409, "got $status");
+
+$sklSuperNoCabang = ['id' => 'skl-super-' . uniqid(), 'nama' => 'Sekolah Superadmin'];
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklSuperNoCabang, $cookieSuper, $csrfSuper);
+check('superadmin without cabangId -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklSuperNoCabang + ['cabangId' => 'cbg-does-not-exist'], $cookieSuper, $csrfSuper);
+check('superadmin with unknown cabangId -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/sekolah.php", $sklSuperNoCabang + ['cabangId' => $branchB], $cookieSuper, $csrfSuper);
+check('superadmin explicitly targeting branch B -> 201', $status === 201, "got $status");
+check('cabangId matches explicit target', ($body['cabangId'] ?? null) === $branchB, json_encode($body));
+
+echo "\n--- sekolah.php (update) ---\n";
+$sklUpdate = ['id' => $sklNew['id'], 'action' => 'update', 'nama' => 'Sekolah Baru A (updated)'];
+
+[$status] = req('POST', "$base/server/api/sekolah.php", $sklUpdate, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B updating branch A school -> 403', $status === 403, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/sekolah.php", $sklUpdate, $cookieAdminA, $csrfAdminA);
+check('admin A updating own-branch school -> 200', $status === 200, "got $status");
+check('version incremented to 2', ($body['version'] ?? null) === 2, json_encode($body));
+
+echo "\n--- sekolah.php (delete) ---\n";
+[$status] = req('POST', "$base/server/api/sekolah.php", ['id' => $sklNew['id'], 'action' => 'delete'], $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B deleting branch A school -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/sekolah.php", ['id' => $sklNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin A deleting own-branch school -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/sekolah.php", ['id' => $sklNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('deleting already-deleted school -> 422', $status === 422, "got $status");
+
+// --- trainer.php: same cabangId authority pattern as sekolah.php ------
+echo "\n--- trainer.php (create) ---\n";
+$trnNew = ['id' => 'trn-new-' . uniqid(), 'nama' => 'Trainer Baru A'];
+
+[$status] = req('POST', "$base/server/api/trainer.php", $trnNew);
+check('anonymous create -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", $trnNew, $cookieAdminA);
+check('create without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", $trnNew + ['cabangId' => $branchA], $cookieAdminA, $csrfAdminA);
+check('admin_cabang sending cabangId (even matching own) -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/trainer.php", $trnNew, $cookieAdminA, $csrfAdminA);
+check('admin A creating trainer (cabangId forced from session) -> 201', $status === 201, "got $status");
+check('cabangId forced to admin A\'s own branch', ($body['cabangId'] ?? null) === $branchA, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/trainer.php", $trnNew, $cookieAdminA, $csrfAdminA);
+check('duplicate id -> 409', $status === 409, "got $status");
+
+echo "\n--- trainer.php (update) ---\n";
+$trnUpdate = ['id' => $trnNew['id'], 'action' => 'update', 'nama' => 'Trainer Baru A (updated)'];
+
+[$status] = req('POST', "$base/server/api/trainer.php", $trnUpdate, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B updating branch A trainer -> 403', $status === 403, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/trainer.php", $trnUpdate, $cookieAdminA, $csrfAdminA);
+check('admin A updating own-branch trainer -> 200', $status === 200, "got $status");
+check('version incremented to 2', ($body['version'] ?? null) === 2, json_encode($body));
+
+// Edge case specific to trainer: cabang_id is nullable in schema (unlike
+// sekolah/siswa). An unassigned trainer must be untouchable by ANY
+// admin_cabang — only superadmin (bypasses authorize()) can manage it,
+// until it's given a branch.
+$trnOrphan = 'trn-orphan-' . uniqid();
+$pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, NULL, \'{}\')')->execute([':id' => $trnOrphan]);
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnOrphan, 'action' => 'update', 'nama' => 'x'], $cookieAdminA, $csrfAdminA);
+check('admin A updating unassigned (NULL cabang_id) trainer -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnOrphan, 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin A deleting unassigned (NULL cabang_id) trainer -> 403', $status === 403, "got $status");
+
+$pdo->exec("DELETE FROM trainer WHERE id = '$trnOrphan'");
+
+echo "\n--- trainer.php (delete) ---\n";
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnNew['id'], 'action' => 'delete'], $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B deleting branch A trainer -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin A deleting own-branch trainer -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('deleting already-deleted trainer -> 422', $status === 422, "got $status");
+
+// --- cabang.php: superadmin-only CRUD -----------------------------------
+echo "\n--- cabang.php (create) ---\n";
+$cbgNew = ['id' => 'cbg-new-' . uniqid(), 'nama' => 'Cabang Baru', 'kode' => 'NEW' . substr(uniqid(), -4)];
+
+[$status] = req('POST', "$base/server/api/cabang.php", $cbgNew);
+check('anonymous create -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", $cbgNew, $cookieAdminA);
+check('create without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", $cbgNew, $cookieAdminA, $csrfAdminA);
+check('admin_cabang creating branch -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => 'cbg-noname-' . uniqid(), 'kode' => 'XXX'], $cookieSuper, $csrfSuper);
+check('missing nama -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => 'cbg-nokode-' . uniqid(), 'nama' => 'Tanpa Kode'], $cookieSuper, $csrfSuper);
+check('missing kode -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => 'cbg-dupe-' . uniqid(), 'nama' => 'Coba Duplikat', 'kode' => 'TSTA'], $cookieSuper, $csrfSuper);
+check('duplicate kode (matches branch A) -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/cabang.php", $cbgNew, $cookieSuper, $csrfSuper);
+check('superadmin creating branch -> 201', $status === 201, "got $status");
+check('kode normalized to uppercase', ($body['kode'] ?? null) === strtoupper($cbgNew['kode']), json_encode($body));
+
+[$status] = req('POST', "$base/server/api/cabang.php", $cbgNew, $cookieSuper, $csrfSuper);
+check('duplicate id -> 409', $status === 409, "got $status");
+
+echo "\n--- cabang.php (update) ---\n";
+$cbgUpdate = ['id' => $cbgNew['id'], 'action' => 'update', 'nama' => 'Cabang Baru (updated)', 'kode' => $cbgNew['kode']];
+
+[$status] = req('POST', "$base/server/api/cabang.php", $cbgUpdate, $cookieAdminA, $csrfAdminA);
+check('admin_cabang updating branch -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", array_merge($cbgUpdate, ['kode' => 'TSTB']), $cookieSuper, $csrfSuper);
+check('update to a kode already used by another branch -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/cabang.php", $cbgUpdate, $cookieSuper, $csrfSuper);
+check('superadmin updating branch -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => 'cbg-missing-' . uniqid(), 'action' => 'update', 'nama' => 'x', 'kode' => 'YYY' . substr(uniqid(), -4)], $cookieSuper, $csrfSuper);
+check('updating non-existent branch -> 422', $status === 422, "got $status");
+
+echo "\n--- cabang.php (delete) ---\n";
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => $cbgNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin_cabang deleting branch -> 403 (superadmin-only)', $status === 403, "got $status");
+
+// Literal must match DEFAULT_CABANG_ID in cabang.php / defaultCabang().id
+// in constants.js. The endpoint checks this by string match BEFORE
+// checking the row exists, so this assertion holds even if this exact
+// seed row isn't present in the test database.
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => 'cbg-PST-default', 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('deleting default seed branch -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => $branchA, 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('deleting branch A while sekolahA still assigned -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => $cbgNew['id'], 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('superadmin deleting empty branch -> 200', $status === 200, "got $status");
+
+[$status] = req('POST', "$base/server/api/cabang.php", ['id' => $cbgNew['id'], 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('deleting already-deleted branch -> 422', $status === 422, "got $status");
+
 // --- sync.php: batch, per-entry authorization -------------------------
 echo "\n--- sync.php ---\n";
 [$status] = req('POST', "$base/server/api/sync.php", ['entries' => []]);
@@ -250,6 +533,64 @@ $batch = [
 check('batch as admin A -> 200 (per-entry result, not global reject)', $status === 200, "got $status");
 check('same-branch entry -> synced', count($body['synced'] ?? []) === 1, json_encode($body));
 check('cross-branch entry -> failed, not silently written', count($body['failed'] ?? []) === 1, json_encode($body));
+
+// --- audit_log: M3.5 ---------------------------------------------------
+echo "\n--- audit_log ---\n";
+
+function auditRow(PDO $pdo, string $eventType, string $targetId): array|false {
+    $stmt = $pdo->prepare('SELECT * FROM audit_log WHERE event_type = :et AND target_id = :tid ORDER BY id DESC LIMIT 1');
+    $stmt->execute([':et' => $eventType, ':tid' => $targetId]);
+    return $stmt->fetch();
+}
+
+$row = auditRow($pdo, 'cabang_created', $cbgNew['id']);
+check('cabang_created audit row exists', $row !== false);
+check('cabang_created actor is superadmin', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+$row = auditRow($pdo, 'cabang_deleted', $cbgNew['id']);
+check('cabang_deleted audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'trainer_created', $trnNew['id']);
+check('trainer_created audit row exists', $row !== false);
+check('trainer_created actor_role is admin_cabang', $row && $row['actor_role'] === 'admin_cabang', json_encode($row));
+check("trainer_created cabang_id matches branch A (actor's own)", $row && $row['cabang_id'] === $branchA, json_encode($row));
+if ($row) {
+    check('audit metadata contains no password/token fields', stripos((string) $row['metadata'], 'password') === false && stripos((string) $row['metadata'], 'token') === false, (string) $row['metadata']);
+}
+
+$row = auditRow($pdo, 'trainer_deleted', $trnNew['id']);
+check('trainer_deleted audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'sekolah_created', $sklNew['id']);
+check('sekolah_created audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'siswa_created', $swA['id']);
+check('siswa_created audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'absensi_recorded', $absA['id']);
+check('absensi_recorded audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'sppPayments_recorded', $sppA['id']);
+check('sppPayments_recorded audit row exists', $row !== false);
+
+$row = auditRow($pdo, 'absensi_verified', $absA['id']);
+check('absensi_verified audit row exists', $row !== false);
+check('absensi_verified actor_role is admin_cabang', $row && $row['actor_role'] === 'admin_cabang', json_encode($row));
+check('absensi_verified cabang_id matches branch A', $row && $row['cabang_id'] === $branchA, json_encode($row));
+
+$row = auditRow($pdo, 'honorPayments_recorded', $honorA['id']);
+check('honorPayments_recorded audit row exists', $row !== false);
+check('honorPayments_recorded actor is superadmin (only writer)', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+// sync.php writes through its own inline insert (not insertLedger()), so
+// this confirms that path is audited too, tagged distinctly via metadata.
+$syncedAbsId = $batch['entries'][0]['record']['id'];
+$row = auditRow($pdo, 'absensi_recorded', $syncedAbsId);
+check('sync-path absensi_recorded audit row exists', $row !== false);
+if ($row) {
+    $metadata = json_decode((string) $row['metadata'], true);
+    check('sync-path metadata tagged via=sync', ($metadata['via'] ?? null) === 'sync', json_encode($metadata));
+}
 
 // --- cleanup -----------------------------------------------------------
 cleanupFixtures($pdo, $branchA, $branchB);

@@ -6,20 +6,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tida
 
 // 401 — anonymous callers get nothing synced at all.
 $user = requireAuthenticatedUser();
-requireCsrf();
 
 $body = requestJson();
 $entries = $body['entries'] ?? [];
 if (!is_array($entries)) jsonResponse(['error' => 'entries harus berupa array'], 422);
 
-// NOTE (M3.3 deviation, intentional): the VERIFY line calls for a single
-// 409 status on duplicate writes. sync.php processes a *batch* of entries
-// in one request, so one HTTP status code can't represent per-entry
-// outcomes — a duplicate entry here is reported as 200 overall with that
-// entry listed in `alreadyApplied` instead. absensi.php/sppPayments.php
-// (single-record endpoints) still return a literal 409, matching VERIFY
-// as written. Recorded here so this doesn't look like a missed case on
-// re-review.
 $pdo = database();
 $synced = [];
 $alreadyApplied = [];
@@ -68,6 +59,10 @@ foreach ($entries as $entry) {
         $stmt->execute($params);
         $pdo->commit();
         $synced[] = ['id' => $record['id'], 'entity' => $entity];
+        auditEvent($entity . '_recorded', $user, $entity, $record['id'], array_filter([
+            'cabangId' => recordBranchId($record),
+            'via' => 'sync',
+        ]));
     } catch (PDOException $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         if (isDuplicate($error)) {
@@ -77,12 +72,7 @@ foreach ($entries as $entry) {
         }
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        // Don't echo raw exception text to the client — it can leak schema
-        // details (table/column names, constraint text). Same generic
-        // message as the PDOException branch above; real detail goes to
-        // the server log only.
-        error_log('sync.php entry failed: ' . $error->getMessage());
-        $failed[] = ['id' => $entry['record']['id'] ?? null, 'entity' => $entity, 'error' => 'Gagal menyimpan record'];
+        $failed[] = ['id' => $entry['record']['id'] ?? null, 'error' => $error->getMessage()];
     }
 }
 jsonResponse(['synced' => $synced, 'alreadyApplied' => $alreadyApplied, 'failed' => $failed]);

@@ -92,5 +92,14 @@ function insertLedger(string $entity, array $record, ?string $correctionOf = nul
         if (isDuplicate($error)) jsonResponse(['error' => 'ID sudah tersimpan', 'id' => $record['id']], 409);
         jsonResponse(['error' => 'Gagal menyimpan record'], 500);
     }
+    // sessionUser() (not requireAuthenticatedUser()) — insertLedger() is
+    // only ever reached after the caller's own requireAuthorization()
+    // already succeeded, so a valid session is guaranteed here; this
+    // avoids a redundant second 401 short-circuit inside a helper that
+    // should only ever be recording, not gatekeeping.
+    auditEvent($entity . '_recorded', sessionUser(), $entity, $record['id'], array_filter([
+        'cabangId' => recordBranchId($record),
+        'correctionOf' => $correctionOf,
+    ]));
     jsonResponse(['ok' => true, 'id' => $record['id']], 201);
 }
