@@ -4,13 +4,19 @@ require_once __DIR__ . '/../bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
-// 401 — no session, no data. requireAuthenticatedUser() is defined in
-// auth/session.php (required by bootstrap.php) and jsonResponse(401)'s
-// internally on an anonymous caller.
+// M4.1/M3.1: dulu endpoint ini dump seluruh tabel tanpa filter apapun —
+// lubang security (semua cabang, semua trainer, bisa baca data siapa
+// saja). Sekarang tiap record dicek lewat authorize() atau discope lewat
+// cabang_id di level SQL sebelum masuk response.
+//
+// 401 — no session, no data.
 $user = requireAuthenticatedUser();
 
 $entity = $_GET['entity'] ?? null;
-$allEntities = ['absensi', 'sppPayments', 'honorPayments', 'settings', 'invoices'];
+$allEntities = [
+    'absensi', 'sppPayments', 'honorPayments', 'settings', 'invoices',
+    'sekolah', 'trainer', 'siswa', 'cabang',
+];
 
 // Validate the entity name itself first (400) before any permission check,
 // so an unknown ?entity= never leaks a 403 vs 400 distinction about
@@ -29,6 +35,22 @@ $entities = $entity ? [$entity] : $allEntities;
 $pdo = database();
 $output = [];
 
+// siswa has no cabang_id-derived-from-itself relationship trainerOwnsRecord
+// can use directly — it needs the OWNING school's assigned trainerIds
+// (siswa.sekolahId -> sekolah.trainerIds). Precompute once, only if a
+// trainer might need it (siswa is in scope AND role is trainer) — avoids
+// an unnecessary query for every other role/entity combination.
+$sekolahTrainerIds = [];
+if ($user['role'] === 'trainer' && in_array('siswa', $entities, true)) {
+    $sekolahRows = $pdo->query('SELECT payload FROM sekolah ORDER BY created_at, id')->fetchAll();
+    foreach ($sekolahRows as $row) {
+        $sch = json_decode($row['payload'], true);
+        if (is_array($sch) && isset($sch['id'])) {
+            $sekolahTrainerIds[$sch['id']] = $sch['trainerIds'] ?? [];
+        }
+    }
+}
+
 foreach ($entities as $name) {
     // Bulk mode (?entity= omitted): entities this role can't read at all
     // come back as an empty list rather than a 403 — matches the "return
@@ -42,20 +64,35 @@ foreach ($entities as $name) {
 
     if ($user['role'] === 'superadmin') {
         $rows = $pdo->query("SELECT payload FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+    } elseif ($name === 'cabang') {
+        // cabang has no cabang_id column pointing at itself — its own `id`
+        // IS the branch id (see recordOwnsBranch() in authorize.php). Admin
+        // Cabang can only ever see their own branch record; Trainer has no
+        // branch-column to scope by here either, so this falls through to
+        // the same per-record authorize() check as everyone non-superadmin.
+        $rows = $pdo->query("SELECT payload FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
     } else {
-        // cabang_id is a real column on all three tables — scope at the SQL
+        // cabang_id is a real column on the other tables — scope at the SQL
         // level first (branch-level, coarse-grained) before any per-record
         // authorize() check below. A caller with no branch context (should
         // never happen post-login, but fail closed rather than assume) gets
         // nothing instead of an unscoped query.
         $cabangId = $user['cabangId'] ?? null;
-        if (!is_string($cabangId) || $cabangId === '') {
+        if ($user['role'] === 'admin_cabang' && (!is_string($cabangId) || $cabangId === '')) {
             $output[$name] = [];
             continue;
         }
-        $stmt = $pdo->prepare("SELECT payload FROM {$config['table']} WHERE cabang_id = :cabang_id ORDER BY created_at, id");
-        $stmt->execute([':cabang_id' => $cabangId]);
-        $rows = $stmt->fetchAll();
+        if ($user['role'] === 'admin_cabang') {
+            $stmt = $pdo->prepare("SELECT payload FROM {$config['table']} WHERE cabang_id = :cabang_id ORDER BY created_at, id");
+            $stmt->execute([':cabang_id' => $cabangId]);
+            $rows = $stmt->fetchAll();
+        } else {
+            // Trainer: no reliable cabang_id column to pre-filter by (trainer
+            // assignment is school-based, not branch-based) — pull the full
+            // table and let the per-record authorize() check below do the
+            // filtering, same as before M4.1.
+            $rows = $pdo->query("SELECT payload FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+        }
     }
 
     $records = array_values(array_filter(array_map(
@@ -63,16 +100,20 @@ foreach ($entities as $name) {
         $rows
     ), static fn (mixed $record): bool => is_array($record)));
 
-    // Admin Cabang and Superadmin are already fully covered by the query
-    // above. Trainer needs a further per-record check beyond branch scope —
-    // e.g. absensi.trainerId must match — enforced via trainerOwnsRecord()
-    // inside authorize(). sppPayments/honorPayments never reach this branch
-    // for trainer: roleCanReadEntity() already excluded them above.
-    if ($user['role'] === 'trainer') {
-        $records = array_values(array_filter(
-            $records,
-            static fn (array $record): bool => authorize('read', $name, $record, $user)
-        ));
+    // Admin Cabang (non-cabang entities) and Superadmin are already fully
+    // covered by the query above. Everyone else needs a per-record
+    // authorize() check: Admin Cabang reading 'cabang' itself (self-match
+    // against their own branch id), and Trainer for every entity (trainer
+    // is assignment-based, not branch-based — e.g. absensi.trainerId must
+    // match, sekolah.trainerIds must contain them, siswa needs the indirect
+    // sekolah lookup precomputed above).
+    if ($user['role'] === 'trainer' || ($user['role'] === 'admin_cabang' && $name === 'cabang')) {
+        $records = array_values(array_filter($records, static function (array $record) use ($name, $user, $sekolahTrainerIds): bool {
+            if ($name === 'siswa') {
+                $record['_sekolahTrainerIds'] = $sekolahTrainerIds[$record['sekolahId'] ?? null] ?? [];
+            }
+            return authorize('read', $name, $record, $user);
+        }));
     }
 
     $output[$name] = $records;

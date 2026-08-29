@@ -1,5 +1,5 @@
 import { normalizeRole } from './role.js'
-import { apiRequest } from './api.js'
+import { apiRequest, ApiError } from './api.js'
 
 const STORE_KEY = 'afterschola_v4'
 const STORE_EVENT = 'afterschola_v4_changed'
@@ -10,23 +10,14 @@ const STORE_EVENT = 'afterschola_v4_changed'
 const LEDGER_KEYS = new Set(['absensi', 'sppPayments', 'honorPayments'])
 
 // Everything server-readable via the generic /api/read.php?entity=...
-// (M3.3) — the 3 ledgers above, plus the 4 full-CRUD entities M3.4 built
-// dedicated write endpoints for. 'settings'/'invoices' aren't included:
-// no server endpoint exists for them yet.
+// (M3.3) — the 3 ledgers above, plus the 4 full-CRUD entities that have
+// dedicated write endpoints. 'settings'/'invoices' aren't included here:
+// no client write path exists for them yet, though read.php itself
+// supports them.
 const READABLE_SERVER_KEYS = new Set([
   'absensi', 'sppPayments', 'honorPayments',
   'sekolah', 'trainer', 'siswa', 'cabang',
 ])
-
-// Dedicated write endpoints from M3.4 — full CRUD (action: create/update/
-// delete), NOT append-only, so they go through writeRemote() below
-// (direct call, immediate error feedback) rather than the ledger queue.
-const WRITE_ENDPOINTS = {
-  siswa: '/api/siswa.php',
-  sekolah: '/api/sekolah.php',
-  trainer: '/api/trainer.php',
-  cabang: '/api/cabang.php',
-}
 
 function notifyStoreChanged() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(STORE_EVENT))
@@ -126,6 +117,7 @@ export function getKeys() {
     sppPayments: `${STORE_KEY}_sppPayments`,
     invoices: `${STORE_KEY}_invoices`,
     settings: `${STORE_KEY}_settings`,
+    // M7.1.1 — branch entity, read/written like any other collection.
     cabang: `${STORE_KEY}_cabang`,
   }
 }
@@ -170,13 +162,6 @@ export function readCached(key) {
   return ctx.role && ctx.role !== 'superadmin' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
 }
 
-// UNVERIFIED ASSUMPTION (carried over from before this file was handed to
-// me, not something I introduced): read.php is assumed to accept
-// ?entity=<key> and answer with a bare JSON array. Never confirmed against
-// the actual read.php source — if the real shape differs, every read()
-// call below (old and new) fails closed to readCached() silently, with no
-// visible error. Get read.php's source and cross-check before relying on
-// this in production.
 export async function read(key) {
   if (!READABLE_SERVER_KEYS.has(key)) return readCached(key)
   try {
@@ -225,10 +210,8 @@ export function write(key, records) {
 // (TrainerList, BranchManager, StudentList, ...) call this expecting an
 // immediate return, inside useState initializers and render logic.
 // queueSync() below only fires for LEDGER_KEYS, exactly as before; for
-// the 4 new full-CRUD entities this remains purely local until M4.3
-// rewires those call sites to use writeRemote() instead (or in addition —
-// that coordination is M4.3's decision to make, not resolved here, to
-// avoid the same record getting submitted through two different paths).
+// the 4 full-CRUD entities this remains purely local until real feature
+// components are rewired to call writeRemote() instead (or in addition).
 export function upsert(key, record) {
   const ctx = getRoleContext()
   if (!ctx.role || !isWithinScope(key, record, ctx)) return
@@ -248,40 +231,86 @@ export function upsert(key, record) {
 }
 
 // ============================================
-// DIRECT CRUD — M3.4 full-CRUD entities (siswa/sekolah/trainer/cabang)
+// M4.1 — WRITE ADAPTER UNTUK MASTER-DATA ENTITY
 // ============================================
-// Unlike the ledger queue below, this calls the server immediately and
-// throws ApiError on failure (401/403/409/422) for the caller to handle —
-// matches M4.1's VERIFY line ("403 shows feedback", "409 remains
-// pending/conflicted") much better than a silent background retry would
-// for mutable master data. Nothing calls this yet; wiring real feature
-// components (TrainerList.jsx, BranchManager.jsx, ...) to use it instead
-// of the old local-only upsert() is M4.3's job, not this file's.
-export async function writeRemote(key, action, record) {
+// Beda dari queueSync()/syncPending() di bawah (ledger append-only:
+// absensi, sppPayments, honorPayments) — ini untuk entity yang BISA
+// diedit (trainer, siswa, cabang, sekolah*) lewat server/api/_master.php,
+// yang pakai optimistic concurrency (kolom `version`). Method dipilih
+// dari ada/tidaknya `record.version`: POST = create (belum ada version),
+// PUT = update (kirim version yang terakhir dibaca).
+//
+// *sekolah terdaftar di entityConfig() server tapi server/api/sekolah.php
+// belum ada per pengecekan terakhir — writeRemote('sekolah', ...) akan
+// gagal dengan 404 sampai endpoint itu dibuat.
+const WRITE_ENDPOINTS = {
+  trainer: '/api/trainer.php',
+  siswa: '/api/siswa.php',
+  cabang: '/api/cabang.php',
+  sekolah: '/api/sekolah.php',
+}
+
+// Mengirim satu record ke server. TIDAK throw untuk 409/403 — keduanya
+// adalah hasil bisnis yang wajar (bukan bug), jadi dikembalikan sebagai
+// status terstruktur supaya pemanggil (UI) bisa menampilkan pesan yang
+// tepat tanpa try/catch berlapis:
+//   - { status: 'ok', id, version }                    → tersimpan
+//   - { status: 'conflict', currentVersion, current }  → record berubah
+//     di server sejak terakhir dibaca; TETAP di-treat "pending/conflicted",
+//     bukan ditimpa diam-diam
+//   - { status: 'forbidden', message }                  → authorize() menolak
+// Error lain (mis. 500, network) tetap di-throw sebagai ApiError biasa.
+export async function writeRemote(key, record) {
   const url = WRITE_ENDPOINTS[key]
-  if (!url) throw new Error(`writeRemote: tidak ada endpoint untuk "${key}"`)
+  if (!url) throw new Error(`writeRemote: entitas "${key}" belum punya endpoint server`)
 
-  const result = await apiRequest(url, {
-    method: 'POST',
-    body: { ...record, action },
-  })
-
-  // Server is authoritative (M3.1-M3.4) — merge its response (e.g.
-  // server-derived cabangId, bumped version) into the local cache so
-  // readCached() reflects the true saved state, not just the optimistic
-  // payload that was sent.
-  if (action === 'delete') {
-    writeRaw(key, readRaw(key).filter(r => r.id !== record.id))
-  } else {
+  try {
+    const result = await apiRequest(url, {
+      method: record?.version ? 'PUT' : 'POST',
+      body: record,
+    })
+    // Server is authoritative — merge its response (e.g. server-derived
+    // cabangId, bumped version) into the local cache so readCached()
+    // reflects the true saved state, not just the optimistic payload
+    // that was sent.
     const merged = { ...record, ...result }
     const records = readRaw(key)
     const idx = records.findIndex(r => r.id === merged.id)
     if (idx >= 0) records[idx] = { ...records[idx], ...merged }
     else records.push(merged)
     writeRaw(key, records)
+    notifyStoreChanged()
+    return { status: 'ok', id: result.id, version: result.version }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409) {
+      return {
+        status: 'conflict',
+        currentVersion: error.body?.currentVersion ?? null,
+        current: error.body?.current ?? null,
+      }
+    }
+    if (error instanceof ApiError && error.status === 403) {
+      return { status: 'forbidden', message: error.message }
+    }
+    throw error
   }
-  notifyStoreChanged()
-  return result
+}
+
+export async function deleteRemote(key, id) {
+  const url = WRITE_ENDPOINTS[key]
+  if (!url) throw new Error(`deleteRemote: entitas "${key}" belum punya endpoint server`)
+
+  try {
+    await apiRequest(url, { method: 'DELETE', body: { id } })
+    writeRaw(key, readRaw(key).filter(r => r.id !== id))
+    notifyStoreChanged()
+    return { status: 'ok', id }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) {
+      return { status: 'forbidden', message: error.message }
+    }
+    throw error
+  }
 }
 
 // ============================================
@@ -354,9 +383,7 @@ export async function syncPending() {
 // Best-effort background refresh of the local cache from the server for
 // any READABLE_SERVER_KEYS entity. Never blocks or replaces read() — a
 // failed/offline pull just leaves the existing localStorage cache in
-// place. Fixed from the previous version, which referenced an
-// undefined `SYNC_ENDPOINTS` and would throw a ReferenceError on every
-// call; now reuses the same /api/read.php path as read() itself.
+// place. Reuses the same /api/read.php path as read() itself.
 export async function pullRemote(key) {
   if (!READABLE_SERVER_KEYS.has(key)) return false
   try {
@@ -376,8 +403,7 @@ export async function pullRemote(key) {
 // SETTINGS (settings: { logoUrl, title })
 // ============================================
 // settings is a single object (not an array) under its own v4 key.
-// No server endpoint exists for this yet (M3.4 built siswa/sekolah/
-// trainer/cabang only) — stays localStorage-only for now.
+// No server endpoint exists for this yet — stays localStorage-only for now.
 
 export function getSettings() {
   try {

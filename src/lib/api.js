@@ -10,6 +10,14 @@ export class ApiError extends Error {
   }
 }
 
+// Dipanggil sekali oleh auth.js untuk mendaftarkan reaksi global saat
+// sesi dianggap habis (401) di tengah pemakaian app — BUKAN saat login
+// gagal atau saat bootstrap awal belum pernah login (keduanya lewat
+// skipUnauthorizedHandler: true di pemanggilnya).
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = typeof handler === 'function' ? handler : null
+}
+
 export function setCsrfToken(token) {
   csrfTokenValue = typeof token === 'string' && token ? token : null
 }
@@ -62,6 +70,9 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
+    if (response.status === 401 && !options.skipUnauthorizedHandler && unauthorizedHandler) {
+      unauthorizedHandler()
+    }
     throw new ApiError(body?.error || `Permintaan gagal (${response.status})`, response.status, body)
   }
   return body

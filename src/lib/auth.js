@@ -19,14 +19,17 @@ function notify() {
   listeners.forEach(listener => listener(currentUser))
 }
 
-// Central 401 handling (api.js interceptor) — any apiRequest() call that
-// hits a 401 anywhere in the app, not just bootstrapAuth's own initial
-// check, resets auth state the same way. Registered once at module load.
-setUnauthorizedHandler(() => {
+// M4.1 — dipanggil oleh api.js setiap ada 401 di tengah pemakaian app
+// (bukan saat login gagal / bootstrap awal, keduanya sudah menandai
+// requestnya dengan skipUnauthorizedHandler: true di bawah). Ini yang
+// bikin sesi habis otomatis "kembali ke login" tanpa komponen manapun
+// perlu tahu soal HTTP status.
+function handleUnauthorized() {
   currentUser = null
   clearCsrfToken()
   notify()
-})
+}
+setUnauthorizedHandler(handleUnauthorized)
 
 export function isProductionAuthRequired() {
   return import.meta.env.PROD || import.meta.env.VITE_AUTH_MODE === 'production'
@@ -79,16 +82,19 @@ export function normalizeSafeIdentity(raw) {
 export async function bootstrapAuth() {
   if (!isProductionAuthRequired()) return null
   try {
-    // skipUnauthorizedHandler: this IS the "am I logged in" check itself —
-    // a 401 here is the expected "not logged in yet" case, already handled
-    // right below. Without this flag, the global interceptor would also
-    // fire and call notify() a second time for the same state change.
+    // skipUnauthorizedHandler: true — belum pernah login itu kondisi
+    // normal saat bootstrap awal, bukan "sesi habis".
     const result = await apiRequest('/api/auth/me.php', { method: 'GET', skipCsrf: true, skipUnauthorizedHandler: true })
     currentUser = normalizeSafeIdentity(result.user)
     await getCsrfToken()
   } catch (error) {
     currentUser = null
     clearCsrfToken()
+    // notify() di sini juga (bukan cuma di jalur sukses di bawah) —
+    // kalau error BUKAN 401 (network mati, 500, dst) dan kita rethrow di
+    // bawah, listener tetap harus tahu currentUser sudah direset SEBELUM
+    // exception itu propagate ke pemanggil. Tanpa ini, UI bisa nyangkut
+    // nampilin state lama padahal currentUser internal sudah null.
     notify()
     if (error.status !== 401) throw error
     return currentUser
@@ -101,6 +107,9 @@ export async function login(username, password) {
   const result = await apiRequest('/api/auth/login.php', {
     method: 'POST',
     skipCsrf: true,
+    // skipUnauthorizedHandler: true — 401 di sini berarti kredensial
+    // salah (user memang sedang di form login), bukan sesi habis.
+    skipUnauthorizedHandler: true,
     body: { username, password },
   })
   currentUser = normalizeSafeIdentity(result.user)
@@ -110,25 +119,19 @@ export async function login(username, password) {
 }
 
 export async function logout() {
-  const hadUser = currentUser !== null
-  // Clear local state regardless of whether the server call below
-  // succeeds — logout is a client-side intent the UI should always honor
-  // immediately. A failed request (network down, server unreachable)
-  // shouldn't leave the user stuck looking "logged in" after they asked
-  // to log out; the server session will still expire on its own via
-  // idle/absolute timeout even if this particular request never lands.
+  // M4.1 fix: bersihkan state lokal DULU, baru beritahu server.
+  // Kalau request logout ke server gagal (network/sesi sudah habis
+  // duluan), user tetap dianggap logout di client — tidak "keliatan
+  // masih login" menunggu response yang mungkin tidak pernah datang.
+  const hadUser = Boolean(currentUser)
   currentUser = null
   clearCsrfToken()
   notify()
   if (hadUser) {
     try {
       await apiRequest('/api/auth/logout.php', { method: 'POST', skipUnauthorizedHandler: true })
-    } catch (error) {
-      // Already logged out client-side above; nothing further to roll
-      // back. Surface the failure for callers that want to show a toast
-      // ("logged out locally, but couldn't reach the server") without
-      // blocking the logout itself.
-      throw error
+    } catch {
+      // Best-effort — state lokal sudah bersih di atas.
     }
   }
 }
