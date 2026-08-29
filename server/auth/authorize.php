@@ -84,7 +84,7 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
     if ($role === 'superadmin') return true;
 
     $data ??= [];
-    if (in_array($action, ['restore', 'manage_users', 'manage_branch', 'manage_settings', 'edit_tarif', 'write_honor_payment', 'settle_honor'], true)) {
+    if (in_array($action, ['restore', 'manage_users', 'manage_branch', 'manage_settings', 'manage_backup', 'edit_tarif', 'write_honor_payment', 'settle_honor'], true)) {
         return false;
     }
 

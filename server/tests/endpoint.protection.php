@@ -651,6 +651,115 @@ check('admin B does NOT see branch A invoice', is_array($body) && count(array_fi
 
 $pdo->exec("DELETE FROM invoices WHERE id = '$invRead'");
 
+// swA (used earlier) was already hard-deleted by the siswa.php (delete)
+// section — seed a fresh active siswa so sekolahA has something to bill.
+$swForInvoice = 'sw-invgen-' . uniqid();
+$pdo->prepare("INSERT INTO siswa (id, cabang_id, payload) VALUES (:id, :c, :p)")->execute([
+    ':id' => $swForInvoice,
+    ':c' => $branchA,
+    ':p' => json_encode(['id' => $swForInvoice, 'sekolahId' => $sekolahA, 'status' => 'Aktif', 'nama' => 'Siswa Invoice Test'], JSON_UNESCAPED_UNICODE),
+]);
+
+echo "\n--- invoices-generate.php ---\n";
+$genPeriode = '2032-01'; // far-future, guaranteed clean
+
+[$status] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => $genPeriode, 'uraian' => 'SPP Test']);
+check('anonymous generate -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => $genPeriode, 'uraian' => 'SPP Test'], $cookieAdminA);
+check('generate without CSRF token -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => $genPeriode, 'uraian' => 'SPP Test'], $cookieAdminA, $csrfAdminA);
+check('admin_cabang generate -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => 'bukan-periode', 'uraian' => 'SPP Test'], $cookieSuper, $csrfSuper);
+check('superadmin malformed periode -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => $genPeriode, 'uraian' => '  '], $cookieSuper, $csrfSuper);
+check('superadmin blank uraian -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => $genPeriode, 'uraian' => 'SPP Test', 'cabangId' => 'cbg-does-not-exist'], $cookieSuper, $csrfSuper);
+check('superadmin unknown cabangId filter -> 422', $status === 422, "got $status");
+
+[$status, $genBody] = req('POST', "$base/server/api/invoices-generate.php", ['periode' => $genPeriode, 'uraian' => 'SPP Test', 'cabangId' => $branchA], $cookieSuper, $csrfSuper);
+check('superadmin generate for branch A -> 200', $status === 200, "got $status");
+check('response has generatedCount/skippedCount', isset($genBody['generatedCount'], $genBody['skippedCount']), json_encode($genBody));
+check('generatedCount is 1 (sekolahA has 1 active siswa now)', ($genBody['generatedCount'] ?? null) === 1, json_encode($genBody));
+
+// --- backup-create.php / backup-list.php / backup-download.php --------
+echo "\n--- backup-create.php ---\n";
+[$status] = req('POST', "$base/server/api/backup-create.php");
+check('anonymous create -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/backup-create.php", null, $cookieAdminA, $csrfAdminA);
+check('admin_cabang creating backup -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/backup-create.php", null, $cookieSuper);
+check('superadmin without CSRF token -> 403', $status === 403, "got $status");
+
+$ch = curl_init("$base/server/api/backup-create.php");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CUSTOMREQUEST => 'POST',
+    CURLOPT_HTTPHEADER => ['X-CSRF-Token: ' . $csrfSuper],
+    CURLOPT_COOKIEFILE => $cookieSuper,
+    CURLOPT_CONNECTTIMEOUT => 3,
+    CURLOPT_TIMEOUT => 15,
+]);
+$backupRaw = curl_exec($ch);
+$backupStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+check('superadmin creating backup -> 200', $backupStatus === 200, "got $backupStatus");
+$backupJson = json_decode((string) $backupRaw, true);
+check('backup response has entities key', is_array($backupJson) && isset($backupJson['entities']), json_encode(array_keys((array) $backupJson)));
+check('backup entities include cabang key', is_array($backupJson['entities'] ?? null) && array_key_exists('cabang', $backupJson['entities']), 'missing cabang key');
+
+$backupRow = $pdo->query('SELECT id, checksum FROM backups ORDER BY created_at DESC LIMIT 1')->fetch();
+check('backups table row created', $backupRow !== false);
+$backupId = $backupRow['id'] ?? null;
+check('backup checksum matches downloaded content', $backupId && hash('sha256', $backupRaw) === $backupRow['checksum'], 'mismatch');
+
+$row = auditRow($pdo, 'backup_created', (string) $backupId);
+check('backup_created audit row exists', $row !== false);
+check('backup_created actor_role is superadmin', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+echo "\n--- backup-list.php ---\n";
+[$status] = req('GET', "$base/server/api/backup-list.php");
+check('anonymous list -> 401', $status === 401, "got $status");
+
+[$status] = req('GET', "$base/server/api/backup-list.php", null, $cookieAdminA);
+check('admin_cabang list -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status, $body] = req('GET', "$base/server/api/backup-list.php", null, $cookieSuper);
+check('superadmin list -> 200', $status === 200, "got $status");
+check('created backup appears in list', is_array($body['backups'] ?? null) && count(array_filter($body['backups'], static fn ($r) => ($r['id'] ?? null) === $backupId)) === 1, json_encode($body));
+
+echo "\n--- backup-download.php ---\n";
+[$status] = req('GET', "$base/server/api/backup-download.php?id=$backupId");
+check('anonymous download -> 401', $status === 401, "got $status");
+
+[$status] = req('GET', "$base/server/api/backup-download.php?id=$backupId", null, $cookieAdminA);
+check('admin_cabang download -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('GET', "$base/server/api/backup-download.php", null, $cookieSuper);
+check('superadmin download without id -> 422', $status === 422, "got $status");
+
+[$status] = req('GET', "$base/server/api/backup-download.php?id=bkp-does-not-exist", null, $cookieSuper);
+check('superadmin download unknown id -> 422', $status === 422, "got $status");
+
+$ch = curl_init("$base/server/api/backup-download.php?id=$backupId");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_COOKIEFILE => $cookieSuper,
+    CURLOPT_CONNECTTIMEOUT => 3,
+    CURLOPT_TIMEOUT => 15,
+]);
+$downloadRaw = curl_exec($ch);
+$downloadStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+check('superadmin download -> 200', $downloadStatus === 200, "got $downloadStatus");
+check('downloaded content matches original backup', $downloadRaw === $backupRaw, 'content mismatch');
+
 // --- audit_log: M3.5 ---------------------------------------------------
 echo "\n--- audit_log ---\n";
 
@@ -718,6 +827,91 @@ if ($row) {
     $metadata = json_decode((string) $row['metadata'], true);
     check('sync-path metadata tagged via=sync', ($metadata['via'] ?? null) === 'sync', json_encode($metadata));
 }
+
+$genInvoiceId = $genBody['generated'][0]['id'] ?? null;
+$viaGenerate = $genInvoiceId ? auditRow($pdo, 'invoices_created', $genInvoiceId) : false;
+check('HTTP-triggered generate audit row exists', $viaGenerate !== false, json_encode($genBody));
+if ($viaGenerate) {
+    check('HTTP-triggered generate audit actor_role is superadmin (not "system")', $viaGenerate['actor_role'] === 'superadmin', json_encode($viaGenerate));
+    $viaMetadata = json_decode((string) $viaGenerate['metadata'], true);
+    check('HTTP-triggered generate audit metadata tagged via=generate', ($viaMetadata['via'] ?? null) === 'generate', json_encode($viaMetadata));
+}
+
+// --- restore.php: DESTRUCTIVE — must run LAST, after every other test --
+// This wipes cabang/sekolah/trainer/siswa/absensi/sppPayments/
+// honorPayments/invoices/settings entirely (see restoreFromSnapshot()).
+// Placing this earlier would break every subsequent test that depends on
+// branchA/branchB/sekolahA/sekolahB fixtures.
+echo "\n--- restore.php ---\n";
+
+function reqUpload(string $url, string $fieldName, string $content, string $filename, ?string $cookie = null, ?string $csrfToken = null): array {
+    $tmpFile = tempnam(sys_get_temp_dir(), 'restore_test_');
+    file_put_contents($tmpFile, $content);
+    $ch = curl_init($url);
+    $headers = [];
+    if ($csrfToken !== null) $headers[] = 'X-CSRF-Token: ' . $csrfToken;
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_POSTFIELDS => [$fieldName => new CURLFile($tmpFile, 'application/json', $filename)],
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    if ($cookie) curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+    $raw = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    @unlink($tmpFile);
+    return [$status, json_decode((string) $raw, true)];
+}
+
+$validSnapshot = json_encode([
+    'generatedAt' => date('c'),
+    'entities' => [
+        'cabang' => [['id' => 'cbg-RESTORE-test', 'kode' => 'RST', 'nama' => 'Cabang Restore Test']],
+        'sekolah' => [], 'trainer' => [], 'siswa' => [], 'absensi' => [],
+        'sppPayments' => [], 'honorPayments' => [], 'invoices' => [], 'settings' => [],
+    ],
+]);
+
+[$status] = reqUpload("$base/server/api/restore.php", 'backupFile', $validSnapshot, 'test.json');
+check('anonymous restore -> 401', $status === 401, "got $status");
+
+[$status] = reqUpload("$base/server/api/restore.php", 'backupFile', $validSnapshot, 'test.json', $cookieAdminA, $csrfAdminA);
+check('admin_cabang restore -> 403 (superadmin-only)', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/restore.php", [], $cookieSuper, $csrfSuper);
+check('superadmin restore without file -> 422', $status === 422, "got $status");
+
+[$status] = reqUpload("$base/server/api/restore.php", 'backupFile', 'not valid json{{{', 'test.json', $cookieSuper, $csrfSuper);
+check('superadmin restore malformed JSON -> 422', $status === 422, "got $status");
+
+[$status] = reqUpload("$base/server/api/restore.php", 'backupFile', json_encode(['entities' => ['cabang' => []]]), 'test.json', $cookieSuper, $csrfSuper);
+check('superadmin restore missing entity keys -> 422', $status === 422, "got $status");
+
+[$status, $body] = reqUpload("$base/server/api/restore.php", 'backupFile', $validSnapshot, 'test.json', $cookieSuper, $csrfSuper);
+check('superadmin restore valid snapshot -> 200', $status === 200, "got $status");
+check('counts.cabang is 1', ($body['counts']['cabang'] ?? null) === 1, json_encode($body));
+check('counts.sekolah is 0', ($body['counts']['sekolah'] ?? null) === 0, json_encode($body));
+
+$restoredCabang = $pdo->query("SELECT id FROM cabang WHERE id = 'cbg-RESTORE-test'")->fetch();
+check('restored cabang row exists in DB', $restoredCabang !== false);
+
+$oldBranchCheck = $pdo->prepare('SELECT 1 FROM cabang WHERE id = :id');
+$oldBranchCheck->execute([':id' => $branchA]);
+check('original branchA wiped by restore (confirms hard replace, not merge)', $oldBranchCheck->fetchColumn() === false);
+
+$stmt = $pdo->prepare("SELECT * FROM audit_log WHERE event_type = 'data_restored' ORDER BY id DESC LIMIT 1");
+$stmt->execute();
+$row = $stmt->fetch();
+check('data_restored audit row exists', $row !== false);
+check('data_restored actor_role is superadmin', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+$pdo->exec("DELETE FROM cabang WHERE id = 'cbg-RESTORE-test'");
+// cleanupFixtures() right after this will try to delete branchA/branchB
+// rows that no longer exist post-restore — harmless no-ops.
+
 
 // --- cleanup -----------------------------------------------------------
 cleanupFixtures($pdo, $branchA, $branchB);
