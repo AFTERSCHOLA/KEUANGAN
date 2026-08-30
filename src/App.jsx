@@ -16,7 +16,8 @@ import RolePicker from './features/auth/RolePicker.jsx'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
-import { bootstrapAuth, getCurrentUser, isProductionAuthRequired, logout } from './lib/auth.js'
+import { bootstrapAuth, getCurrentUser, isProductionAuthRequired, logout, subscribeAuth } from './lib/auth.js'
+import LoginPage from './features/auth/LoginPage.jsx'
 
 
 
@@ -89,9 +90,71 @@ function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
-  const [role, setRole] = useState(() => getRoleContext().role)
-  const [trainerId, setTrainerId] = useState(() => getRoleContext().trainerId)
-  const [cabangId, setCabangId] = useState(() => getRoleContext().cabangId)
+  const productionAuth = isProductionAuthRequired()
+  const [authReady, setAuthReady] = useState(!productionAuth)
+  const [role, setRole] = useState(() => productionAuth ? null : getRoleContext().role)
+  const [trainerId, setTrainerId] = useState(() => productionAuth ? null : getRoleContext().trainerId)
+  const [cabangId, setCabangId] = useState(() => productionAuth ? null : getRoleContext().cabangId)
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser())
+
+  useEffect(() => {
+  if (!productionAuth) return
+
+  return subscribeAuth(user => {
+    setCurrentUser(user)
+
+    if (user) {
+      setRole(user.role)
+      setTrainerId(user.trainerId || null)
+      setCabangId(user.cabangId || null)
+    } else {
+      setRole(null)
+      setTrainerId(null)
+      setCabangId(null)
+    }
+  })
+}, [productionAuth])
+
+  useEffect(() => {
+  if (!productionAuth) {
+    setAuthReady(true)
+    return
+  }
+
+  let mounted = true
+
+  bootstrapAuth()
+    .then(user => {
+      if (!mounted) return
+
+      setCurrentUser(user)
+
+      if (user) {
+        setRole(user.role)
+        setTrainerId(user.trainerId || null)
+        setCabangId(user.cabangId || null)
+      } else {
+        setRole(null)
+        setTrainerId(null)
+        setCabangId(null)
+      }
+    })
+    .catch(() => {
+      if (!mounted) return
+
+      setCurrentUser(null)
+      setRole(null)
+      setTrainerId(null)
+      setCabangId(null)
+    })
+    .finally(() => {
+      if (mounted) setAuthReady(true)
+    })
+
+  return () => {
+    mounted = false
+  }
+}, [productionAuth])
 
   // <title> index.html mengikuti judul dari Settings (M-R6.4).
   useEffect(() => {
@@ -142,6 +205,13 @@ export default function App() {
     setUiState({ role: selectedRole, trainerId: selectedTrainerId || null, cabangId: selectedCabangId || null })
     setActiveTab(selectedRole === 'trainer' ? 'rekap' : 'overview')
   }
+
+  function handleAuthenticated(user) {
+  setCurrentUser(user)
+  setRole(user.role)
+  setTrainerId(user.trainerId || null)
+  setCabangId(user.cabangId || null)
+}
 
   // M5.1.2: trainer yang mendarat di tab admin-only (mis. direct load dengan
   // activeTab tersimpan 'keuangan') di-redirect ke dashboard trainer (rekap).
@@ -236,13 +306,31 @@ export default function App() {
     </div>
   )
 
+  if (!authReady) {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-slate-800">
+      <p className="text-sm text-slate-500">Memeriksa sesi...</p>
+    </div>
+  )
+}
+
   if (!role) {
+  if (productionAuth) {
     return (
-      <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
-        <RolePicker onSelect={handleRoleSelected} />
-      </div>
+      <LoginPage onAuthenticated={handleAuthenticated} />
     )
   }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
+      <RolePicker
+        onSelect={handleRoleSelected}
+        onAuthenticated={handleAuthenticated}
+        production={productionAuth}
+      />
+    </div>
+  )
+}
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
@@ -307,7 +395,23 @@ export default function App() {
             {!sidebarCollapsed && 'Pengaturan'}
           </button>
           <button
-            onClick={() => { setRole(null); setTrainerId(null); setCabangId(null); setUiState({ role: null, trainerId: null, cabangId: null }); setActiveTab('overview') }}
+            onClick={async () => {
+  if (productionAuth) {
+    await logout()
+    setCurrentUser(null)
+    setRole(null)
+    setTrainerId(null)
+    setCabangId(null)
+    setActiveTab('overview')
+    return
+  }
+
+  setRole(null)
+  setTrainerId(null)
+  setCabangId(null)
+  setUiState({ role: null, trainerId: null, cabangId: null })
+  setActiveTab('overview')
+}}
             className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
             title={sidebarCollapsed ? 'Ganti Peran' : undefined}
           >

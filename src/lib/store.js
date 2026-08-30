@@ -235,14 +235,8 @@ export function upsert(key, record) {
 // ============================================
 // Beda dari queueSync()/syncPending() di bawah (ledger append-only:
 // absensi, sppPayments, honorPayments) — ini untuk entity yang BISA
-// diedit (trainer, siswa, cabang, sekolah*) lewat server/api/_master.php,
-// yang pakai optimistic concurrency (kolom `version`). Method dipilih
-// dari ada/tidaknya `record.version`: POST = create (belum ada version),
-// PUT = update (kirim version yang terakhir dibaca).
-//
-// *sekolah terdaftar di entityConfig() server tapi server/api/sekolah.php
-// belum ada per pengecekan terakhir — writeRemote('sekolah', ...) akan
-// gagal dengan 404 sampai endpoint itu dibuat.
+// diedit (trainer, siswa, cabang, sekolah) lewat endpoint dedicated
+// masing-masing.
 const WRITE_ENDPOINTS = {
   trainer: '/api/trainer.php',
   siswa: '/api/siswa.php',
@@ -257,17 +251,32 @@ const WRITE_ENDPOINTS = {
 //   - { status: 'ok', id, version }                    → tersimpan
 //   - { status: 'conflict', currentVersion, current }  → record berubah
 //     di server sejak terakhir dibaca; TETAP di-treat "pending/conflicted",
-//     bukan ditimpa diam-diam
+//     bukan ditimpa diam-diam (belum pernah terjadi di server sampai
+//     M5.3 — endpoint sekarang selalu increment version tanpa cek stale,
+//     jadi cabang ini forward-compatible, bukan aktif dipakai)
 //   - { status: 'forbidden', message }                  → authorize() menolak
 // Error lain (mis. 500, network) tetap di-throw sebagai ApiError biasa.
+//
+// PENTING: semua 4 endpoint (trainer/siswa/cabang/sekolah .php) cuma
+// nerima POST, dan create/update/delete dibedain lewat field `action` di
+// body — bukan lewat HTTP method PUT/DELETE (dikonfirmasi lewat
+// endpoint.protection.php, 201 checks, Gate 3). "Update apa belum"
+// ditentukan dari ADA-TIDAKNYA record ini di local store, bukan dari
+// record.version — payload JSON di server nggak pernah nyimpen `version`
+// di dalamnya (itu kolom SQL terpisah, cuma muncul di response), jadi
+// record hasil read()/pullRemote() (bukan dari writeRemote() sebelumnya)
+// nggak akan punya field version dan bakal salah kedeteksi "create" kalau
+// dicek dari situ.
 export async function writeRemote(key, record) {
   const url = WRITE_ENDPOINTS[key]
   if (!url) throw new Error(`writeRemote: entitas "${key}" belum punya endpoint server`)
 
+  const isUpdate = readRaw(key).some(r => r.id === record.id)
+
   try {
     const result = await apiRequest(url, {
-      method: record?.version ? 'PUT' : 'POST',
-      body: record,
+      method: 'POST',
+      body: isUpdate ? { ...record, action: 'update' } : { ...record, action: 'create' },
     })
     // Server is authoritative — merge its response (e.g. server-derived
     // cabangId, bumped version) into the local cache so readCached()
@@ -301,7 +310,7 @@ export async function deleteRemote(key, id) {
   if (!url) throw new Error(`deleteRemote: entitas "${key}" belum punya endpoint server`)
 
   try {
-    await apiRequest(url, { method: 'DELETE', body: { id } })
+    await apiRequest(url, { method: 'POST', body: { id, action: 'delete' } })
     writeRaw(key, readRaw(key).filter(r => r.id !== id))
     notifyStoreChanged()
     return { status: 'ok', id }

@@ -22,6 +22,13 @@ export default defineConfig({
       },
     }),
   ],
+
+  test: {
+    env: {
+      VITE_AUTH_MODE: 'production',
+    },
+  },
+
   server: {
     proxy: {
       '/api': {
