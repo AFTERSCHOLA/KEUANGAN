@@ -1,4 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+// M-AUTH.3: the store now denies readCached()/write() to anonymous
+// callers. Backup export/restore are superadmin-only operations in the
+// shell, so the tests set a superadmin identity via the auth module
+// stub. Production code never calls these functions while anonymous;
+// backup access is already gated by role per the audit findings.
+const superadminIdentity = { id: 'usr-pusat', role: 'superadmin', cabangId: null, trainerId: null, active: true, mustChangePassword: false }
+
+vi.mock('../auth.js', () => ({
+  getSafeIdentityContext: () => globalThis.__BACKUP_IDENTITY__ || null,
+}))
+
 import { getKeys } from '../store.js'
 import {
   BACKUP_VERSION,
@@ -36,6 +48,10 @@ beforeEach(() => {
     removeItem: key => values.delete(key),
     clear: () => values.clear(),
   }
+  // Default: tests run as superadmin. Per-test override possible via
+  // globalThis.__BACKUP_IDENTITY__ = null to verify the new anonymous
+  // short-circuit if needed.
+  globalThis.__BACKUP_IDENTITY__ = superadminIdentity
 })
 
 describe('backup helpers', () => {

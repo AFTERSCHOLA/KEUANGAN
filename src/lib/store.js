@@ -1,4 +1,5 @@
 import { normalizeRole } from './role.js'
+import { getSafeIdentityContext } from './auth.js'
 import { apiRequest, ApiError } from './api.js'
 
 const STORE_KEY = 'afterschola_v4'
@@ -25,47 +26,44 @@ function notifyStoreChanged() {
 
 const UI_STATE_KEY = `${STORE_KEY}_ui`
 
-function readUiRoleState() {
-  try {
-    const json = localStorage.getItem(UI_STATE_KEY)
-    return json ? JSON.parse(json) : {}
-  } catch {
-    return {}
-  }
-}
+// M-AUTH.3: role/cabang/trainer context now comes exclusively from the
+// authenticated server identity (getSafeIdentityContext). The old
+// readUiRoleState() helper — which read role claims from
+// `afterschola_v4_ui` without any server check — is removed. The
+// `afterschola_v4_ui` key is still used for non-sensitive UI preferences
+// (selected period, sidebar collapse, branch filter) but no longer holds
+// identity claims.
 
 function schoolIdsForBranch(cabangId) {
   return new Set(readCollection('sekolah').filter(s => s.cabangId === cabangId).map(s => s.id))
 }
 
-function trainerBranchIds(trainer) {
-  const schools = readCollection('sekolah')
-  return [...new Set((trainer?.sekolahIds || [])
-    .map(id => schools.find(s => s.id === id)?.cabangId)
-    .filter(Boolean))]
-}
-
 export function getRoleContext() {
-  const ui = readUiRoleState()
-  const role = normalizeRole(ui.role)
+  // M-AUTH.3: role/scope must come from the authenticated server identity,
+  // not from localStorage. Anything else is no longer trusted as a security
+  // boundary. When there's no currentUser (anonymous, expired session, or a
+  // pre-auth bootstrap), the context is null and every guarded call below
+  // treats it as "no access".
+  const identity = getSafeIdentityContext()
+  if (!identity || identity.active === false) {
+    return { role: null, trainerId: null, cabangId: null }
+  }
+  const role = normalizeRole(identity.role)
   if (!role) return { role: null, trainerId: null, cabangId: null }
   if (role === 'superadmin') return { role, trainerId: null, cabangId: null }
-
-  const branches = readCollection('cabang')
   if (role === 'admin_cabang') {
-    const cabangId = typeof ui.cabangId === 'string' && branches.some(c => c.id === ui.cabangId)
-      ? ui.cabangId
+    const cabangId = typeof identity.cabangId === 'string' && identity.cabangId !== ''
+      ? identity.cabangId
       : null
     return { role: cabangId ? role : null, trainerId: null, cabangId }
   }
-
-  if (!ui.trainerId) return { role: null, trainerId: null, cabangId: null }
-  const trainer = readCollection('trainer').find(t => t.id === ui.trainerId)
-  const branchIds = trainerBranchIds(trainer)
-  const cabangId = typeof ui.cabangId === 'string' && branchIds.includes(ui.cabangId)
-    ? ui.cabangId
-    : branchIds.length === 1 ? branchIds[0] : null
-  return { role, trainerId: ui.trainerId, cabangId }
+  if (role === 'trainer') {
+    const trainerId = typeof identity.trainerId === 'string' && identity.trainerId !== ''
+      ? identity.trainerId
+      : null
+    return { role: trainerId ? role : null, trainerId, cabangId: null }
+  }
+  return { role: null, trainerId: null, cabangId: null }
 }
 
 function isWithinScope(key, record, ctx) {
@@ -157,12 +155,23 @@ export function setMigrationState(migrations) {
 }
 
 export function readCached(key) {
-  const parsed = readCollection(key)
+  // M-AUTH.3: anonymous callers (no authenticated server identity) get
+  // an empty list for any entity. Previously this returned whatever
+  // localStorage happened to hold — which leaked the last logged-in
+  // user's records to anyone with a stale browser profile, and let a
+  // forged `afterschola_v4_ui.role` claim drive isWithinScope() below.
   const ctx = getRoleContext()
-  return ctx.role && ctx.role !== 'superadmin' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
+  if (!ctx.role) return []
+  const parsed = readCollection(key)
+  return ctx.role !== 'superadmin' ? parsed.filter(r => isWithinScope(key, r, ctx)) : parsed
 }
 
 export async function read(key) {
+  // M-AUTH.3: anonymous callers don't get to read protected entities,
+  // not even from local cache. There's no server authority backing the
+  // request, so any value returned would be unauthenticated disclosure.
+  const ctx = getRoleContext()
+  if (!ctx.role) return []
   if (!READABLE_SERVER_KEYS.has(key)) return readCached(key)
   try {
     const remote = await apiRequest(`/api/read.php?entity=${encodeURIComponent(key)}`, { method: 'GET' })
@@ -170,11 +179,24 @@ export async function read(key) {
     writeRaw(key, remote)
     notifyStoreChanged()
     return readCached(key)
-  } catch {
-    // Offline, expired session (401 already handled by api.js's
-    // interceptor — auth state is reset by the time we get here), or a
-    // server error: fall back to whatever's in the local cache rather
-    // than surfacing a hard failure for a read.
+  } catch (error) {
+    // 401 means the session is gone (api.js's unauthorized handler has
+    // already cleared currentUser). Wipe the protected cache so a
+    // stale browser profile doesn't keep showing the previous user's
+    // records on the next reload. Per the production plan: cache
+    // ownership is bound to the authenticated identity; without one
+    // there's nothing to keep.
+    if (error instanceof ApiError && error.status === 401) {
+      writeRaw(key, [])
+      notifyStoreChanged()
+      return []
+    }
+    // Anything else — network failure, 5xx — leaves the user offline
+    // with whatever they already had; that's the existing local-first
+    // behavior the shell relies on for the sync button. Either way,
+    // we do NOT surface the previous user's data to a now-anonymous
+    // caller (readCached() will return [] for them via the no-role
+    // short-circuit above).
     return readCached(key)
   }
 }
@@ -190,9 +212,13 @@ export async function hydrateServerData() {
 }
 
 export function write(key, records) {
+  // M-AUTH.3: anonymous callers cannot mutate any collection. The old
+  // superadmin short-circuit (any record accepted) is preserved so the
+  // production login flow still works once the identity is established.
   const ctx = getRoleContext()
   if (!Array.isArray(records)) return
-  if (!ctx.role || ctx.role === 'superadmin') {
+  if (!ctx.role) return
+  if (ctx.role === 'superadmin') {
     writeRaw(key, records)
     notifyStoreChanged()
     return
@@ -212,6 +238,9 @@ export function write(key, records) {
 // queueSync() below only fires for LEDGER_KEYS, exactly as before; for
 // the 4 full-CRUD entities this remains purely local until real feature
 // components are rewired to call writeRemote() instead (or in addition).
+//
+// M-AUTH.3: anonymous callers (no role context) and out-of-scope records
+// are now both no-ops, so an empty identity cannot create rows.
 export function upsert(key, record) {
   const ctx = getRoleContext()
   if (!ctx.role || !isWithinScope(key, record, ctx)) return

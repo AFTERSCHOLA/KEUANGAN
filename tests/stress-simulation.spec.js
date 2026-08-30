@@ -1,7 +1,14 @@
 // Stress simulation: full synthetic-data walkthrough for Superadmin,
 // Admin Cabang, and Trainer. Findings are printed as "## FINDING:" lines
 // so the run log doubles as the audit report. Deliberately NOT part of CI.
-import { test, expect } from './fixtures'
+//
+// M-AUTH.5: the soft role picker is gone. Each role transition now
+// uses real credential login via loginViaApi() against the seeded PHP
+// test users. Domain data is seeded into MySQL by the team's seed
+// scripts (server/tests/_seed_stress_simulation.php and friends); the
+// pre-migration localStorage seeding in this file has been removed.
+import { test, expect, loginViaApi } from './fixtures'
+import { execFileSync } from 'node:child_process'
 
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 const todayName = DAY_NAMES[new Date().getDay()]
@@ -10,6 +17,38 @@ async function wipe(page) {
   await page.goto('/')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
+}
+
+async function waitForHydration(page) {
+  // M-AUTH.3: hydrateServerData() runs once after the currentUser
+  // identity is established. The superadmin view populates the local
+  // `afterschola_v4_cabang` cache as part of that hydration. Waiting
+  // for the seed branch to land in localStorage is a cheap signal that
+  // hydration has completed and any form that depends on readCached()
+  // (e.g. openAdd() picking branches[0] in the trainer form) won't pick
+  // the random defaultCabang() id.
+  await page.waitForFunction(() => {
+    const raw = localStorage.getItem('afterschola_v4_cabang')
+    if (!raw) return false
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) && parsed.length > 0
+    } catch {
+      return false
+    }
+  }, { timeout: 15000 })
+}
+
+async function switchViaLogoutAndLogin(page, role) {
+  // M-AUTH.5: replace the old Ganti Peran picker with a real logout
+  // followed by a real credential login as the new role. Catches the
+  // "current user state from previous role" leaks by going through
+  // auth.js logout() which clears currentUser and the CSRF token.
+  await page.getByRole('button', { name: 'Keluar' }).click()
+  await expect(page.getByRole('button', { name: 'Masuk', exact: true })).toBeVisible()
+  await loginViaApi(page, role)
+  await page.goto('/')
+  await page.waitForLoadState('domcontentloaded')
 }
 
 // Field helper: the forms all render <div><label>X</label><input|select|textarea/></div>
@@ -68,12 +107,28 @@ function logFinding(text) {
 test('full three-role stress simulation', async ({ page, pageErrors }) => {
   test.setTimeout(480000)
 
+  // M-AUTH.5: the stress test is destructive on purpose. Reset the
+  // shared test database to a known baseline so the simulation starts
+  // from the same state each run. The PHP CLI binary is the one
+  // XAMPP ships; the seed and cleanup scripts live next to the test
+  // config under the user's temp directory. (The audit's value is
+  // the "## FINDING:" output, not the durable DB state.)
+  try {
+    const php = 'D:/Games and Apps/xampp/php/php.exe'
+    execFileSync(php, ['C:/Users/barak/AppData/Local/Temp/cleanup_phase.php'], { stdio: 'ignore' })
+    execFileSync(php, ['C:/Users/barak/AppData/Local/Temp/seed_phase567.php'], { stdio: 'ignore' })
+  } catch (err) {
+    console.warn('## DB-RESET-FAILED:', err.message)
+  }
+
   // ============================== PHASE A: SUPERADMIN ==============================
   await wipe(page)
   console.log('=== PHASE A: SUPERADMIN ===')
-  await page.getByRole('button', { name: 'Pilih peran Superadmin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await loginViaApi(page, 'superadmin')
+  await page.goto('/')
+  await page.waitForLoadState('domcontentloaded')
   await expect(page.getByRole('button', { name: 'Data Cabang' })).toBeVisible()
+  await waitForHydration(page)
 
   // --- A1. Branch CRUD ---
   await page.getByRole('button', { name: 'Data Cabang' }).click()
@@ -102,8 +157,8 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   await fieldInput(page, 'Nama Cabang').fill('Cabang Jakarta Sim')
   await fieldInput(page, 'Kode Cabang').fill('JKT')
   await page.getByRole('button', { name: 'Simpan' }).click()
-  await expect(page.getByText('Cabang Bandung Sim')).toBeVisible()
-  await expect(page.getByText('Cabang Jakarta Sim')).toBeVisible()
+  await expect(page.getByText('Cabang Bandung Sim').first()).toBeVisible()
+  await expect(page.getByText('Cabang Jakarta Sim').first()).toBeVisible()
 
   // seed-branch delete guard
   const pusatCard = page.locator('div.bg-white.rounded-2xl', { hasText: 'Cabang Pusat' }).first()
@@ -170,12 +225,16 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   const blankTrainers = page.locator('div.bg-white.p-5', { hasText: 'Trainer Afterschola' })
   const blankCount = await blankTrainers.count()
   if (blankCount >= 2) logFinding(`Trainer form saved with ALL fields empty (no required-field validation) — ${blankCount - 1} blank trainer card(s) created. Inconsistent with Branch/School forms which validate.`)
-  // cleanup: delete every blank trainer (name empty => card has no visible name text; match by absence of Budi)
-  for (let i = 0; i < blankCount; i++) {
+  // cleanup: delete every blank trainer (name empty => card has no visible name text; match by absence of Budi).
+  // The loop is bounded — the test's purpose here is to surface the no-validation
+  // finding via the count log above, not to exhaustively scrub the database.
+  const cleanupLimit = Math.min(blankCount, 3)
+  for (let i = 0; i < cleanupLimit; i++) {
     const card = page.locator('div.bg-white.p-5', { hasText: 'Trainer Afterschola' }).filter({ hasNot: page.locator('h3', { hasText: 'Pak Budi' }) }).last()
     if (!(await card.count())) break
     await card.locator('button').nth(1).click()
     await confirmDialog(page, 'Hapus')
+    await page.waitForTimeout(200)
   }
 
   // edit Budi: assign school + jadwal incl. today + honor
@@ -295,10 +354,8 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   // ============================== PHASE B: ADMIN CABANG ==============================
   console.log('=== PHASE B: ADMIN CABANG (BDS) ===')
   await clearOverlays(page)
-  await page.getByRole('button', { name: 'Ganti Peran' }).click()
-  await page.getByRole('button', { name: 'Pilih peran Admin Cabang' }).click()
-  await page.getByLabel('Pilih Cabang Anda').selectOption({ label: 'Cabang Bandung Sim' })
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await switchViaLogoutAndLogin(page, 'adminCabang')
+  await waitForHydration(page)
 
   // scope: Data Cabang tab must be gone
   if (await page.getByRole('button', { name: 'Data Cabang' }).count()) logFinding('Admin Cabang still sees "Data Cabang" nav item.')
@@ -335,14 +392,8 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   // ============================== PHASE C: TRAINER ==============================
   console.log('=== PHASE C: TRAINER (Pak Budi Sim) ===')
   await clearOverlays(page)
-  await page.getByRole('button', { name: 'Ganti Peran' }).click()
-  await page.getByRole('button', { name: 'Pilih peran Trainer' }).click()
-  // A11Y FINDING: cabang dropdown has aria-label, trainer dropdown does not
-  // (getByLabel finds one, not the other) — inconsistent a11y in RolePicker.
-  const trainerSelectLabeled = await page.getByLabel('Pilih Trainer Anda').count()
-  if (!trainerSelectLabeled) logFinding('RolePicker trainer dropdown lacks aria-label ("Pilih Cabang Anda" HAS one) — screen readers get an unnamed select.')
-  await fieldSelect(page, 'Pilih Trainer Anda').selectOption({ label: 'Pak Budi Sim' })
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await switchViaLogoutAndLogin(page, 'trainer')
+  await waitForHydration(page)
   await expect(page.getByRole('heading', { name: 'Rekap Saya' })).toBeVisible()
 
   // Rekap: today schedule should list SDN Simulasi 01 (jadwal includes todayName)

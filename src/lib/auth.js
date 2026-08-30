@@ -39,6 +39,15 @@ export function getCurrentUser() {
   return currentUser
 }
 
+// M-AUTH.3: a read-only accessor other modules (store, role context) can
+// use to learn who the logged-in user is, WITHOUT re-reading localStorage
+// (which the old role-picker flow used to claim role/cabang/trainer from
+// without credentials). Returns the same allowlisted shape produced by
+// normalizeSafeIdentity(), or null when there's no authenticated session.
+export function getSafeIdentityContext() {
+  return currentUser
+}
+
 export function subscribeAuth(listener) {
   listeners.add(listener)
   return () => listeners.delete(listener)

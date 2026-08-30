@@ -6,7 +6,7 @@ Afterschola is locally testable today and cPanel is the deployment target, not a
 
 The first production release includes CRUD for operational entities, attendance capture and verification, SPP and honor ledgers, reports, branch scope, backup/restore, the PWA shell, secure login, server-side RBAC, audit logging, migration/reconciliation, staging deployment, and a rehearsed rollback. Real-time updates, soft-delete/trash, flexible honor matrices without an approved business case, and self-service email password reset are outside this release.
 
-Soft-login is available only in explicit development/test mode. A production build must fail closed and cannot unlock protected screens from localStorage role state alone.
+Soft-login is no longer used in any build. A single username + password form is the only entry point; tests sign in through the API via `loginViaApi()` in `tests/fixtures.js` against the seeded PHP test users. A production build must fail closed and cannot unlock protected screens from localStorage role state alone.
 
 ## 2. System topology
 

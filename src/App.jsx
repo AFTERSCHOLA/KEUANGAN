@@ -11,13 +11,13 @@ import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
-import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData, getRoleContext } from './lib/store'
-import RolePicker from './features/auth/RolePicker.jsx'
+import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
-import { bootstrapAuth, getCurrentUser, isProductionAuthRequired, logout, subscribeAuth } from './lib/auth.js'
+import { bootstrapAuth, getCurrentUser, logout, subscribeAuth } from './lib/auth.js'
 import LoginPage from './features/auth/LoginPage.jsx'
+import MustChangePasswordPage from './features/auth/MustChangePasswordPage.jsx'
 
 
 
@@ -90,16 +90,13 @@ function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
-  const productionAuth = isProductionAuthRequired()
-  const [authReady, setAuthReady] = useState(!productionAuth)
-  const [role, setRole] = useState(() => productionAuth ? null : getRoleContext().role)
-  const [trainerId, setTrainerId] = useState(() => productionAuth ? null : getRoleContext().trainerId)
-  const [cabangId, setCabangId] = useState(() => productionAuth ? null : getRoleContext().cabangId)
+  const [authReady, setAuthReady] = useState(false)
+  const [role, setRole] = useState(null)
+  const [trainerId, setTrainerId] = useState(null)
+  const [cabangId, setCabangId] = useState(null)
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser())
 
   useEffect(() => {
-  if (!productionAuth) return
-
   return subscribeAuth(user => {
     setCurrentUser(user)
 
@@ -113,14 +110,9 @@ export default function App() {
       setCabangId(null)
     }
   })
-}, [productionAuth])
+}, [])
 
   useEffect(() => {
-  if (!productionAuth) {
-    setAuthReady(true)
-    return
-  }
-
   let mounted = true
 
   bootstrapAuth()
@@ -154,7 +146,7 @@ export default function App() {
   return () => {
     mounted = false
   }
-}, [productionAuth])
+}, [])
 
   // <title> index.html mengikuti judul dari Settings (M-R6.4).
   useEffect(() => {
@@ -172,9 +164,18 @@ export default function App() {
   useEffect(() => {
     const refreshSync = () => setSyncStatus(getSyncStatus())
     const unsubscribe = subscribeStore(refreshSync)
-    hydrateServerData().then(refreshSync)
+    // M-AUTH.3: hydrate ONLY when an identity is present. An anonymous
+    // bootstrap must not pull protected records, and the listener below
+    // is what calls hydrateServerData() the first time a login lands.
     return unsubscribe
   }, [])
+
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    hydrateServerData().then(() => { if (!cancelled) setSyncStatus(getSyncStatus()) })
+    return () => { cancelled = true }
+  }, [currentUser?.id])
 
   async function handleSync() {
     setSyncing(true)
@@ -196,14 +197,6 @@ export default function App() {
       setUiState({ sidebarCollapsed: next })
       return next
     })
-  }
-
-  function handleRoleSelected({ role: selectedRole, trainerId: selectedTrainerId, cabangId: selectedCabangId }) {
-    setRole(selectedRole)
-    setTrainerId(selectedTrainerId || null)
-    setCabangId(selectedCabangId || null)
-    setUiState({ role: selectedRole, trainerId: selectedTrainerId || null, cabangId: selectedCabangId || null })
-    setActiveTab(selectedRole === 'trainer' ? 'rekap' : 'overview')
   }
 
   function handleAuthenticated(user) {
@@ -315,22 +308,18 @@ export default function App() {
 }
 
   if (!role) {
-  if (productionAuth) {
-    return (
-      <LoginPage onAuthenticated={handleAuthenticated} />
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
-      <RolePicker
-        onSelect={handleRoleSelected}
-        onAuthenticated={handleAuthenticated}
-        production={productionAuth}
-      />
-    </div>
+    <LoginPage onAuthenticated={handleAuthenticated} />
   )
 }
+
+  // M-AUTH.4: server returned mustChangePassword=true. Block the
+  // dashboard until the user sets a new password. The changePassword()
+  // call in MustChangePasswordPage flips the flag via subscribeAuth and
+  // re-renders the dashboard automatically.
+  if (currentUser?.mustChangePassword) {
+    return <MustChangePasswordPage />
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
@@ -396,29 +385,20 @@ export default function App() {
           </button>
           <button
             onClick={async () => {
-  if (productionAuth) {
-    await logout()
-    setCurrentUser(null)
-    setRole(null)
-    setTrainerId(null)
-    setCabangId(null)
-    setActiveTab('overview')
-    return
-  }
-
+  await logout()
+  setCurrentUser(null)
   setRole(null)
   setTrainerId(null)
   setCabangId(null)
-  setUiState({ role: null, trainerId: null, cabangId: null })
   setActiveTab('overview')
 }}
-            className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
-            title={sidebarCollapsed ? 'Ganti Peran' : undefined}
+            className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
+            title={sidebarCollapsed ? 'Keluar' : undefined}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
             </svg>
-            {!sidebarCollapsed && 'Ganti Peran'}
+            {!sidebarCollapsed && 'Keluar'}
           </button>
         </div>
       </aside>

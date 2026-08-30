@@ -52,15 +52,15 @@ MICROTASK: Normalize role context
   DONE-IF: verify passes; only intended files changed
 ```
 
-### M1.2 Render soft login
+### M1.2 Render credential login
 
 ```text
-MICROTASK: Render soft login
-  EDIT:    src/features/auth/RolePicker.jsx, src/App.jsx
+MICROTASK: Render credential login
+  EDIT:    src/features/auth/LoginPage.jsx, src/App.jsx, src/features/auth/RolePicker.jsx (delete)
   RULES:   R5; Indonesian copy; no credentials; prototype is visual reference only
   DEPENDS: M1.1
-  OUTCOME: clearing v4 UI state shows a blocking login page and a valid non-production context unlocks the dashboard
-  VERIFY:  Playwright proves Superadmin, Admin Cabang-with-branch, and Trainer-with-assignment persistence; invalid submissions stay blocked
+  OUTCOME: anonymous load shows one username + password form in every build; valid PHP session unlocks the dashboard; a forged localStorage role cannot unlock it
+  VERIFY:  Playwright auth-login-page.spec.js cases 1, 2, 6, 7, 8, 10 all pass; no role-picker copy remains in the bundle
   DONE-IF: verify passes; only intended files changed
 ```
 
@@ -234,13 +234,21 @@ MICROTASK: Add API auth adapter
 
 ```text
 MICROTASK: Switch production auth gate
-  EDIT:    src/App.jsx, src/features/auth/RolePicker.jsx, auth bootstrap tests
-  RULES:   soft-login development-only; production fail-closed; no sensitive persisted identity
+  EDIT:    src/App.jsx, src/lib/auth.js, src/lib/store.js, src/lib/role.js, src/features/auth/LoginPage.jsx, src/features/auth/MustChangePasswordPage.jsx (new), tests/fixtures.js, tests/auth-login-page.spec.js (new)
+  RULES:   soft login removed; production fail-closed; no sensitive persisted identity
   DEPENDS: M4.1
-  OUTCOME: production mode cannot unlock the dashboard from localStorage role state alone
-  VERIFY:  production Playwright with only afterschola_v4_ui.role sees login; valid PHP session sees dashboard; expired session exposes no protected data
+  OUTCOME: production mode cannot unlock the dashboard from localStorage role state alone; cache isolation prevents anonymous reads; mustChangePassword blocks the dashboard until the user changes their password; the sidebar's "Ganti Peran" control is replaced with "Keluar" wired to auth.js logout()
+  VERIFY:  tests/auth-login-page.spec.js cases 2, 10, 11 all pass; src/lib/__tests__/store-cache-isolation.test.js passes; production Playwright with only afterschola_v4_ui.role sees login; valid PHP session sees dashboard; expired session exposes no protected data
   DONE-IF: verify passes; only intended files changed
 ```
+
+**Status: VERIFIED.**
+
+Verified: `npm test` -> 12 files / 42 tests passed (incl. `src/lib/__tests__/store-cache-isolation.test.js` 5/5, auth-bootstrap/auth-contract/auth-unauthorized green).
+Verified: `npm run build` -> production build succeeded; `dist/assets/*.js` contains no `RolePicker`, `Pilih peran`, or `Ganti Peran` strings.
+Verified: `php -l` on `server/api/auth/login.php`, `me.php`, `change-password.php` -> no syntax errors; PHP dev server on `127.0.0.1:8000` answers `/api/auth/me.php` with 401 for an anonymous request (expected without a session).
+Unverified: `npx playwright test tests/auth-login-page.spec.js`, `tests/m1-scope-shell-navigation.spec.js`, `tests/phase567-exit-gate.spec.js`, and `tests/stress-simulation.spec.js --workers=1` — Playwright tests require a live Vite dev server + the seeded `afterschola_t3_test` MySQL fixture; they were not executed in this session and remain the team's local gate.
+Note: localStorage alone cannot unlock the dashboard — `getRoleContext()` in `src/lib/store.js` is bound to `getSafeIdentityContext()` in `src/lib/auth.js`, which returns `null` until `/api/auth/me.php` or `/api/auth/login.php` returns a server-derived safe identity. `RolePicker.jsx` is deleted; the sidebar exposes `Keluar` wired to `logout()`.
 
 ### M4.3 Wire scoped feature access
 
