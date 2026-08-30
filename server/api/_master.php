@@ -3,9 +3,19 @@ declare(strict_types=1);
 // Helper bersama untuk 4 entity master-data yang BISA diedit (sekolah,
 // trainer, siswa, cabang) — beda dari insertLedger() di bootstrap.php yang
 // append-only. Pakai optimistic concurrency lewat kolom `version` di schema
-// (yang sebelumnya nganggur, gak dipakai) — inilah yang bikin semantik 409
-// "record sudah diubah pihak lain" (M4.1 VERIFY) beneran ada, bukan silent
-// overwrite.
+// — inilah yang bikin semantik 409 "record sudah diubah pihak lain" (M4.1
+// VERIFY) beneran ada, bukan silent overwrite.
+//
+// SECURITY FIX (ditambahkan setelah ditemukan hilang total di versi asli):
+// requireCsrf() dan auditEvent() sebelumnya TIDAK PERNAH dipanggil di
+// masterWrite()/masterDelete() maupun di file pemanggilnya (siswa.php dkk).
+// Ini regresi nyata dari kontrak M3.1/G0.2 yang sudah ditest 199+ checks
+// lolos sebelumnya. requireCsrf() ditaruh di baris pertama tiap fungsi
+// (sebelum apa pun yang state-changing dieksekusi), auditEvent() ditaruh
+// di tiap titik keberhasilan (create/update/delete) dengan nama event yang
+// SAMA PERSIS dengan yang sudah diverifikasi endpoint.protection.php
+// sebelumnya ({entity}_created/_updated/_deleted) supaya test lama tetap
+// bisa memverifikasi audit trail-nya tanpa perlu ganti nama event.
 
 function masterFetch(PDO $pdo, string $table, string $id): ?array {
     $stmt = $pdo->prepare("SELECT id, cabang_id, version, payload FROM {$table} WHERE id = :id");
@@ -22,6 +32,10 @@ function masterFetch(PDO $pdo, string $table, string $id): ?array {
 }
 
 function masterWrite(string $entity, array $user, bool $isCabang = false, ?array $record = null, array $overrides = []): never {
+    // FIX: was completely missing. Every other state-changing endpoint in
+    // this codebase calls this before touching the DB — this one didn't.
+    requireCsrf();
+
     $config = entityConfig($entity);
     $pdo = database();
     $record ??= requestJson();
@@ -34,13 +48,13 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     }
     $id = trim($record['id']);
 
-
     $cabangId = $isCabang ? $id : (isset($record['cabangId']) && is_string($record['cabangId']) ? trim($record['cabangId']) : null);
     if (!$isCabang && $entity !== 'trainer' && ($cabangId === null || $cabangId === '')) {
         jsonResponse(['error' => 'Record membutuhkan cabangId'], 422);
     }
 
     $existing = masterFetch($pdo, $config['table'], $id);
+    $wasCreate = $existing === null;
 
     // Cek authorize() dua kali kalau ini update: terhadap cabang LAMA (gak
     // boleh sentuh record yang bukan milikmu) DAN cabang BARU (gak boleh
@@ -66,7 +80,6 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
         $newVersion = 1;
         $sql = $isCabang
             ? "INSERT INTO {$config['table']} (id, version, payload) VALUES (:id, :version, :payload)"
-
             : "INSERT INTO {$config['table']} (id, cabang_id, version, payload) VALUES (:id, :cabang_id, :version, :payload)";
         try {
             $stmt = $pdo->prepare($sql);
@@ -77,6 +90,11 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
             if (isDuplicate($e)) jsonResponse(['error' => 'ID sudah dipakai, coba lagi'], 409);
             jsonResponse(['error' => 'Gagal menyimpan record'], 500);
         }
+        // FIX: was completely missing — this is why cabang_created/
+        // trainer_created/siswa_created rows vanished from audit_log.
+        auditEvent("{$entity}_created", $user, $entity, $id, array_filter([
+            'cabangId' => $isCabang ? null : $cabangId,
+        ]));
         jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion], 201);
     }
 
@@ -99,7 +117,6 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
 
     if ($stmt->rowCount() === 0) {
         // Ada request lain yang menang race antara SELECT dan UPDATE ini.
-
         $latest = masterFetch($pdo, $config['table'], $id);
         jsonResponse([
             'error' => 'Konflik versi — record sudah diubah pihak lain',
@@ -108,10 +125,17 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
         ], 409);
     }
 
+    // FIX: was completely missing.
+    auditEvent("{$entity}_updated", $user, $entity, $id, array_filter([
+        'cabangId' => $isCabang ? null : $cabangId,
+    ]));
     jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion], 200);
 }
 
 function masterDelete(string $entity, array $user, bool $isCabang = false): never {
+    // FIX: was completely missing.
+    requireCsrf();
+
     $config = entityConfig($entity);
     $pdo = database();
     $body = requestJson();
@@ -130,5 +154,10 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
 
     $stmt = $pdo->prepare("DELETE FROM {$config['table']} WHERE id = :id");
     $stmt->execute([':id' => $id]);
+
+    // FIX: was completely missing.
+    auditEvent("{$entity}_deleted", $user, $entity, $id, array_filter([
+        'cabangId' => $isCabang ? null : $existing['cabangId'],
+    ]));
     jsonResponse(['ok' => true, 'id' => $id]);
 }

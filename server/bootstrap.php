@@ -52,15 +52,14 @@ function entityConfig(string $entity): array {
         'absensi' => ['table' => 'absensi', 'path' => 'absensi.php'],
         'sppPayments' => ['table' => 'spp_payments', 'path' => 'sppPayments.php'],
         'honorPayments' => ['table' => 'honor_payments', 'path' => 'honorPayments.php'],
-<<<<<<< HEAD
-        'settings' => ['table' => 'settings'],   // <-- tambahin ini
-        'invoices' => ['table' => 'invoices'],
-=======
+        
+        'settings' => ['table' => 'settings', 'path' => 'settings.php'],
+        'invoices' => ['table' => 'invoices', 'path' => 'invoices.php'],
         'sekolah' => ['table' => 'sekolah', 'path' => 'sekolah.php'],
         'trainer' => ['table' => 'trainer', 'path' => 'trainer.php'],
         'siswa' => ['table' => 'siswa', 'path' => 'siswa.php'],
         'cabang' => ['table' => 'cabang', 'path' => 'cabang.php'],
->>>>>>> d24e54d (Gate 4 M.4.1 Add API/auth adapter)
+        
     ];
     if (!isset($config[$entity])) jsonResponse(['error' => 'Entity tidak didukung'], 400);
     return $config[$entity];

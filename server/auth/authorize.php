@@ -97,20 +97,15 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         if ($resource === 'cabang' && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
             return false;
         }
-<<<<<<< HEAD
-        // Honor payments: Admin Cabang is read-only (matrix: "Read own trainers").
-        // Invoices: Admin Cabang is read-only (matrix: "View/print own branch").
-        // Audit log: Admin Cabang is read-only (matrix section 5) — mutation must
-        // never be attributable to a branch admin choosing what gets logged.
-=======
+
         // Audit log: matrix section 5 — Admin Cabang is "Own branch read-only".
         // Same treatment as honorPayments/invoices: read allowed via the normal
         // branch-scoped read path below, mutation blocked here regardless of
         // branch ownership so a matching cabangId can't be used to write/delete.
->>>>>>> d24e54d (Gate 4 M.4.1 Add API/auth adapter)
         if (in_array($resource, ['honorPayments', 'invoices', 'audit_log'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
             return false;
         }
+        
         if ($action === 'read') return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
         if (in_array($action, ['create', 'update', 'delete', 'write', 'verify'], true)) {
             return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
