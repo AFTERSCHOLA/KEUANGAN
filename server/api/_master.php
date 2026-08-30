@@ -18,7 +18,8 @@ declare(strict_types=1);
 // bisa memverifikasi audit trail-nya tanpa perlu ganti nama event.
 
 function masterFetch(PDO $pdo, string $table, string $id): ?array {
-    $stmt = $pdo->prepare("SELECT id, cabang_id, version, payload FROM {$table} WHERE id = :id");
+    $branchColumn = $table === 'cabang' ? 'NULL AS cabang_id' : 'cabang_id';
+    $stmt = $pdo->prepare("SELECT id, {$branchColumn}, version, payload FROM {$table} WHERE id = :id");
     $stmt->execute([':id' => $id]);
     $row = $stmt->fetch();
     if (!$row) return null;
@@ -31,7 +32,7 @@ function masterFetch(PDO $pdo, string $table, string $id): ?array {
     ];
 }
 
-function masterWrite(string $entity, array $user, bool $isCabang = false, ?array $record = null, array $overrides = []): never {
+function masterWrite(string $entity, array $user, bool $isCabang = false, ?array $record = null, array $overrides = [], string $action = 'create'): never {
     // FIX: was completely missing. Every other state-changing endpoint in
     // this codebase calls this before touching the DB — this one didn't.
     requireCsrf();
@@ -54,7 +55,9 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     }
 
     $existing = masterFetch($pdo, $config['table'], $id);
-    $wasCreate = $existing === null;
+    if ($action === 'update' && $existing === null) {
+        jsonResponse(['error' => 'Record tidak ditemukan'], 422);
+    }
 
     // Cek authorize() dua kali kalau ini update: terhadap cabang LAMA (gak
     // boleh sentuh record yang bukan milikmu) DAN cabang BARU (gak boleh
@@ -79,12 +82,17 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     if ($existing === null) {
         $newVersion = 1;
         $sql = $isCabang
-            ? "INSERT INTO {$config['table']} (id, version, payload) VALUES (:id, :version, :payload)"
+            ? "INSERT INTO {$config['table']} (id, kode, nama, version, payload) VALUES (:id, :kode, :nama, :version, :payload)"
             : "INSERT INTO {$config['table']} (id, cabang_id, version, payload) VALUES (:id, :cabang_id, :version, :payload)";
         try {
             $stmt = $pdo->prepare($sql);
             $params = [':id' => $id, ':version' => $newVersion, ':payload' => $payloadJson];
-            if (!$isCabang) $params[':cabang_id'] = $cabangId;
+            if ($isCabang) {
+                $params[':kode'] = $record['kode'];
+                $params[':nama'] = $record['nama'];
+            } else {
+                $params[':cabang_id'] = $cabangId;
+            }
             $stmt->execute($params);
         } catch (PDOException $e) {
             if (isDuplicate($e)) jsonResponse(['error' => 'ID sudah dipakai, coba lagi'], 409);
@@ -95,7 +103,7 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
         auditEvent("{$entity}_created", $user, $entity, $id, array_filter([
             'cabangId' => $isCabang ? null : $cabangId,
         ]));
-        jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion], 201);
+        jsonResponse(array_merge($record, ['ok' => true, 'id' => $id, 'version' => $newVersion]), 201);
     }
 
     // Update — client WAJIB kirim version yang dia baca terakhir kali.
@@ -109,10 +117,17 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     }
 
     $newVersion = $existing['version'] + 1;
-    $sql = "UPDATE {$config['table']} SET " . (!$isCabang ? 'cabang_id = :cabang_id, ' : '') . "version = :version, payload = :payload WHERE id = :id AND version = :expected_version";
+    $sql = $isCabang
+        ? "UPDATE {$config['table']} SET kode = :kode, nama = :nama, version = :version, payload = :payload WHERE id = :id AND version = :expected_version"
+        : "UPDATE {$config['table']} SET cabang_id = :cabang_id, version = :version, payload = :payload WHERE id = :id AND version = :expected_version";
     $stmt = $pdo->prepare($sql);
     $params = [':id' => $id, ':version' => $newVersion, ':payload' => $payloadJson, ':expected_version' => $existing['version']];
-    if (!$isCabang) $params[':cabang_id'] = $cabangId;
+    if ($isCabang) {
+        $params[':kode'] = $record['kode'];
+        $params[':nama'] = $record['nama'];
+    } else {
+        $params[':cabang_id'] = $cabangId;
+    }
     $stmt->execute($params);
 
     if ($stmt->rowCount() === 0) {
@@ -143,13 +158,23 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
     if ($id === '') jsonResponse(['error' => 'id dibutuhkan'], 422);
 
     $existing = masterFetch($pdo, $config['table'], $id);
-    if ($existing === null) jsonResponse(['error' => 'Record tidak ditemukan'], 404);
+    if ($existing === null) jsonResponse(['error' => 'Record tidak ditemukan'], 422);
 
     $authData = $existing['payload'];
     $authData['id'] = $existing['id'];
     if (!$isCabang) $authData['cabangId'] = $existing['cabangId'];
     if (!authorize('delete', $entity, $authData, $user)) {
         jsonResponse(['error' => 'Akses tidak diizinkan'], 403);
+    }
+
+    if ($isCabang) {
+        foreach (['sekolah', 'trainer', 'siswa', 'absensi', 'spp_payments', 'honor_payments', 'invoices'] as $table) {
+            $stmt = $pdo->prepare("SELECT 1 FROM {$table} WHERE cabang_id = :cabang_id LIMIT 1");
+            $stmt->execute([':cabang_id' => $id]);
+            if ($stmt->fetchColumn() !== false) {
+                jsonResponse(['error' => 'Cabang masih memiliki data terkait'], 422);
+            }
+        }
     }
 
     $stmt = $pdo->prepare("DELETE FROM {$config['table']} WHERE id = :id");

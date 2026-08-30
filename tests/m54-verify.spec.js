@@ -162,9 +162,9 @@ test('M5.4 exit gate: trainer capture/certification reaches admin verification w
   await loginAdmin(page)
 
   const currentDate = today()
-  const school = { id: 'school-exit-m54', nama: SCHOOL, spp: 100000, jadwal: todayWeekday(), trainerIds: ['trainer-exit-m54', 'assistant-exit-m54'] }
-  const trainer = { id: 'trainer-exit-m54', nama: TRAINER, honor: 50000, sekolahIds: [school.id] }
-  const assistant = { id: 'assistant-exit-m54', nama: ASSISTANT, honor: 40000, sekolahIds: [school.id] }
+  const school = { id: 'school-exit-m54', nama: SCHOOL, spp: 100000, jadwal: todayWeekday(), trainerIds: ['trainer-exit-m54', 'assistant-exit-m54'], cabangId: 'cbg-PST-default' }
+  const trainer = { id: 'trainer-exit-m54', nama: TRAINER, honor: 50000, sekolahIds: [school.id], cabangId: 'cbg-PST-default' }
+  const assistant = { id: 'assistant-exit-m54', nama: ASSISTANT, honor: 40000, sekolahIds: [school.id], cabangId: 'cbg-PST-default' }
   const siswa = [
     { id: 'student-active-m54', nama: 'Active Exit M54', sekolahId: school.id, sekolahNama: SCHOOL, status: 'Aktif', sppLunas: {} },
     { id: 'student-trial-m54', nama: 'Trial Exit M54', sekolahId: school.id, sekolahNama: SCHOOL, status: 'Trial', trialMulai: TRIAL_DATE, sppLunas: {} },
@@ -188,7 +188,7 @@ test('M5.4 exit gate: trainer capture/certification reaches admin verification w
       konfirmasiTrainer: `${currentDate}T00:00:00.000Z`,
     }],
     honorPayments: [{ id: 'payment-exit-m54', trainerId: trainer.id, periode: currentDate.slice(0, 7), nominal: 20000, tanggalBayar: currentDate }],
-    ui: { role: 'admin', trainerId: null, selectedYear: Number(currentDate.slice(0, 4)), selectedMonth: Number(currentDate.slice(5, 7)) },
+    ui: { role: 'admin_cabang', trainerId: null, cabangId: 'cbg-PST-default', selectedYear: Number(currentDate.slice(0, 4)), selectedMonth: Number(currentDate.slice(5, 7)) },
   })
   await page.reload()
   await page.waitForLoadState('domcontentloaded')

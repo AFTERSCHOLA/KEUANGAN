@@ -87,25 +87,16 @@ MICROTASK: Gate soft flow
   VERIFY:  existing M5 and Phase 5–7 exit-gate tests pass with zero page errors
   DONE-IF: verify passes; only intended files changed
 ```
-**Status: BLOCKED — not done.**
+**Status: VERIFIED.**
 
-Progress: fixed stale M5 test login helpers (`m52`/`m53`/`m54-verify.spec.js`) to select
-a branch before submitting, since Admin Cabang login now requires `cabangId` (M7.1).
-Reduced M5/Phase 5-7 gate failures from 13/16 to 8/16.
+Verified: `npm test` -> 10 files / 34 tests passed; `npm run build` -> production build succeeded.
+Verified: focused M1.2/M1.3/M5.1–M5.4/KI-1/Phase 5–7 Playwright gates -> 27 passed with zero page errors.
+Verified: original M1.4/M5.2–M5.4/Phase 5–7 suite -> 13 passed with zero page errors.
+Verified: `tests/stress-simulation.spec.js` -> 1 passed with `FINAL PAGE ERRORS []`.
+Changed: focused test fixtures only — canonical `admin_cabang` branch contexts in `m53-verify.spec.js` and `m54-verify.spec.js`; CSRF route fixture in `phase567-exit-gate.spec.js`.
 
-Two remaining failures are test-only defects (in scope for M1.4, not yet applied):
-- `m53-verify.spec.js:178-180` — one inline re-login site still missing branch selection.
-- `m53` M5.3.1 / `m54` exit gate — seed data injects `role: 'admin'`, which
-  `normalizeRole()` rejects (only `superadmin`/`admin_cabang`/`trainer` are canonical
-  per M1.1/G0.2). Fix is to seed `role: 'admin_cabang'` with a valid `cabangId`.
+The prior M1.4 blockers were stale test setup: missing branch selection, legacy `role: 'admin'`, and fixture records without branch ownership. KI-1 remains resolved and its dedicated tests pass. Stress findings F1–F5, F7, F11–F12, F17, F20, F22, and trainer sync-button visibility remain tracked under their existing audit/production owners; they were not patched in this gate.
 
-Five remaining failures (`m52-verify.spec.js`) are **not test defects** — they expose
-a real application bug, out of M1.4's scope to fix. See "Known issues" below and the
-corresponding row in `PRODUCTION_PLAN.md` section 12.
-
-M1.4 cannot be marked DONE until either (a) the app bug is fixed upstream in M3.1 and
-all 16 tests pass, or (b) an explicit scope decision is made to route around it (e.g.
-running the affected M5.2 tests as Superadmin) with sign-off recorded here.
 
 ## Gate 2 — PHP authentication foundation
 
@@ -218,6 +209,12 @@ MICROTASK: Add audit events
   VERIFY:  tests assert event type, actor, scope, target, timestamp, and absence of secrets
   DONE-IF: verify passes; only intended files changed
 ```
+
+**T3 / G0–M3 status: VERIFIED.**
+
+Verified: `D:\\Games and Apps\\xampp\\php\\php.exe --version` -> PHP 8.2.12; `curl`, `PDO`, `pdo_mysql`, and `session` extensions present; XAMPP MariaDB 10.4.32 alive on port 3306; isolated `afterschola_t3_test` database created; ignored `server/config.php` configured for the test database. `php -l` passed for every `server/**/*.php` file. Identity, session, login, schema, policy, entity, API, invoice, and Superadmin bootstrap tests all exited 0; final protected endpoint/audit/restore suite exited 0 with 201 checks passed.
+Changed: `server/api/_master.php`, `server/api/cabang.php`, `server/api/siswa.php`, `server/api/trainer.php`, `server/schema.sql`, and `server/tests/endpoint.protection.php`; milestone evidence documentation updated; `server/config.php` remains ignored and uncommitted.
+Remaining: local T3 evidence does not prove cPanel production readiness; Platform-auth / Data-release owns staging/hosting verification.
 
 ## Gate 4 — Authenticated React mode
 

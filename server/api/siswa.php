@@ -8,6 +8,13 @@ $method = $_SERVER['REQUEST_METHOD'];
  
 if ($method === 'POST' || $method === 'PUT') {
     $data = requestJson();
+    $action = $data['action'] ?? 'create';
+    if (!in_array($action, ['create', 'update', 'delete'], true)) {
+        jsonResponse(['error' => 'Operasi tidak didukung'], 400);
+    }
+    if ($action === 'delete') {
+        masterDelete('siswa', $user);
+    }
  
     // cabangId is never trusted from the client for any action — see
     // PRODUCTION_MILESTONES.md "siswa.cabangId — server derive, LOCKED".
@@ -25,7 +32,7 @@ if ($method === 'POST' || $method === 'PUT') {
         jsonResponse(['error' => 'sekolahId tidak ditemukan'], 422);
     }
  
-    masterWrite('siswa', $user, record: $data, overrides: ['cabangId' => $newCabangId]);
+    masterWrite('siswa', $user, record: $data, overrides: ['cabangId' => $newCabangId], action: $action);
 } elseif ($method === 'DELETE') {
     masterDelete('siswa', $user);
 } else {

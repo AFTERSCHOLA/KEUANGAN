@@ -20,6 +20,14 @@ if ($method === 'DELETE') {
     masterDelete('cabang', $user, isCabang: true);
 } elseif ($method === 'POST' || $method === 'PUT') {
     $data = requestJson();
+    $action = $data['action'] ?? 'create';
+    if (!in_array($action, ['create', 'update', 'delete'], true)) {
+        jsonResponse(['error' => 'Operasi tidak didukung'], 400);
+    }
+    if ($action === 'delete') {
+        masterDelete('cabang', $user, isCabang: true);
+    }
+    requireAuthorization('manage_branch', 'cabang', $data, $user);
 
     if (!isset($data['id']) || !is_string($data['id']) || trim($data['id']) === '') {
         jsonResponse(['error' => 'Record membutuhkan id'], 422);
@@ -43,7 +51,7 @@ if ($method === 'DELETE') {
         jsonResponse(['error' => "Kode \"$kode\" sudah dipakai cabang \"{$dupe['nama']}\". Pilih kode lain."], 422);
     }
 
-    masterWrite('cabang', $user, isCabang: true, record: $data, overrides: ['kode' => $kode]);
+    masterWrite('cabang', $user, isCabang: true, record: $data, overrides: ['kode' => $kode], action: $action);
 } else {
     jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 }

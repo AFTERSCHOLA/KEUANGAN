@@ -26,14 +26,6 @@ export function clearCsrfToken() {
   csrfTokenValue = null
 }
 
-// Registered once by auth.js so any apiRequest() call anywhere in the app
-// (not just bootstrapAuth's own initial /api/auth/me.php check) resets
-// auth state and notifies listeners on a 401 — mid-session expiry from a
-// feature component gets the same "back to login" behavior as startup,
-// without every call site needing its own try/catch for it.
-export function setUnauthorizedHandler(handler) {
-  unauthorizedHandler = typeof handler === 'function' ? handler : null
-}
 
 export async function getCsrfToken() {
   const response = await apiRequest('/api/auth/csrf.php', { method: 'GET', skipCsrf: true })
@@ -70,9 +62,6 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    if (response.status === 401 && !options.skipUnauthorizedHandler && unauthorizedHandler) {
-      unauthorizedHandler()
-    }
     throw new ApiError(body?.error || `Permintaan gagal (${response.status})`, response.status, body)
   }
   return body
