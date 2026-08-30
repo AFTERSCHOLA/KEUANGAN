@@ -87,6 +87,7 @@ MICROTASK: Gate soft flow
   VERIFY:  existing M5 and Phase 5–7 exit-gate tests pass with zero page errors
   DONE-IF: verify passes; only intended files changed
 ```
+
 **Status: VERIFIED.**
 
 Verified: `npm test` -> 10 files / 34 tests passed; `npm run build` -> production build succeeded.
@@ -96,7 +97,6 @@ Verified: `tests/stress-simulation.spec.js` -> 1 passed with `FINAL PAGE ERRORS 
 Changed: focused test fixtures only — canonical `admin_cabang` branch contexts in `m53-verify.spec.js` and `m54-verify.spec.js`; CSRF route fixture in `phase567-exit-gate.spec.js`.
 
 The prior M1.4 blockers were stale test setup: missing branch selection, legacy `role: 'admin'`, and fixture records without branch ownership. KI-1 remains resolved and its dedicated tests pass. Stress findings F1–F5, F7, F11–F12, F17, F20, F22, and trainer sync-button visibility remain tracked under their existing audit/production owners; they were not patched in this gate.
-
 
 ## Gate 2 — PHP authentication foundation
 
@@ -449,7 +449,6 @@ src/lib/constants.js now stamps `cabangId` on new trainer records, and
 `TrainerList.jsx`'s openAdd() derives the branch from the logged-in
 Admin Cabang's own getRoleContext() instead of an arbitrary cabang[0].
 Verified by tests/ki1-trainer-cabangid.spec.js.
-
 
 ## Ownership and final acceptance
 
