@@ -13,8 +13,9 @@ if ($method === 'POST' || $method === 'PUT') {
         jsonResponse(['error' => 'Operasi tidak didukung'], 400);
     }
     if ($action === 'delete') {
-        masterDelete('trainer', $user);
-    }
+    masterDelete('trainer', $user);
+    return;
+}
 
     // cabangId authority depends on role (same pattern as sekolah.php).
     // Admin Cabang can only ever manage trainers in their own branch —

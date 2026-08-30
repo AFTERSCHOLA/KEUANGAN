@@ -99,45 +99,18 @@ export default function App() {
   useEffect(() => {
   return subscribeAuth(user => {
     setCurrentUser(user)
-
-    if (user) {
-      setRole(user.role)
-      setTrainerId(user.trainerId || null)
-      setCabangId(user.cabangId || null)
-    } else {
-      setRole(null)
-      setTrainerId(null)
-      setCabangId(null)
-    }
+    setRole(user?.role ?? null)
+    setTrainerId(user?.trainerId ?? null)
+    setCabangId(user?.cabangId ?? null)
   })
 }, [])
 
-  useEffect(() => {
+useEffect(() => {
   let mounted = true
 
   bootstrapAuth()
-    .then(user => {
-      if (!mounted) return
-
-      setCurrentUser(user)
-
-      if (user) {
-        setRole(user.role)
-        setTrainerId(user.trainerId || null)
-        setCabangId(user.cabangId || null)
-      } else {
-        setRole(null)
-        setTrainerId(null)
-        setCabangId(null)
-      }
-    })
     .catch(() => {
-      if (!mounted) return
-
-      setCurrentUser(null)
-      setRole(null)
-      setTrainerId(null)
-      setCabangId(null)
+      // bootstrapAuth sudah membersihkan state auth
     })
     .finally(() => {
       if (mounted) setAuthReady(true)
@@ -199,11 +172,8 @@ export default function App() {
     })
   }
 
-  function handleAuthenticated(user) {
-  setCurrentUser(user)
-  setRole(user.role)
-  setTrainerId(user.trainerId || null)
-  setCabangId(user.cabangId || null)
+  function handleAuthenticated() {
+  // State auth diperbarui lewat subscribeAuth()
 }
 
   // M5.1.2: trainer yang mendarat di tab admin-only (mis. direct load dengan
@@ -384,12 +354,8 @@ export default function App() {
             {!sidebarCollapsed && 'Pengaturan'}
           </button>
           <button
-            onClick={async () => {
+  onClick={async () => {
   await logout()
-  setCurrentUser(null)
-  setRole(null)
-  setTrainerId(null)
-  setCabangId(null)
   setActiveTab('overview')
 }}
             className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
