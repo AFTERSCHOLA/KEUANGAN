@@ -25,6 +25,14 @@ if ($method === 'DELETE') {
         jsonResponse(['error' => 'Operasi tidak didukung'], 400);
     }
     if ($action === 'delete') {
+        // FIX: guard ini sebelumnya cuma ada di jalur $method === 'DELETE'
+        // (HTTP verb asli), padahal test & (kemungkinan besar) client React
+        // selalu kirim POST + {"action":"delete"} — jalur ini sebelumnya
+        // nggak pernah lewat pengecekan DEFAULT_CABANG_ID sama sekali.
+        $deleteId = isset($data['id']) && is_string($data['id']) ? trim($data['id']) : '';
+        if ($deleteId === DEFAULT_CABANG_ID) {
+            jsonResponse(['error' => 'Cabang default (seed) tidak bisa dihapus — cabang ini dipakai sebagai fallback sistem'], 422);
+        }
         masterDelete('cabang', $user, isCabang: true);
     }
     requireAuthorization('manage_branch', 'cabang', $data, $user);
