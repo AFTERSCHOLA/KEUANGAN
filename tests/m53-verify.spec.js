@@ -82,15 +82,15 @@ test('M5.3.1: queue uses persisted proof, historical context, verification gate,
   await page.evaluate(({ SCHOOL, TRAINER }) => {
     const get = key => JSON.parse(localStorage.getItem(`afterschola_v4_${key}`) || '[]')
     const set = (key, value) => localStorage.setItem(`afterschola_v4_${key}`, JSON.stringify(value))
-    const school = { id: 'school-ui', nama: SCHOOL, jadwal: '', spp: 100000, trainerIds: ['trainer-ui'] }
-    const trainer = { id: 'trainer-ui', nama: TRAINER, honor: 50000, sekolahIds: ['school-ui'] }
+    const school = { id: 'school-ui', nama: SCHOOL, jadwal: '', spp: 100000, trainerIds: ['trainer-ui'], cabangId: 'cbg-PST-default' }
+    const trainer = { id: 'trainer-ui', nama: TRAINER, honor: 50000, sekolahIds: ['school-ui'], cabangId: 'cbg-PST-default' }
     set('sekolah', [school])
     set('trainer', [trainer])
     set('absensi', [
       { id: 'history-jul', tanggal: '2026-07-01', periode: '2026-07', sekolahId: school.id, trainerId: trainer.id, trainerNama: trainer.nama, trainerStatus: 'Hadir', siswaList: [] },
       { id: 'history-aug', tanggal: '2026-08-01', periode: '2026-08', sekolahId: school.id, trainerId: trainer.id, trainerNama: trainer.nama, trainerStatus: 'Hadir', siswaList: [] },
     ])
-    set('ui', { role: 'admin', trainerId: null, selectedYear: 2026, selectedMonth: 8 })
+    set('ui', { role: 'admin_cabang', trainerId: null, cabangId: 'cbg-PST-default', selectedYear: 2026, selectedMonth: 8 })
   }, { SCHOOL, TRAINER })
   await page.reload()
   await page.waitForLoadState('domcontentloaded')
@@ -162,8 +162,8 @@ test('M5.3.3: trainer student list is read-only and Trial badge remains visible'
   await loginAdmin(page)
 
   await page.evaluate(() => {
-    localStorage.setItem('afterschola_v4_sekolah', JSON.stringify([{ id: 'school-ui', nama: 'School UI', trainerIds: ['trainer-ui'] }]))
-    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([{ id: 'trainer-ui', nama: 'Trainer UI', honor: 50000, sekolahIds: ['school-ui'] }]))
+    localStorage.setItem('afterschola_v4_sekolah', JSON.stringify([{ id: 'school-ui', nama: 'School UI', trainerIds: ['trainer-ui'], cabangId: 'cbg-PST-default' }]))
+    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([{ id: 'trainer-ui', nama: 'Trainer UI', honor: 50000, sekolahIds: ['school-ui'], cabangId: 'cbg-PST-default' }]))
     localStorage.setItem('afterschola_v4_siswa', JSON.stringify([{ id: 'student-ui', nama: 'Trial UI', sekolahId: 'school-ui', sekolahNama: 'School UI', status: 'Trial', trialMulai: '2026-08-01', sppLunas: {} }]))
     localStorage.setItem('afterschola_v4_ui', JSON.stringify({ role: 'trainer', trainerId: 'trainer-ui' }))
   })
@@ -177,6 +177,7 @@ test('M5.3.3: trainer student list is read-only and Trial badge remains visible'
 
   await page.getByRole('button', { name: 'Ganti Peran' }).click()
   await page.getByRole('button', { name: 'Pilih peran Admin' }).click()
+  await page.getByLabel('Pilih Cabang Anda').selectOption({ index: 1 })
   await page.getByRole('button', { name: 'Masuk', exact: true }).click()
   await openTab(page, 'Data Siswa')
   await expect(page.getByText('Aksi', { exact: true })).toBeVisible()

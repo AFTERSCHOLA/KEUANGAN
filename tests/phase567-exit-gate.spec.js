@@ -291,6 +291,9 @@ test('Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation'
   await expect(page.getByRole('button', { name: /Sinkronisasi \(1\)/ })).toBeVisible()
 
   let syncPayload = null
+  await page.route('**/api/auth/csrf.php', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ csrfToken: 'phase567-csrf' }) })
+  })
   await page.route('**/api/sync.php', async route => {
     syncPayload = route.request().postDataJSON()
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ synced: 0, alreadyApplied: ['abs-PST-sync-sim'], failed: [] }) })

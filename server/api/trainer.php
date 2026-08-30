@@ -8,6 +8,13 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'POST' || $method === 'PUT') {
     $data = requestJson();
+    $action = $data['action'] ?? 'create';
+    if (!in_array($action, ['create', 'update', 'delete'], true)) {
+        jsonResponse(['error' => 'Operasi tidak didukung'], 400);
+    }
+    if ($action === 'delete') {
+        masterDelete('trainer', $user);
+    }
 
     // cabangId authority depends on role (same pattern as sekolah.php).
     // Admin Cabang can only ever manage trainers in their own branch —
@@ -35,7 +42,7 @@ if ($method === 'POST' || $method === 'PUT') {
         $cabangId = $data['cabangId'];
     }
 
-    masterWrite('trainer', $user, record: $data, overrides: ['cabangId' => $cabangId]);
+    masterWrite('trainer', $user, record: $data, overrides: ['cabangId' => $cabangId], action: $action);
 } elseif ($method === 'DELETE') {
     masterDelete('trainer', $user);
 } else {

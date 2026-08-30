@@ -303,7 +303,7 @@ check('response cabangId matches school\'s branch (server-derived)', ($body['cab
 check('duplicate id -> 409', $status === 409, "got $status");
 
 echo "\n--- siswa.php (update) ---\n";
-$swUpdate = ['id' => $swA['id'], 'action' => 'update', 'sekolahId' => $sekolahA, 'nama' => 'Siswa Test A (updated)'];
+$swUpdate = ['id' => $swA['id'], 'action' => 'update', 'version' => 1, 'sekolahId' => $sekolahA, 'nama' => 'Siswa Test A (updated)'];
 
 [$status] = req('POST', "$base/server/api/siswa.php", $swUpdate);
 check('anonymous update -> 401', $status === 401, "got $status");
@@ -421,7 +421,7 @@ check('cabangId forced to admin A\'s own branch', ($body['cabangId'] ?? null) ==
 check('duplicate id -> 409', $status === 409, "got $status");
 
 echo "\n--- trainer.php (update) ---\n";
-$trnUpdate = ['id' => $trnNew['id'], 'action' => 'update', 'nama' => 'Trainer Baru A (updated)'];
+$trnUpdate = ['id' => $trnNew['id'], 'action' => 'update', 'version' => 1, 'nama' => 'Trainer Baru A (updated)'];
 
 [$status] = req('POST', "$base/server/api/trainer.php", $trnUpdate, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
 check('admin B updating branch A trainer -> 403', $status === 403, "got $status");
@@ -485,7 +485,7 @@ check('kode normalized to uppercase', ($body['kode'] ?? null) === strtoupper($cb
 check('duplicate id -> 409', $status === 409, "got $status");
 
 echo "\n--- cabang.php (update) ---\n";
-$cbgUpdate = ['id' => $cbgNew['id'], 'action' => 'update', 'nama' => 'Cabang Baru (updated)', 'kode' => $cbgNew['kode']];
+$cbgUpdate = ['id' => $cbgNew['id'], 'action' => 'update', 'version' => 1, 'nama' => 'Cabang Baru (updated)', 'kode' => $cbgNew['kode']];
 
 [$status] = req('POST', "$base/server/api/cabang.php", $cbgUpdate, $cookieAdminA, $csrfAdminA);
 check('admin_cabang updating branch -> 403 (superadmin-only)', $status === 403, "got $status");
