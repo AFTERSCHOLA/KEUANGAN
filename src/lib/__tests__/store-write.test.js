@@ -30,7 +30,13 @@ describe('M4.1 writeRemote', () => {
   it('returns ok with the bumped version on success', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'trn-1', version: 2 }, 200))
     const result = await writeRemote('trainer', { id: 'trn-1', version: 1, nama: 'Budi' })
-    expect(result).toEqual({ status: 'ok', id: 'trn-1', version: 2 })
+    // USER_PROVISIONING.md D4 — callers may read response-only fields like
+    // initialPassword from result.body, so writeRemote surfaces the full
+    // server body alongside the structured status/id/version.
+    expect(result.status).toBe('ok')
+    expect(result.id).toBe('trn-1')
+    expect(result.version).toBe(2)
+    expect(result.body).toEqual({ ok: true, id: 'trn-1', version: 2 })
   })
 
   it('stays conflicted on 409 instead of throwing or overwriting', async () => {

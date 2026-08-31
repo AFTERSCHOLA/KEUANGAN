@@ -17,6 +17,17 @@ export default function TrainerList() {
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertMsg, setAlertMsg] = useState('')
 
+  // USER_PROVISIONING.md D3/D4/D6 — single-form trainer onboarding.
+  // createAccount: whether to also issue a login account (default true; off
+  // for substitute trainers who won't log in).
+  // username: the login name; required when createAccount is true.
+  // pendingPassword: returned once from the server after a successful create,
+  // shown in initialPasswordDialog so the admin can read it to the trainer.
+  const [createAccount, setCreateAccount] = useState(true)
+  const [username, setUsername] = useState('')
+  const [initialPasswordDialog, setInitialPasswordDialog] = useState(null) // { username, password } | null
+  const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
+
   // Privilege matrix (PRODUCTION_PLAN.md section 5): Trainer role is
   // "Read own record" only. Hiding these controls is a UX courtesy, not
   // the security boundary — authorize.php on the server is what actually
@@ -39,6 +50,8 @@ export default function TrainerList() {
       ? branches.find(c => c.id === ctx.cabangId) || defaultCabang()
       : branches[0] || defaultCabang()
     setForm(newTrainer(branch.id, branch.kode))
+    setUsername('')
+    setCreateAccount(true)
     setModalOpen(true)
   }
 
@@ -55,17 +68,71 @@ export default function TrainerList() {
   try {
     const prev = trainers.find(t => t.id === form.id)
     const oldSekolahIds = prev ? prev.sekolahIds : []
+    const isEdit = prev !== undefined
+    const isCreatingAccount = !isEdit && createAccount
 
-    const result = await writeRemote('trainer', form)
+    // USER_PROVISIONING.md D3: when creating a trainer with login account,
+    // route through /api/users.php which atomically creates both the trainer
+    // record AND the user account. Edit and create-without-account paths
+    // keep using /api/trainer.php.
+    let result
+    if (isCreatingAccount) {
+      if (!username.trim()) {
+        showError('Username wajib diisi untuk membuat akun login.')
+        return
+      }
+      const trainerPayload = {
+        nama: form.nama,
+        wa: form.wa,
+        jadwal: form.jadwal,
+        honor: form.honor,
+        sekolahIds: form.sekolahIds,
+      }
+      result = await writeRemote('users', {
+        action: 'create',
+        role: 'trainer',
+        username: username.trim(),
+        displayName: form.nama,
+        cabangId: form.cabangId,
+        trainer: trainerPayload,
+      })
 
-    if (result.status === 'forbidden') {
-      showError(result.message || 'Kamu tidak punya izin untuk menyimpan trainer ini.')
-      return
-    }
+      if (result.status === 'forbidden') {
+        showError(result.message || 'Kamu tidak punya izin untuk membuat akun trainer ini.')
+        return
+      }
+      if (result.status === 'conflict') {
+        showError('Data trainer bentrok dengan data yang ada di server.')
+        return
+      }
 
-    if (result.status === 'conflict') {
-      showError('Data trainer ini sudah berubah di server sejak terakhir dimuat. Muat ulang halaman sebelum menyimpan lagi.')
-      return
+      // The /api/users.php response carries the canonical trainer record.
+      // Open the initial-password dialog so the admin can read the
+      // temporary password to the trainer (USER_PROVISIONING.md D4).
+      const serverTrainer = result.body?.trainer
+      const initialPassword = result.body?.initialPassword
+      if (serverTrainer && initialPassword) {
+        // Adopt the server's trainer.id so the local cache reflects truth.
+        form.id = serverTrainer.id
+        setInitialPasswordDialog({
+          username: username.trim(),
+          password: initialPassword,
+          trainerName: form.nama,
+        })
+        setPasswordAcknowledged(false)
+      }
+    } else {
+      result = await writeRemote('trainer', form)
+
+      if (result.status === 'forbidden') {
+        showError(result.message || 'Kamu tidak punya izin untuk menyimpan trainer ini.')
+        return
+      }
+
+      if (result.status === 'conflict') {
+        showError('Data trainer ini sudah berubah di server sejak terakhir dimuat. Muat ulang halaman sebelum menyimpan lagi.')
+        return
+      }
     }
 
     const sekolahList = readCached('sekolah')
@@ -258,16 +325,85 @@ export default function TrainerList() {
 
       {canManageTrainers && (
         <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && trainers.find(t => t.id === form.id) ? 'Edit Trainer' : 'Tambah Trainer'}>
-          <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} saving={saving} />
+          <TrainerForm
+            form={form}
+            setForm={setForm}
+            save={save}
+            onClose={() => setModalOpen(false)}
+            saving={saving}
+            isEdit={trainers.some(t => t.id === form.id)}
+            createAccount={createAccount}
+            setCreateAccount={setCreateAccount}
+            username={username}
+            setUsername={setUsername}
+          />
         </Modal>
       )}
+
+      {/* USER_PROVISIONING.md D4 — show the system-generated initial password
+          exactly once after a successful trainer account creation. The user
+          must click "Saya sudah catat" before the dialog can close. */}
+      <Modal
+        open={initialPasswordDialog !== null && !passwordAcknowledged}
+        onClose={() => {}}
+        title="Akun Trainer Berhasil Dibuat"
+      >
+        {initialPasswordDialog && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Akun login untuk <strong>{initialPasswordDialog.trainerName}</strong> sudah dibuat.
+              Berikan informasi berikut ke trainer — password hanya ditampilkan sekali dan trainer akan diminta menggantinya saat login pertama.
+            </p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase">Username</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    readOnly
+                    value={initialPasswordDialog.username}
+                    className="flex-1 rounded-lg border bg-slate-50 p-2.5 text-sm font-mono"
+                  />
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(initialPasswordDialog.username)}
+                    className="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold"
+                  >Salin</button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase">Kata Sandi Sementara</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    readOnly
+                    value={initialPasswordDialog.password}
+                    className="flex-1 rounded-lg border bg-slate-50 p-2.5 text-sm font-mono"
+                  />
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(initialPasswordDialog.password)}
+                    className="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold"
+                  >Salin</button>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setPasswordAcknowledged(true)
+                setInitialPasswordDialog(null)
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm"
+            >
+              Saya sudah catat, tutup
+            </button>
+          </div>
+        )}
+      </Modal>
+
       <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
       <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
     </div>
   )
 }
 
-function TrainerForm({ form, setForm, save, onClose, saving }) {
+function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccount, setCreateAccount, username, setUsername }) {
   const sekolah = readCached('sekolah')
   return (
     <>
@@ -301,6 +437,41 @@ function TrainerForm({ form, setForm, save, onClose, saving }) {
           ))}
         </div>
       </div>
+
+      {/* USER_PROVISIONING.md D3/D4/D6 — login-account fields, only shown when creating a new trainer. */}
+      {!isEdit && (
+        <div className="pt-3 border-t border-dashed border-slate-200 space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={createAccount}
+              disabled={saving}
+              onChange={e => setCreateAccount(e.target.checked)}
+              className="rounded"
+            />
+            <span className="font-semibold text-slate-700">Buat akun login untuk trainer ini</span>
+          </label>
+          <p className="text-[11px] text-slate-400 -mt-2 ml-6">
+            Matikan untuk trainer pengganti yang belum membutuhkan kredensial login.
+          </p>
+          {createAccount && (
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase">Username Login</label>
+              <input
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                disabled={saving}
+                placeholder="contoh: budi.santoso"
+                className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60 font-mono"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                3-64 karakter, hanya huruf/angka/titik/garis-bawah/strip. Password sementara akan dibuat otomatis dan ditampilkan setelah simpan.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-3 pt-2">
         <button onClick={save} disabled={saving} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">
           {saving ? 'Menyimpan...' : 'Simpan'}

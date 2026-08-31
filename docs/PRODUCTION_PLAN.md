@@ -73,7 +73,7 @@ The PHP `authorize($action, $resource, $data)` policy is deny-by-default and is 
 |---|---|---|---|
 | Cabang management | Full, all branches | None | None |
 | Schools | Full, all branches | Read own branch | Read assigned schools |
-| Trainers | Full, all branches | Read own branch | Read own record |
+| Trainers | Read all branches (overseer) | Full own branch | Read own record |
 | Students | Full, audited | Full, own branch | Read-only assigned students |
 | Attendance | Read/verify all | Write/verify own branch | Write own sessions; self-certify own weekly records |
 | SPP collection | Full, all branches | Record own branch; mark deposited | None |

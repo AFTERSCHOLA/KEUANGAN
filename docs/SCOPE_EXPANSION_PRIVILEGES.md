@@ -55,7 +55,7 @@ Superadmin (Pusat)
 | Scope | Superadmin | Admin Cabang | Trainer | Server Rule |
 |-------|------------|--------------|---------|-------------|
 | **Data Sekolah** | ✅ Write pusat only; 🔍 Read all | 🔍 Read own | 🔍 Read assigned | Write requires `cabangId = 'pusat'`; read filtered by token.cabangId |
-| **Data Trainer** | ✅ Full everywhere | 🟡 Propose only | 🔍 Read own | Write requires pusat role; read filtered by assignment |
+| **Data Trainer** | 🔍 Read everywhere | ✅ Full own branch | 🔍 Read own | Write requires admin_cabang role + own cabangId; superadmin is overseer only (USER_PROVISIONING.md D1) |
 | **Data Siswa** | ✅ Full (audit trail) | ✅ Full own branch | 🔍 Read-only view | Write filtered by `cabangId`; trainer gets view-only component |
 | **Absensi entry** | 🔍 Read + ✅ Verify | ✅ Write own branch | ✅ Write own sessions | Write requires matching `trainerId = token.trainerId` OR cabang role; verify requires elevated role |
 | **Absensi verification** | ✅ Verify all (exception queue: flags + random sample) | ✅ Verify own (before pusat lock; same exception queue, branch-scoped) | ✅ Self-certify own weekly records (`konfirmasiTrainer` stamp) | Verify flag writable only by `role IN ('superadmin', 'admin')` or higher; certification stamp writable only by `trainerId = token.trainerId` |

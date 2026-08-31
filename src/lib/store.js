@@ -117,6 +117,11 @@ export function getKeys() {
     settings: `${STORE_KEY}_settings`,
     // M7.1.1 — branch entity, read/written like any other collection.
     cabang: `${STORE_KEY}_cabang`,
+    // USER_PROVISIONING.md D8 — `users` is server-authoritative and only
+    // surfaced via the management forms (BranchManager / TrainerList). We
+    // don't need a local mirror: the dialog reads the password straight
+    // from the response, and there's no "user list" view to keep in sync.
+    users: `${STORE_KEY}_users`,
   }
 }
 
@@ -271,6 +276,10 @@ const WRITE_ENDPOINTS = {
   siswa: '/api/siswa.php',
   cabang: '/api/cabang.php',
   sekolah: '/api/sekolah.php',
+  // USER_PROVISIONING.md D3/D8 — Branch Admin creates Trainer (record + login)
+  // in one call through /api/users.php. Falls back to /api/trainer.php for
+  // trainers without login accounts (D6 substitute-trainer case).
+  users: '/api/users.php',
 }
 
 // Mengirim satu record ke server. TIDAK throw untuk 409/403 — keduanya
@@ -318,7 +327,10 @@ export async function writeRemote(key, record) {
     else records.push(merged)
     writeRaw(key, records)
     notifyStoreChanged()
-    return { status: 'ok', id: result.id, version: result.version }
+    // Return the full server body so callers can read response-only fields
+    // (e.g. /api/users.php returns initialPassword once at creation time).
+    // Backward-compatible: existing callers read .status/.id/.version.
+    return { status: 'ok', id: result.id, version: result.version, body: result }
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) {
       return {
