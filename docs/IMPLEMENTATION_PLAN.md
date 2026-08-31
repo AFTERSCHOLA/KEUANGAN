@@ -325,3 +325,5 @@ Total: ~28 microtasks, each independently falsifiable. If the implementer is one
 ## Part 9 — Deferred and superseded items
 
 Login/auth and access control are promoted into the approved production track in `PRODUCTION_PLAN.md` and `PRODUCTION_MILESTONES.md` gates G0–M5. The backend is fixed as plain PHP 8.2+ with PDO/MySQL for cPanel production. JWT, signed-header auth, per-branch `.htaccess` protection, soft-delete/trash, real-time updates, self-service email reset, and multi-operator features beyond explicit version conflicts remain outside the first release.
+
+The `deploy/` directory is now **generated** by `npm run build:deploy` (see `docs/DEPLOY_BUNDLE.md` and `PRODUCTION_MILESTONES.md` D7.2). The earlier pattern of hand-curating `deploy/api/*.php` snapshots is superseded — the build script mirrors `server/api/**`, `server/auth/**`, `server/bin/**`, and `server/validation/` into `deploy/` and runs a parity gate that fails the build when anything drifts.

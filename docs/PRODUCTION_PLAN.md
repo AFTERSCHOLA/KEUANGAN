@@ -149,7 +149,7 @@ Existing M0–M7 and Phase 5–7 exit gates, finance invariants, visual parity, 
 
 Prerequisites are DNS and staging subdomains, confirmed HTTPS, PHP 8.2+, required PDO/MySQL/session/fileinfo/upload extensions, a least-privilege MySQL user/database, private config and upload/backup paths, cron if available, and cPanel Terminal access for the first Superadmin bootstrap.
 
-Build once and deploy the same artifact to staging. Configure private secrets outside git and outside the document root. Apply ordered schema migrations, bootstrap the first Superadmin through the protected command, run smoke and security tests, import only an approved v4 export, and sign the reconciliation report.
+Build once and deploy the same artifact to staging. The local artifact is produced by `npm run build:deploy` — see `docs/DEPLOY_BUNDLE.md` for the build flow, the generated file tree, and the parity gate that prevents drift. Configure private secrets outside git and outside the document root. Apply ordered schema migrations, bootstrap the first Superadmin through the protected command, run smoke and security tests, import only an approved v4 export, and sign the reconciliation report.
 
 Before production promotion, create and verify a readable database backup, retain the previous artifact/configuration, promote the tested artifact, run the production smoke suite, and record the release. Rollback restores a known artifact/configuration and the corresponding database backup; it never uses ad-hoc production SQL. Post-release checks verify authentication, scopes, headers, backups, audits, and health checks.
 

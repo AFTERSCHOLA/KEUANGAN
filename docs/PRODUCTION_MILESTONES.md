@@ -364,25 +364,37 @@ MICROTASK: Inspect hosting capabilities
   DONE-IF: verify passes; only intended files changed
 ```
 
-### D7.2 Deploy staging artifact
+### D7.2 Build deploy artifact locally
+
+```text
+MICROTASK: Build deploy artifact
+  EDIT:    scripts/build-deploy.cjs (executable), package.json (build:deploy script), deploy/.htaccess + deploy/.gitignore (generated), .gitignore (ignores the mirror artifacts), docs/DEPLOY_BUNDLE.md
+  RULES:   generated artifacts are gitignored; Vite outputs remain tracked; parity check is a hard gate; private/ and config.php never enter the bundle
+  DEPENDS: M6.3
+  OUTCOME: `npm run build:deploy` produces deploy/ byte-equivalent to what was tested; deploy/api/users.php, deploy/auth/session.php, deploy/auth/authorize.php, deploy/bin/create-superadmin.php all exist; .htaccess blocks private/, *.sql, *.log, config.php
+  VERIFY:  build exits 0; parity post-check passes; manual rm of deploy/api/users.php → rebuild restores it; git status shows Vite outputs as modified and the mirror files absent
+  DONE-IF: verify passes; only intended files changed
+```
+
+### D7.3 Deploy staging artifact
 
 ```text
 MICROTASK: Deploy staging artifact
   EDIT:    cPanel document root, private config, schema migration, release artifact
-  RULES:   same tested artifact; no secrets in bundle; least-privilege DB user
-  DEPENDS: D7.1 and M6.3
+  RULES:   upload deploy/* produced by D7.2; no secrets in bundle; least-privilege DB user; config.php created on the server from config.example.php
+  DEPENDS: D7.1 and D7.2 and M6.3
   OUTCOME: staging serves the React app and authenticated PHP API over HTTPS
-  VERIFY:  staging smoke suite passes auth, CSRF, role matrix, branch isolation, CRUD, conflicts, uploads, PWA, and backup paths
+  VERIFY:  staging smoke suite passes auth, CSRF, role matrix, branch isolation, CRUD, conflicts, uploads, PWA, and backup paths; GET /api/users.php returns 401 (not 404)
   DONE-IF: verify passes; only intended files changed
 ```
 
-### D7.3 Import and reconcile staging data
+### D7.4 Import and reconcile staging data
 
 ```text
 MICROTASK: Reconcile staging data
   EDIT:    staging database through reviewed migration/import only
   RULES:   verified backup; transaction/idempotence; no ad-hoc SQL repair
-  DEPENDS: D7.2 and approved v4 export
+  DEPENDS: D7.3 and approved v4 export
   OUTCOME: staging contains reconciled production-shaped data and controlled user access
   VERIFY:  post-import counts, finance snapshots, branch isolation, and audit events match signed reconciliation report
   DONE-IF: verify passes; only intended files changed
