@@ -455,6 +455,34 @@ check('admin A deleting own-branch trainer -> 200', $status === 200, "got $statu
 [$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
 check('deleting already-deleted trainer -> 422', $status === 422, "got $status");
 
+// --- trainer.php: superadmin restrictions (WA thread 1/9/2026 final) --
+// superadmin: read + update only, never create/delete trainer.
+// admin_cabang: full CRUD, cabangId always server-derived from session.
+echo "\n--- trainer.php (superadmin restrictions) ---\n";
+
+// Seed a dedicated trainer via admin_cabang (legit path) so superadmin
+// tests don't interfere with any other version chain in this file.
+$trnSuperTarget = ['id' => 'trn-super-' . uniqid(), 'nama' => 'Trainer Super Target'];
+[$status] = req('POST', "$base/server/api/trainer.php", $trnSuperTarget, $cookieAdminA, $csrfAdminA);
+check('admin A creating trainer for superadmin tests -> 201', $status === 201, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => 'trn-superblock-' . uniqid(), 'nama' => 'x'], $cookieSuper, $csrfSuper);
+check('superadmin creating trainer -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnSuperTarget['id'], 'action' => 'update', 'version' => 1, 'cabangId' => $branchA, 'nama' => 'x'], $cookieSuper, $csrfSuper);
+check('superadmin update sending cabangId -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/trainer.php", ['id' => $trnSuperTarget['id'], 'action' => 'update', 'version' => 1, 'nama' => 'Trainer Super Target (updated)'], $cookieSuper, $csrfSuper);
+check('superadmin updating trainer -> 200', $status === 200, "got $status");
+check('cabangId unchanged after superadmin update', ($body['cabangId'] ?? null) === $branchA, json_encode($body));
+
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnSuperTarget['id'], 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('superadmin deleting trainer -> 403', $status === 403, "got $status");
+
+// Cleanup via admin_cabang, which IS allowed to delete.
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnSuperTarget['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('admin A deleting the superadmin-test trainer (cleanup) -> 200', $status === 200, "got $status");
+
 // --- cabang.php: superadmin-only CRUD -----------------------------------
 echo "\n--- cabang.php (create) ---\n";
 $cbgNew = ['id' => 'cbg-new-' . uniqid(), 'nama' => 'Cabang Baru', 'kode' => 'NEW' . substr(uniqid(), -4)];

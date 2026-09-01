@@ -98,13 +98,6 @@ export default function SidebarLayout({
         )}
       </div>
 
-      {/* Period selectors (slot — kept inside until M3) */}
-      {PeriodSelectors && (
-        <div className="py-4 border-b border-blue-800">
-          <PeriodSelectors collapsed={collapsed} />
-        </div>
-      )}
-
       {/* Nav (sidebar is now pure navigation) */}
       <nav className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
         {tabs?.map((tab) => {
