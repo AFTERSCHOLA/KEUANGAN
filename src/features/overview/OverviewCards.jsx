@@ -4,6 +4,8 @@ import { MONTHS, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
 import { filterEntitiesByBranch } from '../../lib/branchScope.js'
 import ExecutiveSummary from '../reports/ExecutiveSummary.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+import PeriodFilter from '../../components/PeriodFilter.jsx'
 
 // M4.2 — Overview graphs (Person 5). Pure SVG/CSS, no chart library.
 // R4: every number here comes out of finance.js's financialData(); this
@@ -69,28 +71,31 @@ export default function OverviewCards() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="bg-white p-4 rounded-2xl shadow-sm border flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Overview</h2>
-          <p className="text-xs text-slate-500">Ringkasan operasional & keuangan — {MONTHS[selectedIdx]} {period.selectedYear}/{period.selectedYear + 1}</p>
-        </div>
-        {role === 'superadmin' && (
-          <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-            Cabang
-            <select
-              aria-label="Cabang"
-              value={selectedCabangId}
-              onChange={e => setSelectedCabangId(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Semua Cabang</option>
-              {branches.map(branch => (
-                <option key={branch.id} value={branch.id}>{branch.nama} ({branch.kode})</option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+      <PageHeader
+        title="Overview"
+        subtitle={`Ringkasan operasional & keuangan — ${MONTHS[selectedIdx]} ${period.selectedYear}/${period.selectedYear + 1}`}
+        rightSlot={
+          <div className="flex items-center gap-3 flex-wrap">
+            {role === 'superadmin' && (
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                Cabang
+                <select
+                  aria-label="Cabang"
+                  value={selectedCabangId}
+                  onChange={e => setSelectedCabangId(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                >
+                  <option value="">Semua Cabang</option>
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.nama} ({branch.kode})</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <PeriodFilter period={period} />
+          </div>
+        }
+      />
 
       {/* M6.3.3 — Executive Summary: Laba/Rugi + kolektibilitas + red flags */}
       <ExecutiveSummary entities={entities} />
@@ -125,12 +130,18 @@ export default function OverviewCards() {
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border p-5">
           <h3 className="font-bold text-slate-800 text-sm mb-1">Tren Bulanan — Tahun Ajaran {period.selectedYear}/{period.selectedYear + 1}</h3>
           <p className="text-xs text-slate-400 mb-4">Pemasukan vs Dibayar (kas) dibanding Beban Honor (memo)</p>
-          <MonthlyTrendChart data={monthly} />
-          <Legend items={[
-            { color: 'bg-blue-600', label: 'Pemasukan SPP' },
-            { color: 'bg-emerald-500', label: 'Honor Dibayar' },
-            { color: 'bg-yellow-400', label: 'Beban Honor (memo)' },
-          ]} />
+          {monthly.every((m) => m.pemasukanSpp === 0 && m.totalHonorDibayar === 0 && m.totalBebanHonor === 0) ? (
+            <EmptyChartState text="Belum ada transaksi di tahun ajaran ini." />
+          ) : (
+            <>
+              <MonthlyTrendChart data={monthly} />
+              <Legend items={[
+                { color: 'bg-blue-600', label: 'Pemasukan SPP' },
+                { color: 'bg-emerald-500', label: 'Honor Dibayar' },
+                { color: 'bg-yellow-400', label: 'Beban Honor (memo)' },
+              ]} />
+            </>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border p-5 flex flex-col items-center">

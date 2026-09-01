@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* ----------------------------------------------------------------------
+ * Brand tokens (M4 will migrate high-traffic surfaces to these).
+ * Defined up front so M1 doesn't have to come back to this file.
+ * -------------------------------------------------------------------- */
+@theme {
+  --color-brand-900: #1e3a8a;
+  --color-brand-800: #1e40af;
+  --color-brand-700: #1d4ed8;
+  --color-brand-50:  #eff6ff;
+  --color-accent-400: #facc15;
+  --color-accent-300: #fde047;
+  --color-ink-900: #0f172a;
+  --color-ink-600: #475569;
+  --color-ink-400: #94a3b8;
+  --color-surface:  #ffffff;
+  --color-canvas:   #f8fafc;
+  --color-line:     #e2e8f0;
+}
+
+/* ----------------------------------------------------------------------
+ * Animations
+ * `animate-fadeIn` and `animate-scaleIn` are referenced in 19 files
+ * but the keyframes were missing — every page-enter and modal-open
+ * animation was a silent no-op. Restore them here.
+ * -------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.animate-fadeIn  { animation: fadeIn 0.22s ease-out both; }
+.animate-scaleIn { animation: scaleIn 0.18s ease-out both; }

@@ -7,6 +7,8 @@ import { elapsedPeriods, isTunggakan, sppPaidForPeriode, buildTagihanWaLink } fr
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SppPaymentModal from '../payments/SppPaymentModal.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+import PeriodFilter from '../../components/PeriodFilter.jsx'
 
 export default function StudentList({ readOnly = false }) {
   const [siswa, setSiswa] = useState(() => readCached('siswa'))
@@ -87,13 +89,16 @@ export default function StudentList({ readOnly = false }) {
   if (siswa.length === 0 && !modalOpen) {
     return (
       <div className="space-y-6 animate-fadeIn">
-        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">Manajemen Siswa</h2>
-            <p className="text-xs text-slate-500">Profil, Kehadiran, Status SPP Bulanan</p>
-          </div>
-          {!readOnly && <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>}
-        </div>
+        <PageHeader
+          title="Manajemen Siswa"
+          subtitle="Profil, Kehadiran, Status SPP Bulanan"
+          rightSlot={<PeriodFilter period={period} />}
+          actions={!readOnly && (
+            <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">
+              Tambah Siswa Baru
+            </button>
+          )}
+        />
         <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
           <p className="text-slate-400 text-sm">Belum ada data siswa. Klik "Tambah Siswa Baru" untuk memulai.</p>
         </div>
@@ -111,13 +116,16 @@ export default function StudentList({ readOnly = false }) {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Manajemen Siswa</h2>
-          <p className="text-xs text-slate-500">Profil, Kehadiran, Status SPP Bulanan</p>
-        </div>
-        {!readOnly && <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Siswa Baru</button>}
-      </div>
+      <PageHeader
+        title="Manajemen Siswa"
+        subtitle="Profil, Kehadiran, Status SPP Bulanan"
+        rightSlot={<PeriodFilter period={period} />}
+        actions={!readOnly && (
+          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">
+            Tambah Siswa Baru
+          </button>
+        )}
+      />
 
       <div className="flex items-center gap-2 flex-wrap">
         <button

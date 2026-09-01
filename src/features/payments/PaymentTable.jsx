@@ -6,6 +6,8 @@ import { financialData } from '../../lib/finance.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SlipHonor from '../reports/SlipHonor.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+import PeriodFilter from '../../components/PeriodFilter.jsx'
 
 export default function PaymentTable() {
   const period = usePeriod()
@@ -99,12 +101,11 @@ export default function PaymentTable() {
   if (trainers.length === 0) {
     return (
       <div className="space-y-6 animate-fadeIn">
-        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">Lembar Pembayaran Honor Trainer</h2>
-            <p className="text-xs text-slate-500">Pencatatan realisasi pengeluaran kas pembayaran honorarium</p>
-          </div>
-        </div>
+        <PageHeader
+          title="Lembar Pembayaran Honor Trainer"
+          subtitle="Pencatatan realisasi pengeluaran kas pembayaran honorarium"
+          rightSlot={<PeriodFilter period={period} />}
+        />
         <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
           <p className="text-slate-400 text-sm">Tidak ada data trainer untuk pencatatan pembayaran.</p>
         </div>
@@ -114,12 +115,11 @@ export default function PaymentTable() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Lembar Pembayaran Honor Trainer</h2>
-          <p className="text-xs text-slate-500">Pencatatan realisasi pengeluaran kas pembayaran honorarium — periode berjalan sesuai Tahun/Bulan di sidebar</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Lembar Pembayaran Honor Trainer"
+        subtitle="Pencatatan realisasi pengeluaran kas pembayaran honorarium — periode berjalan sesuai filter di atas"
+        rightSlot={<PeriodFilter period={period} />}
+      />
 
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border">
         <div className="overflow-x-auto">
@@ -151,7 +151,14 @@ export default function PaymentTable() {
                       <td className="py-4 px-6 text-right font-medium text-slate-500">{formatRupiah(fin.tarif)}</td>
                       <td className="py-4 px-6 text-right font-bold text-slate-800">{formatRupiah(fin.bebanHonor)}</td>
                       <td className="py-4 px-6 text-right font-bold text-emerald-600">{formatRupiah(fin.dibayar)}</td>
-                      <td className={`py-4 px-6 text-right font-extrabold ${fin.sisaHonor > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{formatRupiah(fin.sisaHonor)}</td>
+                      <td className={`py-4 px-6 text-right font-extrabold ${fin.sisaHonor > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span aria-hidden="true" className={`text-xs ${fin.sisaHonor > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
+                            {fin.sisaHonor > 0 ? '●' : '✓'}
+                          </span>
+                          {formatRupiah(fin.sisaHonor)}
+                        </span>
+                      </td>
                       <td className="py-4 px-6 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
                           {fin.sisaHonor > 0 && (

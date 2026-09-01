@@ -10,7 +10,8 @@ import OverviewCards from './features/overview/OverviewCards.jsx'
 import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
-import { MONTHS, MONTH_KEYS, academicYearLabel, defaultAcademicYear } from './lib/constants'
+import SidebarLayout from './components/SidebarLayout.jsx'
+import AccountMenu from './components/AccountMenu.jsx'
 import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
@@ -53,39 +54,6 @@ const TRAINER_TABS = [
   TABS.find(t => t.id === 'siswa'),
   REKAP_TAB,
 ]
-
-// Rentang tahun ajaran yang ditawarkan di dropdown. Selalu sertakan
-// selectedYear kalau ternyata di luar rentang default (mis. test M1
-// exit gate yang loncat ke 2027/2028).
-function buildYearOptions(selectedYear) {
-  const base = defaultAcademicYear()
-  const years = new Set()
-  for (let y = base - 1; y <= base + 4; y++) years.add(y)
-  years.add(selectedYear)
-  return Array.from(years).sort((a, b) => a - b)
-}
-
-function SidebarLogo({ logoUrl, size = 'w-12 h-12', iconSize = 'w-8 h-8' }) {
-  if (logoUrl) {
-    return (
-      <img
-        src={logoUrl}
-        alt="Logo"
-        className={`${size} rounded-full object-cover border-2 border-yellow-400 bg-white shadow-md shrink-0`}
-        onError={e => { e.currentTarget.style.display = 'none' }}
-      />
-    )
-  }
-  return (
-    <div className={`${size} rounded-full border-2 border-yellow-400 bg-blue-950 flex items-center justify-center text-white font-extrabold text-base shadow-inner shrink-0`}>
-      <svg className={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6" />
-      </svg>
-    </div>
-  )
-}
 
 export default function App() {
   const period = usePeriod()
@@ -186,88 +154,12 @@ useEffect(() => {
     }
   }, [role, activeTab])
 
-  const yearOptions = buildYearOptions(period.selectedYear)
-
   function handleRestored() {
     setBackupModalOpen(false)
     // Semua tab baca ulang lewat store.read() saat mount; cara paling
     // aman untuk memastikan setiap tab ter-refresh setelah restore.
     window.location.reload()
   }
-
-  const NavList = ({ onNavigate }) => (
-    <nav className="flex-1 flex flex-col gap-1 px-3 py-4 overflow-y-auto">
-      {(role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS).map(tab => {
-        const isActive = activeTab === tab.id
-        if (tab.comingSoon) {
-          return (
-            <div
-              key={tab.id}
-              title=""
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-300/40 cursor-not-allowed ${sidebarCollapsed ? 'justify-center' : ''}`}
-            >
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={tab.icon} />
-              </svg>
-              {!sidebarCollapsed && (
-                <span className="flex items-center gap-2">
-                  {tab.label}
-                  <span className="text-[9px] font-bold uppercase tracking-wide bg-blue-800 text-blue-300 px-1.5 py-0.5 rounded"></span>
-                </span>
-              )}
-            </div>
-          )
-        }
-        return (
-          <button
-            key={tab.id}
-            onClick={() => { setActiveTab(tab.id); onNavigate?.() }}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${sidebarCollapsed ? 'justify-center' : ''} ${
-              isActive ? 'bg-yellow-400 text-slate-900 shadow-md' : 'text-white hover:bg-blue-800'
-            }`}
-            title={sidebarCollapsed ? tab.label : undefined}
-          >
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={tab.icon} />
-            </svg>
-            {!sidebarCollapsed && tab.label}
-          </button>
-        )
-      })}
-    </nav>
-  )
-
-  const PeriodSelectors = () => (
-    <div className={`px-3 ${sidebarCollapsed ? 'hidden' : 'flex flex-col gap-2'}`}>
-      <div className="flex items-center gap-2 px-1">
-        <label className="text-[10px] font-extrabold text-blue-300 uppercase tracking-wider">Tahun Ajaran</label>
-        <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[9px] font-bold text-slate-600">
-          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-          </svg>
-          Tersimpan lokal
-        </span>
-      </div>
-      <select
-        value={period.selectedYear}
-        onChange={e => period.setSelectedYear(Number(e.target.value))}
-        className="w-full rounded-lg bg-blue-800 text-white text-sm font-semibold px-2.5 py-2 border border-blue-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-      >
-        {yearOptions.map(y => (
-          <option key={y} value={y} className="text-slate-900">{academicYearLabel(y)}</option>
-        ))}
-      </select>
-      <select
-        value={period.selectedMonth}
-        onChange={e => period.setSelectedMonth(Number(e.target.value))}
-        className="w-full rounded-lg bg-blue-800 text-white text-sm font-semibold px-2.5 py-2 border border-blue-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-      >
-        {MONTHS.map((name, i) => (
-          <option key={name} value={Number(MONTH_KEYS[i])} className="text-slate-900">{name}</option>
-        ))}
-      </select>
-    </div>
-  )
 
   if (!authReady) {
   return (
@@ -277,164 +169,92 @@ useEffect(() => {
   )
 }
 
-  if (!role) {
+if (!role) {
   return (
     <LoginPage onAuthenticated={handleAuthenticated} />
   )
 }
 
-  // M-AUTH.4: server returned mustChangePassword=true. Block the
-  // dashboard until the user sets a new password. The changePassword()
-  // call in MustChangePasswordPage flips the flag via subscribeAuth and
-  // re-renders the dashboard automatically.
-  if (currentUser?.mustChangePassword) {
-    return <MustChangePasswordPage />
-  }
+// M-AUTH.4: server returned mustChangePassword=true. Block the
+// dashboard until the user sets a new password. The changePassword()
+// call in MustChangePasswordPage flips the flag via subscribeAuth and
+// re-renders the dashboard automatically.
+if (currentUser?.mustChangePassword) {
+  return <MustChangePasswordPage />
+}
+
+  const visibleTabs = role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
       {/* Desktop sidebar */}
-      <aside className={`hidden md:flex flex-col bg-blue-900 border-r-4 border-yellow-400 shrink-0 transition-all ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
-        <div className={`flex items-center gap-2 px-4 py-4 border-b border-blue-800 ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-          {!sidebarCollapsed && (
-            <div className="flex items-center gap-2 min-w-0">
-              <SidebarLogo logoUrl={settings.logoUrl} size="w-10 h-10" iconSize="w-6 h-6" />
-              <h1 className="text-xl font-bold tracking-tight text-yellow-300 truncate">{settings.title || 'Afterschola'}</h1>
-            </div>
-          )}
-          {sidebarCollapsed && <SidebarLogo logoUrl={settings.logoUrl} size="w-10 h-10" iconSize="w-6 h-6" />}
-          <button
-            onClick={toggleSidebarCollapsed}
-            className="text-blue-300 hover:text-yellow-300 p-1"
-            title={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={sidebarCollapsed ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'} />
-            </svg>
-          </button>
-        </div>
-
-        <div className="py-4 border-b border-blue-800">
-          <PeriodSelectors />
-        </div>
-
-        <NavList />
-
-        <div className="px-3 py-4 border-t border-blue-800">
-          <button
-            onClick={handleSync}
-            disabled={syncing || syncStatus.pending === 0}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${sidebarCollapsed ? 'justify-center' : ''} ${syncStatus.pending > 0 ? 'text-yellow-300 hover:bg-blue-800' : 'text-blue-300/60'} disabled:cursor-default`}
-            title={sidebarCollapsed ? 'Sinkronisasi' : undefined}
-          >
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
-            </svg>
-            {!sidebarCollapsed && `${syncing ? 'Menyinkronkan...' : 'Sinkronisasi'}${syncStatus.pending > 0 ? ` (${syncStatus.pending})` : ''}`}
-          </button>
-          <button
-            onClick={() => setBackupModalOpen(true)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
-            title={sidebarCollapsed ? 'Backup & Restore' : undefined}
-          >
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            {!sidebarCollapsed && 'Backup & Restore'}
-          </button>
-          <button
-            onClick={() => setSettingsModalOpen(true)}
-            className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
-            title={sidebarCollapsed ? 'Pengaturan' : undefined}
-          >
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {!sidebarCollapsed && 'Pengaturan'}
-          </button>
-          <button
-  onClick={async () => {
-  await logout()
-  setActiveTab('overview')
-}}
-            className={`mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 transition-all ${sidebarCollapsed ? 'justify-center' : ''}`}
-            title={sidebarCollapsed ? 'Keluar' : undefined}
-          >
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-            </svg>
-            {!sidebarCollapsed && 'Keluar'}
-          </button>
-        </div>
-      </aside>
+      <SidebarLayout
+        variant="desktop"
+        title={settings.title || 'Afterschola'}
+        logoUrl={settings.logoUrl}
+        tabs={visibleTabs}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onSync={handleSync}
+        syncing={syncing}
+        syncPending={syncStatus.pending}
+        onOpenBackup={() => setBackupModalOpen(true)}
+        onOpenSettings={() => setSettingsModalOpen(true)}
+        onLogout={async () => { await logout(); setActiveTab('overview') }}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebarCollapsed}
+      />
 
       {/* Mobile drawer */}
       {mobileDrawerOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setMobileDrawerOpen(false)} />
-          <aside className="relative w-64 bg-blue-900 border-r-4 border-yellow-400 flex flex-col animate-fadeIn">
-            <div className="flex items-center justify-between px-4 py-4 border-b border-blue-800">
-              <div className="flex items-center gap-2 min-w-0">
-                <SidebarLogo logoUrl={settings.logoUrl} size="w-10 h-10" iconSize="w-6 h-6" />
-                <h1 className="text-xl font-bold tracking-tight text-yellow-300 truncate">{settings.title || 'Afterschola'}</h1>
-              </div>
-              <button onClick={() => setMobileDrawerOpen(false)} className="text-blue-300 hover:text-yellow-300 p-1">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="py-4 border-b border-blue-800">
-              <PeriodSelectors />
-            </div>
-            <NavList onNavigate={() => setMobileDrawerOpen(false)} />
-            <div className="px-3 py-4 border-t border-blue-800">
-              <button
-                onClick={() => { handleSync(); setMobileDrawerOpen(false) }}
-                disabled={syncing || syncStatus.pending === 0}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold ${syncStatus.pending > 0 ? 'text-yellow-300 hover:bg-blue-800' : 'text-blue-300/60'} disabled:cursor-default`}
-              >
-                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
-                </svg>
-                {`${syncing ? 'Menyinkronkan...' : 'Sinkronisasi'}${syncStatus.pending > 0 ? ` (${syncStatus.pending})` : ''}`}
-              </button>
-              <button
-                onClick={() => { setBackupModalOpen(true); setMobileDrawerOpen(false) }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white"
-              >
-                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-                </svg>
-                Backup & Restore
-              </button>
-              <button
-                onClick={() => { setSettingsModalOpen(true); setMobileDrawerOpen(false) }}
-                className="mt-1 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-blue-200 hover:bg-blue-800 hover:text-white"
-              >
-                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Pengaturan
-              </button>
-            </div>
-          </aside>
+          <SidebarLayout
+            variant="drawer"
+            title={settings.title || 'Afterschola'}
+            logoUrl={settings.logoUrl}
+            tabs={visibleTabs}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            onSync={handleSync}
+            syncing={syncing}
+            syncPending={syncStatus.pending}
+            onOpenBackup={() => setBackupModalOpen(true)}
+            onOpenSettings={() => setSettingsModalOpen(true)}
+            onLogout={async () => { await logout(); setActiveTab('overview') }}
+            onClose={() => setMobileDrawerOpen(false)}
+          />
         </div>
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top bar with hamburger */}
-        <header className="md:hidden bg-blue-900 text-white shadow-md border-b-4 border-yellow-400 sticky top-0 z-40">
-          <div className="px-4 py-3 flex items-center justify-between">
-            <button onClick={() => setMobileDrawerOpen(true)} className="text-white p-1">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <h1 className="text-lg font-bold tracking-tight text-yellow-300 truncate">{settings.title || 'Afterschola'}</h1>
-            <div className="w-8" />
+        {/* App header — sticky. Mobile shows hamburger; desktop shows the account menu on the right. */}
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+          <div className="px-4 md:px-6 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(true)}
+                aria-label="Buka menu"
+                className="md:hidden text-slate-700 hover:text-slate-900 p-1 -ml-1"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <h1 className="md:hidden text-lg font-bold tracking-tight text-slate-800 truncate">
+                {settings.title || 'Afterschola'}
+              </h1>
+            </div>
+            <AccountMenu
+              username={currentUser?.username || 'Akun'}
+              syncPending={syncStatus.pending}
+              syncing={syncing}
+              onSync={handleSync}
+              onOpenBackup={() => setBackupModalOpen(true)}
+              onOpenSettings={() => setSettingsModalOpen(true)}
+              onLogout={async () => { await logout(); setActiveTab('overview') }}
+            />
           </div>
         </header>
 
