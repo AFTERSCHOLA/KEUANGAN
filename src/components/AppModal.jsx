@@ -20,6 +20,8 @@ export default function AppModal({
 }) {
   const dialogRef = useRef(null)
   const previouslyFocused = useRef(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   // Map sizes to Tailwind classes
   const sizeClass = {
@@ -37,44 +39,38 @@ export default function AppModal({
   }[topAccent] || ''
 
   useEffect(() => {
-    if (!isOpen) return
+  if (!isOpen) return
 
-    // Body scroll lock
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+  const prevOverflow = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
 
-    // Remember previously focused element so we can restore on close
-    previouslyFocused.current = document.activeElement
+  previouslyFocused.current = document.activeElement
 
-    // Focus first focusable inside the dialog
-    const focusFirst = () => {
-      const root = dialogRef.current
-      if (!root) return
-      const target = root.querySelector(
-        'input, select, textarea, button, [tabindex]:not([tabindex="-1"])'
-      )
-      target?.focus()
+  const focusFirst = () => {
+    const root = dialogRef.current
+    if (!root) return
+    const target = root.querySelector(
+      'input, select, textarea, button, [tabindex]:not([tabindex="-1"])'
+    )
+    target?.focus()
+  }
+  const id = requestAnimationFrame(focusFirst)
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      onCloseRef.current?.()
     }
-    // Run after mount paints
-    const id = requestAnimationFrame(focusFirst)
+  }
+  document.addEventListener('keydown', onKey)
 
-    // Escape key
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose?.()
-      }
-    }
-    document.addEventListener('keydown', onKey)
-
-    return () => {
-      document.body.style.overflow = prevOverflow
-      document.removeEventListener('keydown', onKey)
-      cancelAnimationFrame(id)
-      // Restore focus
-      previouslyFocused.current?.focus?.()
-    }
-  }, [isOpen, onClose])
+  return () => {
+    document.body.style.overflow = prevOverflow
+    document.removeEventListener('keydown', onKey)
+    cancelAnimationFrame(id)
+    previouslyFocused.current?.focus?.()
+  }
+}, [isOpen])   // <-- cuma isOpen
 
   if (!isOpen) return null
 

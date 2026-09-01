@@ -33,7 +33,8 @@ export default function TrainerList() {
   // the security boundary — authorize.php on the server is what actually
   // enforces this regardless of what the client renders.
   const ctx = getRoleContext()
-  const canManageTrainers = ctx.role === 'admin_cabang' || ctx.role === 'superadmin'
+  const canEditTrainers = ctx.role === 'admin_cabang' || ctx.role === 'superadmin'
+  const canCreateOrDeleteTrainers = ctx.role === 'admin_cabang'
 
   function refresh() {
     setTrainers(readCached('trainer'))
@@ -45,15 +46,13 @@ export default function TrainerList() {
   }
 
   function openAdd() {
-    const branches = readCached('cabang')
-    const branch = ctx.role === 'admin_cabang'
-      ? branches.find(c => c.id === ctx.cabangId) || defaultCabang()
-      : branches[0] || defaultCabang()
-    setForm(newTrainer(branch.id, branch.kode))
-    setUsername('')
-    setCreateAccount(true)
-    setModalOpen(true)
-  }
+  const branches = readCached('cabang')
+  const branch = branches.find(c => c.id === ctx.cabangId) || defaultCabang()
+  setForm(newTrainer(branch.id, branch.kode))
+  setUsername('')
+  setCreateAccount(true)
+  setModalOpen(true)
+}
 
   function openEdit(t) {
     setForm({ ...t })
@@ -62,6 +61,10 @@ export default function TrainerList() {
 
   async function save() {
   if (saving) return
+  if (ctx.role === 'superadmin' && !trainers.find(t => t.id === form.id)) {
+    showError('Superadmin tidak dapat membuat trainer baru.')
+    return
+  }
 
   setSaving(true)
 
@@ -204,10 +207,11 @@ export default function TrainerList() {
 }
 
   function remove(id) {
-    setConfirmMsg('Hapus trainer ini? Data absensi dan pembayaran tetap tersimpan.')
-    setPendingRemoveId(id)
-    setConfirmOpen(true)
-  }
+  if (ctx.role !== 'admin_cabang') return
+  setConfirmMsg('Hapus trainer ini? Data absensi dan pembayaran tetap tersimpan.')
+  setPendingRemoveId(id)
+  setConfirmOpen(true)
+}
 
   async function doRemove() {
   if (!pendingRemoveId || saving) return
@@ -248,18 +252,18 @@ export default function TrainerList() {
             <h2 className="text-xl font-bold text-slate-800">Manajemen Trainer</h2>
             <p className="text-xs text-slate-500">Kelola info trainer, penugasan bimbingan kelas, serta honor sesi mengajar.</p>
           </div>
-          {canManageTrainers && (
-            <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Trainer Baru</button>
-          )}
+          {canCreateOrDeleteTrainers && (
+  <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Trainer Baru</button>
+)}
         </div>
         <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">
-          <p className="text-slate-400 text-sm">Belum ada data trainer.{canManageTrainers && ' Klik "Tambah Trainer Baru" untuk memulai.'}</p>
+          <p className="text-slate-400 text-sm">Belum ada data trainer.{canCreateOrDeleteTrainers && ' Klik "Tambah Trainer Baru" untuk memulai.'}</p>
         </div>
-        {canManageTrainers && (
-          <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Trainer">
-            <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} saving={saving} />
-          </Modal>
-        )}
+        {canCreateOrDeleteTrainers && (
+  <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Trainer">
+    <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} saving={saving} />
+  </Modal>
+)}
         <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
         <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
       </div>
@@ -273,9 +277,9 @@ export default function TrainerList() {
           <h2 className="text-xl font-bold text-slate-800">Manajemen Trainer</h2>
           <p className="text-xs text-slate-500">Kelola info trainer, penugasan bimbingan kelas, serta honor sesi mengajar.</p>
         </div>
-        {canManageTrainers && (
-          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Trainer Baru</button>
-        )}
+        {canCreateOrDeleteTrainers && (
+  <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Trainer Baru</button>
+)}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -292,16 +296,20 @@ export default function TrainerList() {
                     <p className="text-xs text-slate-400">Trainer Afterschola</p>
                   </div>
                 </div>
-                {canManageTrainers && (
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(t)} className="text-slate-400 hover:text-blue-600 p-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536M6.5 21.036H3v-3.572" strokeWidth="2"/></svg>
-                    </button>
-                    <button onClick={() => remove(t.id)} className="text-slate-400 hover:text-rose-600 p-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21" strokeWidth="2"/></svg>
-                    </button>
-                  </div>
-                )}
+                {(canEditTrainers || canCreateOrDeleteTrainers) && (
+  <div className="flex gap-1">
+    {canEditTrainers && (
+      <button onClick={() => openEdit(t)} className="text-slate-400 hover:text-blue-600 p-1">
+        {/* pencil icon */}
+      </button>
+    )}
+    {canCreateOrDeleteTrainers && (
+      <button onClick={() => remove(t.id)} className="text-slate-400 hover:text-rose-600 p-1">
+        {/* trash icon */}
+      </button>
+    )}
+  </div>
+)}
               </div>
 
               <div className="space-y-2.5 pt-3 border-t text-xs">
@@ -323,22 +331,22 @@ export default function TrainerList() {
         ))}
       </div>
 
-      {canManageTrainers && (
-        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && trainers.find(t => t.id === form.id) ? 'Edit Trainer' : 'Tambah Trainer'}>
-          <TrainerForm
-            form={form}
-            setForm={setForm}
-            save={save}
-            onClose={() => setModalOpen(false)}
-            saving={saving}
-            isEdit={trainers.some(t => t.id === form.id)}
-            createAccount={createAccount}
-            setCreateAccount={setCreateAccount}
-            username={username}
-            setUsername={setUsername}
-          />
-        </Modal>
-      )}
+      {canEditTrainers && (
+  <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id && trainers.find(t => t.id === form.id) ? 'Edit Trainer' : 'Tambah Trainer'}>
+    <TrainerForm
+      form={form}
+      setForm={setForm}
+      save={save}
+      onClose={() => setModalOpen(false)}
+      saving={saving}
+      isEdit={trainers.some(t => t.id === form.id)}
+      createAccount={createAccount}
+      setCreateAccount={setCreateAccount}
+      username={username}
+      setUsername={setUsername}
+    />
+  </Modal>
+)}
 
       {/* USER_PROVISIONING.md D4 — show the system-generated initial password
           exactly once after a successful trainer account creation. The user
