@@ -67,19 +67,26 @@ function createUser(array $data, array $user): never {
     $displayName = isset($data['displayName']) && is_string($data['displayName']) ? trim($data['displayName']) : '';
     if ($displayName === '') jsonResponse(['error' => 'Nama tampilan wajib diisi'], 422);
 
-    $cabangId = isset($data['cabangId']) && is_string($data['cabangId']) ? trim($data['cabangId']) : '';
-    if ($cabangId === '') jsonResponse(['error' => 'cabangId wajib diisi'], 422);
-
     // ---- 2. Branch scoping per role ----
+    // Session is the authority for branch assignment, never the client.
+    // Mirrors server/api/trainer.php:20-33 — Branch Admin's session.cabangId
+    // IS the trainer's branch; any client-supplied cabangId is rejected
+    // outright so DevTools tampering can't bypass branch scoping.
+    // Super Admin has no session.cabangId, so they must supply one.
     if ($role === 'admin_cabang') {
         if ($targetRole !== 'trainer') {
             jsonResponse(['error' => 'Admin Cabang hanya dapat membuat akun trainer'], 403);
         }
-        if ($cabangId !== ($actorCabangId ?? '')) {
-            jsonResponse(['error' => 'Admin Cabang hanya dapat membuat akun untuk cabang sendiri'], 403);
+        if (array_key_exists('cabangId', $data)) {
+            jsonResponse(['error' => 'cabangId tidak boleh dikirim'], 422);
+        }
+        $cabangId = $actorCabangId;
+        if (!is_string($cabangId) || $cabangId === '') {
+            jsonResponse(['error' => 'Sesi Admin Cabang tidak memiliki cabangId'], 403);
         }
     } else {
-        // superadmin: ensure target cabang actually exists
+        $cabangId = isset($data['cabangId']) && is_string($data['cabangId']) ? trim($data['cabangId']) : '';
+        if ($cabangId === '') jsonResponse(['error' => 'cabangId wajib diisi'], 422);
         $check = database()->prepare('SELECT 1 FROM cabang WHERE id = :id');
         $check->execute([':id' => $cabangId]);
         if ($check->fetchColumn() === false) {

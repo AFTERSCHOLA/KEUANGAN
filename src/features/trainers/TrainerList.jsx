@@ -96,7 +96,6 @@ export default function TrainerList() {
         role: 'trainer',
         username: username.trim(),
         displayName: form.nama,
-        cabangId: form.cabangId,
         trainer: trainerPayload,
       })
 
