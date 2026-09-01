@@ -69,4 +69,14 @@ describe('G0.2 client identity contract', () => {
     expect(getCurrentUser()).toEqual(identity)
     expect(localStorage.length).toBe(0)
   })
+
+  it('tightens login() against a malformed success body', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse(null))
+    await expect(login('contract@example.test', 'not-stored')).rejects.toThrow('Identitas tidak valid')
+    expect(getCurrentUser()).toBeNull()
+
+    fetch.mockResolvedValueOnce(jsonResponse({ csrfToken: 'csrf-no-user' }))
+    await expect(login('contract@example.test', 'not-stored')).rejects.toThrow('Identitas tidak valid')
+    expect(getCurrentUser()).toBeNull()
+  })
 })

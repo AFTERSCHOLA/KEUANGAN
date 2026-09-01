@@ -121,6 +121,12 @@ export async function login(username, password) {
     skipUnauthorizedHandler: true,
     body: { username, password },
   })
+  if (!result || typeof result !== 'object' || !result.user) {
+    currentUser = null
+    clearCsrfToken()
+    notify()
+    throw new Error('Identitas tidak valid')
+  }
   currentUser = normalizeSafeIdentity(result.user)
   setCsrfToken(result.csrfToken)
   notify()
