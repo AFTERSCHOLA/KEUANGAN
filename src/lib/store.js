@@ -309,7 +309,13 @@ export async function writeRemote(key, record) {
   const url = WRITE_ENDPOINTS[key]
   if (!url) throw new Error(`writeRemote: entitas "${key}" belum punya endpoint server`)
 
-  const isUpdate = readRaw(key).some(r => r.id === record.id)
+// record.id being absent means the ID is server-generated (e.g. users.php's
+// createUser()), not client-pregenerated (trainer/siswa/sekolah/cabang via
+// generateId()) — never treat this as "update" by matching against an
+// undefined id, since getKeys() has no 'users' entry and readRaw('users')
+// would otherwise collide on the shared literal localStorage key
+// "undefined" with any other unregistered key.
+const isUpdate = record.id != null && readRaw(key).some(r => r.id === record.id)
 
   try {
     const result = await apiRequest(url, {

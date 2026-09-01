@@ -4,7 +4,7 @@ import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
-import { readCached, getRoleContext, writeRemote, deleteRemote } from '../../lib/store.js'
+import { readCached, getRoleContext, writeRemote, deleteRemote, upsert } from '../../lib/store.js'
 
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => readCached('trainer'))
@@ -112,17 +112,21 @@ export default function TrainerList() {
       // Open the initial-password dialog so the admin can read the
       // temporary password to the trainer (USER_PROVISIONING.md D4).
       const serverTrainer = result.body?.trainer
-      const initialPassword = result.body?.initialPassword
-      if (serverTrainer && initialPassword) {
-        // Adopt the server's trainer.id so the local cache reflects truth.
-        form.id = serverTrainer.id
-        setInitialPasswordDialog({
-          username: username.trim(),
-          password: initialPassword,
-          trainerName: form.nama,
-        })
-        setPasswordAcknowledged(false)
-      }
+const initialPassword = result.body?.initialPassword
+if (serverTrainer && initialPassword) {
+  // Adopt the server's trainer.id so the local cache reflects truth.
+  form.id = serverTrainer.id
+  // FIX: writeRemote('users', ...) di atas cuma nulis ke cache lokal
+  // 'users', bukan 'trainer' — jadi trainer baru harus dimasukin manual
+  // ke cache 'trainer' supaya langsung muncul tanpa perlu refresh/pull.
+  upsert('trainer', serverTrainer)
+  setInitialPasswordDialog({
+    username: username.trim(),
+    password: initialPassword,
+    trainerName: form.nama,
+  })
+  setPasswordAcknowledged(false)
+}
     } else {
       result = await writeRemote('trainer', form)
 
