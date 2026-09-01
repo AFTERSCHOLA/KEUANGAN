@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { readCached, write, upsert, usePeriod } from '../../lib/store.js'
+import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa, defaultCabang } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
@@ -65,11 +65,19 @@ export default function StudentList({ readOnly = false }) {
     setModalOpen(true)
   }
 
-  function save() {
-    upsert('siswa', form)
-    setModalOpen(false)
-    refresh()
+  async function save() {
+  const result = await writeRemote('siswa', form)
+  if (result.status === 'forbidden') {
+    // kalau ada showError/alert di komponen ini, tampilkan di sini
+    return
   }
+  if (result.status === 'conflict') {
+    // sama, tampilkan pesan konflik
+    return
+  }
+  setModalOpen(false)
+  refresh()
+}
 
   function remove(id) {
     setConfirmMsg('Hapus siswa ini?')
@@ -77,14 +85,16 @@ export default function StudentList({ readOnly = false }) {
     setConfirmOpen(true)
   }
 
-  function doRemove() {
-    if (!pendingRemoveId) return
-    const updated = siswa.filter(s => s.id !== pendingRemoveId)
-    write('siswa', updated)
-    setPendingRemoveId(null)
-    setConfirmOpen(false)
-    refresh()
+  async function doRemove() {
+  if (!pendingRemoveId) return
+  const result = await deleteRemote('siswa', pendingRemoveId)
+  if (result.status === 'forbidden') {
+    return
   }
+  setPendingRemoveId(null)
+  setConfirmOpen(false)
+  refresh()
+}
 
   if (siswa.length === 0 && !modalOpen) {
     return (

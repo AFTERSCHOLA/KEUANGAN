@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { readCached, write, upsert, getRoleContext } from '../../lib/store.js'
+import { readCached, write, upsert, getRoleContext, writeRemote, deleteRemote } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newSekolah, defaultCabang } from '../../lib/constants.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
@@ -48,55 +48,64 @@ export default function SchoolList() {
     setModalOpen(true)
   }
 
-  function save() {
-    if (!form.nama.trim()) {
-      setAlertMsg('Nama sekolah tidak boleh kosong.')
-      setAlertOpen(true)
-      return
-    }
-    const prev = sekolah.find(s => s.id === form.id)
-    const oldTrainerIds = prev ? prev.trainerIds : []
-    upsert('sekolah', form)
-    const trainerList = readCached('trainer')
-    oldTrainerIds.forEach(tId => {
-      if (!form.trainerIds.includes(tId)) {
-        const t = trainerList.find(tr => tr.id === tId)
-        if (t) {
-          t.sekolahIds = (t.sekolahIds || []).filter(sId => sId !== form.id)
-          upsert('trainer', t)
-        }
-      }
-    })
-    form.trainerIds.forEach(tId => {
-      if (!oldTrainerIds.includes(tId)) {
-        const t = trainerList.find(tr => tr.id === tId)
-        if (t) {
-          if (!(t.sekolahIds || []).includes(form.id)) {
-            t.sekolahIds = [...(t.sekolahIds || []), form.id]
-            upsert('trainer', t)
-          }
-        }
-      }
-    })
-
-    // Part 2, rule 4: "School rename → refresh siswa.sekolahNama caches
-    // in the same save." — missing before; siswa list would keep showing
-    // the old school name after a rename.
-    if (prev && prev.nama !== form.nama) {
-      const siswaList = readCached('siswa')
-      let touched = false
-      siswaList.forEach(s => {
-        if (s.sekolahId === form.id && s.sekolahNama !== form.nama) {
-          s.sekolahNama = form.nama
-          touched = true
-        }
-      })
-      if (touched) write('siswa', siswaList)
-    }
-
-    setModalOpen(false)
-    refresh()
+async function save() {
+  if (!form.nama.trim()) {
+    setAlertMsg('Nama sekolah tidak boleh kosong.')
+    setAlertOpen(true)
+    return
   }
+  const prev = sekolah.find(s => s.id === form.id)
+  const oldTrainerIds = prev ? prev.trainerIds : []
+
+  const result = await writeRemote('sekolah', form)
+  if (result.status === 'forbidden') {
+    setAlertMsg(result.message || 'Kamu tidak punya izin untuk menyimpan sekolah ini.')
+    setAlertOpen(true)
+    return
+  }
+  if (result.status === 'conflict') {
+    setAlertMsg('Data sekolah ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
+    setAlertOpen(true)
+    return
+  }
+
+  const trainerList = readCached('trainer')
+  for (const tId of oldTrainerIds) {
+    if (!form.trainerIds.includes(tId)) {
+      const t = trainerList.find(tr => tr.id === tId)
+      if (t) {
+        t.sekolahIds = (t.sekolahIds || []).filter(sId => sId !== form.id)
+        await writeRemote('trainer', t)
+      }
+    }
+  }
+  for (const tId of form.trainerIds) {
+    if (!oldTrainerIds.includes(tId)) {
+      const t = trainerList.find(tr => tr.id === tId)
+      if (t && !(t.sekolahIds || []).includes(form.id)) {
+        t.sekolahIds = [...(t.sekolahIds || []), form.id]
+        await writeRemote('trainer', t)
+      }
+    }
+  }
+
+  // Rename sync ke siswa.sekolahNama — ini murni derived cache lokal
+  // (bukan sumber kebenaran), jadi upsert/write lokal di sini masih OK.
+  if (prev && prev.nama !== form.nama) {
+    const siswaList = readCached('siswa')
+    let touched = false
+    siswaList.forEach(s => {
+      if (s.sekolahId === form.id && s.sekolahNama !== form.nama) {
+        s.sekolahNama = form.nama
+        touched = true
+      }
+    })
+    if (touched) write('siswa', siswaList)
+  }
+
+  setModalOpen(false)
+  refresh()
+}
 
   function remove(id) {
     const siswa = readCached('siswa')
@@ -131,24 +140,28 @@ export default function SchoolList() {
     doDelete(id)
   }
 
-  function doDelete(id) {
-    const sch = sekolah.find(s => s.id === id)
-    if (sch) {
-      const trainerList = readCached('trainer')
-      ;(sch.trainerIds || []).forEach(tId => {
-        const t = trainerList.find(tr => tr.id === tId)
-        if (t) {
-          t.sekolahIds = (t.sekolahIds || []).filter(sId => sId !== id)
-          upsert('trainer', t)
-        }
-      })
+  async function doDelete(id) {
+  const sch = sekolah.find(s => s.id === id)
+  if (sch) {
+    const trainerList = readCached('trainer')
+    for (const tId of (sch.trainerIds || [])) {
+      const t = trainerList.find(tr => tr.id === tId)
+      if (t) {
+        t.sekolahIds = (t.sekolahIds || []).filter(sId => sId !== id)
+        await writeRemote('trainer', t)
+      }
     }
-    const updated = sekolah.filter(s => s.id !== id)
-    write('sekolah', updated)
-    setPendingDeleteId(null)
-    setPendingSiswaCount(0)
-    refresh()
   }
+  const result = await deleteRemote('sekolah', id)
+  if (result.status === 'forbidden') {
+    setAlertMsg(result.message || 'Kamu tidak punya izin untuk menghapus sekolah ini.')
+    setAlertOpen(true)
+    return
+  }
+  setPendingDeleteId(null)
+  setPendingSiswaCount(0)
+  refresh()
+}
 
     if (printInvoice) {
     return <InvoiceTemplate invoice={printInvoice.invoice} sekolah={printInvoice.sekolah} onBack={() => setPrintInvoice(null)} />

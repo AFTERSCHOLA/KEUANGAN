@@ -299,16 +299,20 @@ if (serverTrainer && initialPassword) {
                     <p className="text-xs text-slate-400">Trainer Afterschola</p>
                   </div>
                 </div>
-                {(canEditTrainers || canCreateOrDeleteTrainers) && (
-  <div className="flex gap-1">
+  {(canEditTrainers || canCreateOrDeleteTrainers) && (
+  <div className="flex gap-1 shrink-0">
     {canEditTrainers && (
       <button onClick={() => openEdit(t)} className="text-slate-400 hover:text-blue-600 p-1">
-        {/* pencil icon */}
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M15.232 5.232l3.536 3.536M6.5 21.036H3v-3.572" strokeWidth="2"/>
+        </svg>
       </button>
     )}
     {canCreateOrDeleteTrainers && (
       <button onClick={() => remove(t.id)} className="text-slate-400 hover:text-rose-600 p-1">
-        {/* trash icon */}
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21" strokeWidth="2"/>
+        </svg>
       </button>
     )}
   </div>
