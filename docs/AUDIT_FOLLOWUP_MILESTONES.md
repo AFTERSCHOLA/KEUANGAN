@@ -97,6 +97,79 @@ MICROTASK: Pre-submit cabangId sanity check
   DONE-IF: verify passes; only intended files changed
 ```
 
+## Gate AF-A4 — Multi-account CRUD sync (cross-feature)
+
+Findings AF12–AF16 came out of the round-trip + CRUD audit. They are owned
+by `docs/MULTI_ACCOUNT_SYNC.md` (M-MAS1.1 through M-MAS4.2) — see that
+document for the planning prose and per-microtask VERIFY criteria. The
+microtask ordering and explicit acceptance check are kept here so the gate
+order stays contiguous (taste rule #74).
+
+### M-AF4.1 Centralize per-entity `cabangId` policy in `prepareWritePayload`
+
+```text
+MICROTASK: Centralize per-entity cabangId policy in prepareWritePayload
+  EDIT:    src/lib/store.js, src/features/trainers/TrainerList.jsx
+  FINDS:   AF15
+  RULES:   per-entity policy mirrors server rules (sekolah.php:46-49, trainer.php:41-43/50-52, siswa.php:21-23, users.php:80-82, honorPayments.php / sppPayments.php / absensi.php requireRecord); M-MAS1.1 owns the switch
+  DEPENDS: M-AF3.1
+  OUTCOME: writeRemote(key, record) internally invokes prepareWritePayload(key, record, getRoleContext()) before sending the body; admin_cabang sekolah/trainer/users payloads have no `cabangId` key; siswa payloads never have one; the one-off strip in TrainerList.jsx:178-180 is gone
+  VERIFY:  vitest src/lib/__tests__/store-payload.test.js passes (11 cases) AND tests/multi-account-crud-sync.spec.js admin_cabang sekolah write with body `cabangId` returns 422 (server-side rule, AF15 server arm)
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF4.2 Migrate `cabang` create/update/delete + `assignSchool` to `writeRemote`/`deleteRemote`
+
+```text
+MICROTASK: Migrate cabang CRUD + assignSchool to writeRemote/deleteRemote
+  EDIT:    src/features/admin/BranchManager.jsx
+  FINDS:   AF12, AF13
+  RULES:   superadmin-only (authorize.php:87 deny-list); preserve forbidden/conflict branches; server-side default-cabang delete-block stays server-authoritative
+  DEPENDS: M-AF4.1
+  OUTCOME: save() create+update on writeRemote('cabang', prepareWritePayload(...)); doDelete() on await deleteRemote('cabang', id) with forbidden/conflict; assignSchool() on writeRemote('sekolah', ...) with forbidden/conflict; no local-only write()/upsert() for these entities
+  VERIFY:  tests/multi-account-crud-sync.spec.js creates two Sim-* branches as superadmin, deletes them in cleanup, and asserts they are gone on the next superadmin read
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF4.3 Trainer-with-account payload sanitization + cache mirror
+
+```text
+MICROTASK: Trainer-with-account sanitize body + adopt server response via pullRemote
+  EDIT:    src/features/trainers/TrainerList.jsx
+  FINDS:   AF14
+  RULES:   prepareWritePayload('users', …) strips cabangId for admin_cabang (matches users.php:80-82); pullRemote('trainer') is the existing best-effort refresh at store.js:487-500; trainer-with-account path only
+  DEPENDS: M-AF4.1
+  OUTCOME: admin_cabang trainer-with-account request body has no `cabangId` key; superadmin path unchanged; the trainer record reaches the local cache via pullRemote after the server confirms; form.id adopts the server-issued trainer.id
+  VERIFY:  tests/multi-account-crud-sync.spec.js admin_cabang trainer-with-account branch assignment lands in the admin's own branch; the captured POST /api/users.php body has no `cabangId` key
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF4.4 `read.php` echoes the SQL-side `version` so client edits aren't 409'd
+
+```text
+MICROTASK: read.php echoes version alongside payload
+  EDIT:    server/api/read.php, deploy/api/read.php
+  FINDS:   AF16
+  RULES:   optimistic concurrency preserved (write-without-version still 409s); no client-side change needed — writeRemote already passes through whatever `version` is on the record
+  DEPENDS: M-AF4.2
+  OUTCOME: GET /api/read.php?entity=X returns each record with a numeric `version` field merged into its payload; a subsequent UPDATE with that exact `version` succeeds (200) and bumps the server-side version; an UPDATE with `version` missing or stale returns 409 unchanged
+  VERIFY:  tests/multi-account-crud-sync.spec.js phases 2, 4, 7 pass (read-back finds the just-created rows with a numeric `version`); probe at C:\Users\barak\AppData\Local\Temp\kilo\probe-crud-e2e.php proves the update-with-version succeeds and update-without-version 409s
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF4.5 Multi-role CRUD sync E2E spec
+
+```text
+MICROTASK: Multi-role CRUD sync Playwright spec
+  EDIT:    tests/multi-account-crud-sync.spec.js (new)
+  FINDS:   — (new coverage)
+  RULES:   taste #2 (deterministic), #7 (role-based locators), #8 (zero pageerror/console.error), #11 (soft-checked probes), #17 (date-aware dynamic), #21 (test name = milestone row label); follows the m1-scope-shell-navigation.spec.js pattern (loginViaApi); cleans up after itself (taste #33); uses 'Sim-' / 'Simulasi-' markers for easy manual cleanup
+  DEPENDS: M-AF4.2, M-AF4.3, M-AF4.4
+  OUTCOME: single Playwright spec logs in as superadmin, creates two Sim-* branches + their sekolahs + a trainer-with-account bound to branch A; logs in as the seeded admin.cabang@test.local and asserts none of the Sim-* data is visible; asserts admin_cabang cannot smuggle a client `cabangId` (server 422); asserts clean write lands in their own branch; logs back in as superadmin and asserts both branches' data are visible; logs back in as admin and asserts branch-isolation still holds; finally deletes the test branches
+  VERIFY:  npx playwright test tests/multi-account-crud-sync.spec.js --workers=1 passes with zero pageerror/console.error; npm test (vitest) remains green; npm run build succeeds
+  DONE-IF: verify passes; only intended files changed
+```
+
 ## Deferred with owners (taste rule #53)
 
 | ID  | Finding | Owner / resolving milestone                    | Why deferred                                                            |

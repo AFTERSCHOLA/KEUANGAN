@@ -214,13 +214,28 @@ MICROTASK: Add multi-account CRUD sync Playwright spec
 
 ## 7. Doc amendments (after M-MAS4.1 passes)
 
-In `docs/AUDIT_FOLLOWUP_PLAN.md`, append to the P2 section:
+In `docs/AUDIT_FOLLOWUP_PLAN.md`, append to the P3 section:
 
 ```
 | AF12 | `cabang` create/update still use `write()` (local-only); new branches are not fed back to other accounts on the next login pull | **Re-confirmed** — `BranchManager.jsx:18,33` only writes `localStorage`; server has no client-driven create/update path | `src/features/admin/BranchManager.jsx:18,33`, `src/lib/store.js:219-237` |
 | AF13 | `cabang` delete has no `deleteRemote`; a deleted row resurrects on next pull | **Re-confirmed** — no caller of `deleteRemote('cabang', id)` exists anywhere; `BranchManager.jsx:179-185` mutates local cache only | `src/features/admin/BranchManager.jsx:179-185`, `src/lib/store.js:355-370` |
 | AF14 | `BranchManager.assignSchool()` reassigns a sekolah via `upsert('sekolah', …)`; the server UPDATE branch at `sekolah.php:99-105` is never exercised, and the AF5 inverse-rewrite gap propagates | **Re-confirmed** — local-only; complements AF5 | `src/features/admin/BranchManager.jsx:191` |
 | AF15 | Trainer-with-account creation path has two latent local-only leaks: (a) `cabangId` still sent in the body for admin_cabang, (b) `upsert('trainer', serverTrainer)` after the server response | **Re-confirmed** — `TrainerList.jsx:94-100,122` | `src/features/trainers/TrainerList.jsx:94-100,122`, `deploy/api/users.php:70-87` |
+| AF16 | `read.php` returns only the payload column, never the SQL-side `version` — every client edit on a cold-loaded record sends `version: undefined`, which `_master.php:111-117` rejects with 409 as a false-positive version conflict | **Re-confirmed** — surfaced during M-MAS4.1 verification; user-reported as "Data trainer ini sudah berubah..." from the Trainer edit form | `server/api/read.php:54-119`, `server/api/_master.php:111-117` |
 ```
 
 And append a `| MAS… |` row per microtask into `docs/AUDIT_FOLLOWUP_MILESTONES.md`, keeping the gate structure: MAS-A1 → MAS-A2 → MAS-A3 → MAS-A4, matching this plan's gate order.
+
+## 8. Implementation status (post-verification)
+
+All six MAS gates (M-MAS1.1, M-MAS1.2, M-MAS2.1, M-MAS2.2, M-MAS2.3, M-MAS3.1, M-MAS3.2, M-MAS4.1) **plus** M-MAS4.2 (read.php version echo, found during M-MAS4.1 verification) are **landed** as of this commit cycle.
+
+**Verified end-to-end against the live PHP/MySQL backend** (XAMPP, `afterschola_t3_test`):
+- `npm test` → 13/13 files, 54/54 unit tests pass.
+- `npm run build` → built clean.
+- `npx playwright test tests/multi-account-crud-sync.spec.js --workers=1` → **1 passed (13.6s)**, zero pageerror/console.error, all 7 phases green.
+- Standalone probe (`C:\Users\barak\AppData\Local\Temp\kilo\probe-crud-e2e.php`) proves the read-after-write echo of `version` and that the server still 409s on update-without-version.
+
+**Known gaps left for a future cycle:**
+- AF5 inverse-rewrite of `siswa.cabangId` / `absensi.cabang_id` / `trainer.denormalized scope` when a sekolah moves between branches — server keeps the capability, UI still doesn't expose it. Documented in `AUDIT_FOLLOWUP_PLAN.md`; unchanged from M-AUDIT cycle.
+- Pre-existing test rot: `tests/flow-simulation.spec.js`, `tests/ki1-trainer-cabangid.spec.js`, `tests/e2e.spec.js`, `tests/stress-simulation.spec.js`, `tests/auth-login-page.spec.js`, and most `m**-verify.spec.js` files import a non-existent `loginAsAdmin` from `fixtures.js` (AUDIT_FOLLOWUP_PLAN AF2/AF3). Out of scope for this work (taste #13).
