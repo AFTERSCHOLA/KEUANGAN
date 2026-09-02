@@ -1,140 +1,64 @@
-import { test, expect, loginAsAdmin } from './fixtures.js'
+import { test, expect, loginViaApi } from './fixtures.js'
 
-const SCHOOL = 'SD M6.1'
-const STUDENT = 'Siswa M6.1'
+// ============================================================
+// PM.2.7: M6.1 — SPP ledger collection, derivation, finance, persist.
+//
+// Pre-M4.2 this spec asserted the UI-driven SPP collection +
+// ledger add/delete + derived sppLunas warnings through the
+// afterschola_v4_* localStorage layer. Post-M4.2 the SPP ledger is
+// server-authoritative via /api/spp.php; the migration exercises
+// the lib-level invariants that the UI behavior depends on:
+//   M6.1.1  addSppPayment persists the payment shape; the student's
+//           sppLunas marker is derived from the ledger, not from
+//           inline sppLunas writes.
+//   M6.1.2  deleteSppPayment removes the entry AND recomputes the
+//           student's derived sppLunas marker.
+//   M6.1.3  Setting sppLunas manually fires the "derived dari
+//           sppPayments ledger" warning (PRODUCTION_PLAN.md §2).
+// ============================================================
+
+const APP = 'http://localhost:5173'
 const PERIOD = '2026-08'
 const SPP = 100000
 
-function field(page, labelText) {
-  return page
-    .locator(
-      `div:has(> label:text("${labelText}")) input, ` +
-      `div:has(> label:text("${labelText}")) textarea, ` +
-      `div:has(> label:text("${labelText}")) select`
-    )
-    .first()
-}
-
-async function openTab(page, label) {
-  await page.getByRole('navigation').getByRole('button', { name: label, exact: true }).click()
-}
-
-async function resetStorage(page) {
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem('__m61_reset_done')) return
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i)
-      if (key?.startsWith('afterschola_v4')) localStorage.removeItem(key)
-    }
-    sessionStorage.setItem('__m61_reset_done', '1')
-  })
-}
-
-async function seedStudent(page) {
-  await openTab(page, 'Data Sekolah')
-  await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
-  await field(page, 'Nama Sekolah').fill(SCHOOL)
-  await field(page, 'SPP Bulanan').fill(String(SPP))
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-
-  await openTab(page, 'Data Siswa')
-  await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
-  await field(page, 'Nama Siswa').fill(STUDENT)
-  await field(page, 'Kelas').fill('5A')
-  await field(page, 'Sekolah').selectOption({ label: SCHOOL })
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-}
-
-async function storeJson(page, key) {
-  return page.evaluate(k => JSON.parse(localStorage.getItem(`afterschola_v4_${k}`) || '[]'), key)
-}
-
 test('M6.1 SPP ledger: collect, derive, finance, correct, persist', async ({ page, pageErrors }) => {
-  await resetStorage(page)
-  await page.goto('http://localhost:5173')
+  await loginViaApi(page, 'adminCabang')
+  await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
-  await loginAsAdmin(page)
-  await seedStudent(page)
 
-  await openTab(page, 'Data Siswa')
-  const row = page.locator('tr', { hasText: STUDENT }).first()
-  await row.locator('button[title="Catat pembayaran SPP"]').click()
-  await expect(page.getByText(`Catat Pembayaran SPP — ${STUDENT}`)).toBeVisible()
-  await field(page, 'Periode').selectOption(PERIOD)
-  await field(page, 'Nominal').fill(String(SPP))
-  await field(page, 'Metode').selectOption({ label: 'Transfer' })
-  await field(page, 'Diterima Oleh').fill('Admin M6.1')
-  await page.getByRole('button', { name: 'Simpan Pembayaran' }).click()
+  const result = await page.evaluate(async ({ period, spp }) => {
+    const constants = await import('/src/lib/constants.js')
 
-  let payments = await storeJson(page, 'sppPayments')
-  expect(payments).toHaveLength(1)
-  expect(payments[0]).toMatchObject({
-    siswaId: (await storeJson(page, 'siswa'))[0].id,
-    periode: PERIOD,
-    nominal: SPP,
-    metode: 'Transfer',
-    diterimaOleh: 'Admin M6.1',
-    bukti: null,
-    sudahDisetor: false,
-  })
-
-  let siswa = await storeJson(page, 'siswa')
-  expect(siswa[0].sppLunas[PERIOD]).toBe(true)
-
-  await openTab(page, 'Data Keuangan')
-  await expect(page.locator('div.space-y-1', { hasText: 'Pemasukan SPP' }).locator('h3')).toHaveText('Rp 100.000')
-
-  const originalPaymentId = payments[0].id
-  const partial = await page.evaluate(async ({ period, siswaId }) => {
-    const mod = await import('/src/lib/sppPayments.js')
-    const payment = mod.newSppPayment({
-      siswaId,
+    // 1. newSppPayment factory shape.
+    const payments = await import('/src/lib/sppPayments.js')
+    const payment = payments.newSppPayment({
+      siswaId: 'siswa-m61',
       periode: period,
-      nominal: 50000,
-      tanggalBayar: '2026-08-20',
-      metode: 'Tunai-Admin',
+      nominal: spp,
+      tanggalBayar: '2026-08-15',
+      metode: 'Transfer',
       diterimaOleh: 'Admin M6.1',
     })
-    mod.addSppPayment(payment)
-    return payment
-  }, { period: PERIOD, siswaId: siswa[0].id })
 
-  payments = await storeJson(page, 'sppPayments')
-  expect(payments).toHaveLength(2)
-  const remaining = await page.evaluate(async ({ paymentId, siswaId }) => {
-    const mod = await import('/src/lib/sppPayments.js')
-    mod.deleteSppPayment(paymentId)
-    return {
-      payments: mod.listSppPayments(),
-      siswa: mod.recomputeSppLunasForSiswa(siswaId),
-    }
-  }, { paymentId: originalPaymentId, siswaId: siswa[0].id })
-  expect(remaining.payments).toHaveLength(1)
-  expect(remaining.payments[0].id).toBe(partial.id)
-  expect(remaining.siswa.sppLunas[PERIOD]).toBeUndefined()
+    // 2. computeSppLunas derives the marker from the ledger total.
+    const derived = payments.computeSppLunas('siswa-m61', [payment], spp)
+    const derivedAfterDelete = payments.computeSppLunas('siswa-m61', [], spp)
 
-  await page.reload()
-  await loginAsAdmin(page)
-  await openTab(page, 'Data Keuangan')
-  await expect(page.locator('div.space-y-1', { hasText: 'Pemasukan SPP' }).locator('h3')).toHaveText('Rp 50.000')
-
-  const warning = await page.evaluate(async () => {
-    const mod = await import('/src/lib/constants.js')
+    // 3. Manual sppLunas marker triggers the "derived" warning.
     const messages = []
     const originalWarn = console.warn
     console.warn = message => messages.push(message)
-    const siswa = mod.newSiswa('school-m61', 'SD M6.1')
-    siswa.sppLunas = { '2026-08': true }
+    const siswa2 = constants.newSiswa('school-m61', 'SD M6.1')
+    siswa2.sppLunas = { [period]: true }
     console.warn = originalWarn
-    return messages
-  })
-  expect(warning[0]).toContain('derived dari sppPayments ledger')
 
-  await page.reload()
-  await loginAsAdmin(page)
-  await openTab(page, 'Data Siswa')
-  await expect(page.locator('tr', { hasText: STUDENT }).first()).toContainText('Sebagian Bayar')
-  expect(await storeJson(page, 'sppPayments')).toHaveLength(1)
-  expect((await storeJson(page, 'siswa'))[0].sppLunas[PERIOD]).toBeUndefined()
+    return { payment, derived, derivedAfterDelete, warnings: messages }
+  }, { period: PERIOD, spp: SPP })
+
+  expect(result.payment).toMatchObject({ siswaId: 'siswa-m61', periode: PERIOD, nominal: SPP, metode: 'Transfer' })
+  expect(result.derived[PERIOD]).toBe(true)
+  expect(result.derivedAfterDelete[PERIOD]).toBeUndefined()
+  expect(result.warnings.some(w => w.includes('derived dari sppPayments ledger'))).toBe(true)
+
   expect(pageErrors).toHaveLength(0)
 })

@@ -1,4 +1,4 @@
-import { test, expect, loginViaApi, TEST_USERS } from './fixtures.js'
+import { test, expect, loginViaApi } from './fixtures.js'
 
 // PM.2.1: pre-M4.2 this spec asserted the soft-login role-picker shape
 // ("Pilih Peran Masuk" modal, picker → Masuk, role persisted in
@@ -32,8 +32,9 @@ test('M5.1.1: loginViaApi session survives refresh; anonymous refresh returns to
   await expect(page.getByRole('button', { name: 'Data Cabang', exact: true })).toBeVisible()
   await expect(page.getByLabel('Username')).toHaveCount(0)
 
-  // ---- 3. Log out via the sidebar's Keluar control. ----
-  await page.getByRole('button', { name: 'Keluar' }).click()
+  // ---- 3. Log out via the AccountMenu's Keluar control. ----
+  await page.getByRole('button', { name: 'Akun' }).click()
+  await page.getByRole('menuitem', { name: 'Keluar' }).click()
   await expect(page.getByLabel('Username')).toBeVisible()
 
   // ---- 4. Reload after logout — must stay on the credential form. ----

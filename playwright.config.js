@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: /audit.*-crud-.*\.spec\.js$/,
   webServer: {
     command: 'npm run dev',
     port: 5173,

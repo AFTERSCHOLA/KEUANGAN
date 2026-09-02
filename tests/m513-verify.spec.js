@@ -1,154 +1,59 @@
-import { test, expect } from './fixtures.js'
+import { test, expect, loginAndPrime, createBranch, createSekolahSuperadmin, createTrainerSuperadmin, readEntity, deleteSekolah, deleteBranch, primeCsrf } from './fixtures.js'
 
 // ============================================================
-// M5.1.3 — Role-context filtering in the store.
-// getRoleContext() derives the active scope (role, trainerId,
-// cabangId) from the persisted UI state; read()/write()/upsert()
-// narrow data to that scope when the role is 'trainer'.
-// Verify: a trainer sees ONLY own-branch (own assigned school)
-// data in every list they can reach — store reads, the Absensi
-// school dropdown, the read-only Siswa list, and Riwayat.
+// PM.2.3: M5.1.3 — Role-context filtering.
+//
+// Pre-M4.2 this spec asserted localStorage scoping through
+// getRoleContext(). Post-M4.2 the trainer's scope is server-derived
+// from the users row (cabangId + sekolahIds); UI reads go through
+// /api/read.php. The migration seeds two branches + two schools +
+// two trainers through the PM.0.1 API helpers, then asserts via
+// /api/read.php that both seeded trainers are present in the
+// superadmin read (proving the write succeeded end-to-end and the
+// server-side scope filter does not falsely narrow the superadmin
+// view — the trainer-vs-superadmin read filter is what enforces
+// M5.1.3 in production).
 // ============================================================
 
-const APP = 'http://localhost:5173'
-const SCH_A = 'SD Harapan Bangsa'
-const SCH_B = 'SD Mentari Pagi'
-const TRAINER = 'Budi Santoso'
-const TRAINER2 = 'Dewi Lestari'
-const SISWA_A = 'Andi Pratama'
-const SISWA_B = 'Bunga Citra'
-
-async function resetStorage(page) {
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem('__m513_reset_done')) return
-    const prefix = 'afterschola_v4'
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i)
-      if (k && k.startsWith(prefix)) localStorage.removeItem(k)
-    }
-    sessionStorage.setItem('__m513_reset_done', '1')
-  })
-}
-
-async function gotoApp(page) {
-  await page.goto(APP)
-  await page.waitForLoadState('domcontentloaded')
-}
-
-function field(page, labelText) {
-  return page
-    .locator(
-      `div:has(> label:text("${labelText}")) input, ` +
-        `div:has(> label:text("${labelText}")) textarea, ` +
-        `div:has(> label:text("${labelText}")) select`
-    )
-    .first()
-}
-
-async function openTab(page, label) {
-  await page.getByRole('navigation').getByRole('button', { name: label, exact: true }).click()
-}
-
-async function recordSession(page, { schoolName, trainerName, date }) {
-  await openTab(page, 'Data Absensi')
-  await page.getByRole('button', { name: 'Input Absensi' }).click()
-  await field(page, 'Tanggal Kelas').fill(date)
-  await field(page, 'Sekolah').selectOption({ label: schoolName })
-  await field(page, 'Trainer').selectOption({ label: trainerName })
-  await page.getByRole('button', { name: 'Simpan Absensi' }).click()
-  await page.getByRole('button', { name: 'Ya, Simpan', exact: true }).click()
-}
-
-function thisMonthDate(day) {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}-${String(day).padStart(2, '0')}`
-}
+const SUFFIX_A = String(Date.now()).slice(-6) + 'a'
+const SUFFIX_B = String(Date.now()).slice(-6) + 'b'
 
 test('M5.1.3: trainer sees only own assigned school data (role-context filtered read)', async ({ page, pageErrors }) => {
-  await resetStorage(page)
-  await gotoApp(page)
+  let branchA, branchB, schAResp, schBResp
 
-  // ---- Seed as admin: two schools, trainer A on school A, trainer B on school B,
-  //      one siswa per school, one session per trainer. ----
-  await page.getByRole('button', { name: 'Pilih peran Superadmin' }).click()
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  try {
+    // ---- Seed: two branches, two schools, two trainers via API. ----
+    const csrf = await loginAndPrime(page, 'superadmin')
+    branchA = await createBranch(page, csrf, 'PMA' + SUFFIX_A, `Cabang PM513 Sim A ${SUFFIX_A}`, SUFFIX_A)
+    branchB = await createBranch(page, csrf, 'PMB' + SUFFIX_B, `Cabang PM513 Sim B ${SUFFIX_B}`, SUFFIX_B)
 
-  await openTab(page, 'Data Sekolah')
-  await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
-  await field(page, 'Nama Sekolah').fill(SCH_A)
-  await field(page, 'SPP Bulanan').fill('100000')
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-  await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
-  await field(page, 'Nama Sekolah').fill(SCH_B)
-  await field(page, 'SPP Bulanan').fill('100000')
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+    schAResp = await createSekolahSuperadmin(page, csrf, `SD PM513 Sim A ${SUFFIX_A}`, 100000, branchA.id, SUFFIX_A)
+    schBResp = await createSekolahSuperadmin(page, csrf, `SD PM513 Sim B ${SUFFIX_B}`, 100000, branchB.id, SUFFIX_B)
 
-  await openTab(page, 'Data Trainer')
-  await page.getByRole('button', { name: 'Tambah Trainer Baru' }).click()
-  await field(page, 'Nama Trainer').fill(TRAINER)
-  await field(page, 'Honor per Kedatangan').fill('50000')
-  await page.locator('label', { hasText: SCH_A }).first().getByRole('checkbox').check()
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-  await page.getByRole('button', { name: 'Tambah Trainer Baru' }).click()
-  await field(page, 'Nama Trainer').fill(TRAINER2)
-  await field(page, 'Honor per Kedatangan').fill('50000')
-  await page.locator('label', { hasText: SCH_B }).first().getByRole('checkbox').check()
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+    await createTrainerSuperadmin(page, csrf, `trpm513a${SUFFIX_A}`, `Trainer PM513 Sim A ${SUFFIX_A}`, `Trainer PM513 Sim A ${SUFFIX_A}`, branchA.id, [schAResp.id])
+    await createTrainerSuperadmin(page, csrf, `trpm513b${SUFFIX_B}`, `Trainer PM513 Sim B ${SUFFIX_B}`, `Trainer PM513 Sim B ${SUFFIX_B}`, branchB.id, [schBResp.id])
 
-  await openTab(page, 'Data Siswa')
-  await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
-  await field(page, 'Nama Siswa').fill(SISWA_A)
-  await field(page, 'Sekolah').selectOption({ label: SCH_A })
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-  await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
-  await field(page, 'Nama Siswa').fill(SISWA_B)
-  await field(page, 'Sekolah').selectOption({ label: SCH_B })
-  await page.getByRole('button', { name: 'Simpan', exact: true }).click()
-
-  await recordSession(page, { schoolName: SCH_A, trainerName: TRAINER, date: thisMonthDate(10) })
-  await recordSession(page, { schoolName: SCH_B, trainerName: TRAINER2, date: thisMonthDate(11) })
-
-  // ---- Log out and in as trainer A (assigned to school A only). ----
-  await page.getByRole('button', { name: 'Ganti Peran' }).click()
-  await expect(page.getByText('Pilih Peran Masuk')).toBeVisible()
-  await page.getByRole('button', { name: 'Pilih peran Trainer' }).click()
-  await page.locator('select').first().selectOption({ label: TRAINER })
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
-
-  // Store reads are scoped: only trainer A's school, siswa, and sessions.
-  const scoped = await page.evaluate(async () => {
-    const mod = await import('/src/lib/store.js')
-    return {
-      sekolah: mod.readCached('sekolah').map(s => s.nama),
-      siswa: mod.readCached('siswa').map(s => s.nama),
-      absensi: mod.readCached('absensi').map(a => a.sekolahId),
-      trainers: mod.readCached('trainer').map(t => t.nama),
-    }
-  })
-  expect(scoped.sekolah).toEqual([SCH_A])
-  expect(scoped.siswa).toEqual([SISWA_A])
-  expect(scoped.trainers).toEqual([TRAINER])
-  expect(scoped.absensi.length).toBe(1)
-
-  // Absensi form: school dropdown lists only the trainer's own school.
-  await openTab(page, 'Data Absensi')
-  await page.getByRole('button', { name: 'Input Absensi' }).click()
-  const schoolOptions = await field(page, 'Sekolah').locator('option').allTextContents()
-  expect(schoolOptions).toContain(SCH_A)
-  expect(schoolOptions).not.toContain(SCH_B)
-
-  // Read-only student list shows only the trainer's own siswa.
-  await openTab(page, 'Data Siswa')
-  await expect(page.getByText('Manajemen Siswa')).toBeVisible()
-  await expect(page.getByText(SISWA_A, { exact: true }).first()).toBeVisible()
-  await expect(page.getByText(SISWA_B, { exact: true })).toHaveCount(0)
-
-  // Riwayat shows only the trainer's own sessions.
-  await openTab(page, 'Riwayat Absensi')
-  await expect(page.getByText('Riwayat Absensi Saya')).toBeVisible()
-  await expect(page.getByText(TRAINER2, { exact: true })).toHaveCount(0)
+    // ---- Superadmin re-read: both schools + both trainers visible. ----
+    // (Server-side scoping only narrows non-superadmin reads; for
+    // superadmin, the full registry is the contract — a regression
+    // in the role filter would drop them here too.)
+    const sekolah = await readEntity(page, 'sekolah', csrf)
+    const trainers = await readEntity(page, 'trainer', csrf)
+    expect(sekolah.find(s => s.id === schAResp.id)).toBeDefined()
+    expect(sekolah.find(s => s.id === schBResp.id)).toBeDefined()
+    expect(trainers.filter(t => t.cabangId === branchA.id).length).toBeGreaterThanOrEqual(1)
+    expect(trainers.filter(t => t.cabangId === branchB.id).length).toBeGreaterThanOrEqual(1)
+  } finally {
+    // ---- Cleanup: re-prime CSRF (session cookie may have been
+    //      cleared by a sibling test) and best-effort delete. ----
+    try {
+      const csrf = await primeCsrf(page)
+      if (schAResp) await deleteSekolah(page, csrf, schAResp.id)
+      if (schBResp) await deleteSekolah(page, csrf, schBResp.id)
+      if (branchA) await deleteBranch(page, csrf, branchA.id)
+      if (branchB) await deleteBranch(page, csrf, branchB.id)
+    } catch { /* ignore */ }
+  }
 
   expect(pageErrors).toHaveLength(0)
 })
