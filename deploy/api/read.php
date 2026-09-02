@@ -63,14 +63,14 @@ foreach ($entities as $name) {
     $config = entityConfig($name);
 
     if ($user['role'] === 'superadmin') {
-        $rows = $pdo->query("SELECT payload FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+        $rows = $pdo->query("SELECT payload, version FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
     } elseif ($name === 'cabang') {
         // cabang has no cabang_id column pointing at itself — its own `id`
         // IS the branch id (see recordOwnsBranch() in authorize.php). Admin
         // Cabang can only ever see their own branch record; Trainer has no
         // branch-column to scope by here either, so this falls through to
         // the same per-record authorize() check as everyone non-superadmin.
-        $rows = $pdo->query("SELECT payload FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+        $rows = $pdo->query("SELECT payload, version FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
     } else {
         // cabang_id is a real column on the other tables — scope at the SQL
         // level first (branch-level, coarse-grained) before any per-record
@@ -83,7 +83,7 @@ foreach ($entities as $name) {
             continue;
         }
         if ($user['role'] === 'admin_cabang') {
-            $stmt = $pdo->prepare("SELECT payload FROM {$config['table']} WHERE cabang_id = :cabang_id ORDER BY created_at, id");
+            $stmt = $pdo->prepare("SELECT payload, version FROM {$config['table']} WHERE cabang_id = :cabang_id ORDER BY created_at, id");
             $stmt->execute([':cabang_id' => $cabangId]);
             $rows = $stmt->fetchAll();
         } else {
@@ -91,14 +91,26 @@ foreach ($entities as $name) {
             // assignment is school-based, not branch-based) — pull the full
             // table and let the per-record authorize() check below do the
             // filtering, same as before M4.1.
-            $rows = $pdo->query("SELECT payload FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+            $rows = $pdo->query("SELECT payload, version FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
         }
     }
 
     $records = array_values(array_filter(array_map(
-        static fn (array $row): mixed => json_decode($row['payload'], true),
+        static function (array $row) use ($name): array {
+            $payload = json_decode($row['payload'], true);
+            if (!is_array($payload)) return ['__invalid' => true];
+            // M-MAS4.2: surface the SQL-side `version` column alongside the
+            // payload so subsequent writeRemote() UPDATE calls can echo it
+            // back to masterWrite(). masterWrite() (server/api/_master.php:111)
+            // returns 409 unless $clientVersion === $existing['version'].
+            // Without this echo the client only ever sends $clientVersion=null,
+            // so every edit against a cold-loaded record 409s even when there
+            // is no actual concurrent edit.
+            $payload['version'] = (int) $row['version'];
+            return $payload;
+        },
         $rows
-    ), static fn (mixed $record): bool => is_array($record)));
+    ), static fn (mixed $record): bool => is_array($record) && !($record['__invalid'] ?? false)));
 
     // Admin Cabang (non-cabang entities) and Superadmin are already fully
     // covered by the query above. Everyone else needs a per-record
