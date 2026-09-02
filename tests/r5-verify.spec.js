@@ -1,4 +1,4 @@
-import { test, expect, loginAsAdmin } from './fixtures.js'
+import { test, expect, loginViaApi } from './fixtures.js'
 
 // ============================================================
 // M-R5 — Deletion flows & dialog primitives
@@ -37,6 +37,17 @@ async function gotoApp(page) {
   await page.waitForLoadState('domcontentloaded')
 }
 
+async function loginSuperadmin(page) {
+  // PM.1.2: pre-M4.2 the test called a soft-login `loginAsAdmin()` helper
+  // that opened the role picker. Post-M4.2 the only login path is
+  // loginViaApi() against the seeded superadmin; the app then bootstraps
+  // the role context through /api/auth/me.php. UI flows still write
+  // through writeRemote(), which populates afterschola_v4_* on success,
+  // so the existing getStoreJson() assertions remain valid.
+  await loginViaApi(page, 'superadmin')
+  await gotoApp(page)
+}
+
 function field(page, labelText) {
   return page
     .locator(
@@ -60,7 +71,7 @@ async function getStoreJson(page, key) {
 test('M-R5.4: delete school with 3 siswa reassigns them to school B', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await loginAsAdmin(page)
+  await loginSuperadmin(page)
 
   // Two schools, A and B.
   await openTab(page, 'Data Sekolah')
@@ -130,7 +141,7 @@ test('M-R5.4: delete school with 3 siswa reassigns them to school B', async ({ p
 test('M-R5.1/2: confirm shows yellow strip, alert shows emerald strip', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await loginAsAdmin(page)
+  await loginSuperadmin(page)
 
   // Seed: school + trainer + siswa (reuses the live forms).
   await openTab(page, 'Data Sekolah')

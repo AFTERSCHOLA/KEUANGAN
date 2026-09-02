@@ -1,4 +1,8 @@
-import { test, expect, loginViaApi, TEST_USERS } from './fixtures.js'
+import {
+  test, expect, loginViaApi, TEST_USERS,
+  primeCsrf, loginAndPrime, logout, readEntity,
+  createBranch, deleteBranch, createSekolahSuperadmin, deleteSekolah, createTrainerSuperadmin,
+} from './fixtures.js'
 
 // ============================================================
 // MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync E2E
@@ -40,96 +44,9 @@ const PREFIX_A = 'SIMA'
 const PREFIX_B = 'SIMB'
 const SUFFIX = String(Date.now()).slice(-6)
 
-async function primeCsrf(page) {
-  const res = await page.request.get('/api/auth/csrf.php')
-  if (!res.ok()) throw new Error(`csrf prime failed: ${res.status()}`)
-  const body = await res.json()
-  return body.csrfToken
-}
-
-async function loginAndPrime(page, role) {
-  await loginViaApi(page, role)
-  await page.goto(APP)
-  await page.waitForLoadState('domcontentloaded')
-  return primeCsrf(page)
-}
-
-async function logout(page) {
-  await page.request.post('/api/auth/logout.php')
-}
-
-async function readEntity(page, entity, csrf) {
-  const res = await page.request.get(`/api/read.php?entity=${entity}`, {
-    headers: csrf ? { 'X-CSRF-Token': csrf } : undefined,
-  })
-  if (!res.ok()) throw new Error(`readEntity(${entity}) failed: ${res.status()}`)
-  const body = await res.json()
-  // /api/read.php?entity=X returns a bare array (not wrapped). /api/read.php
-  // without ?entity returns an object map of all entities.
-  if (Array.isArray(body)) return body
-  return body[entity] || []
-}
-
-async function createBranch(page, csrf, kode, nama) {
-  const id = `cbg-${kode}-${SUFFIX}`
-  const res = await page.request.post('/api/cabang.php', {
-    headers: { 'X-CSRF-Token': csrf },
-    data: { action: 'create', id, kode, nama },
-  })
-  const body = await res.json()
-  if (!res.ok()) throw new Error(`createBranch(${kode}) failed: ${res.status()} ${JSON.stringify(body)}`)
-  return body
-}
-
-async function deleteBranch(page, csrf, id) {
-  const res = await page.request.post('/api/cabang.php', {
-    headers: { 'X-CSRF-Token': csrf },
-    data: { id, action: 'delete' },
-  })
-  if (!res.ok() && res.status() !== 422) {
-    const body = await res.json()
-    throw new Error(`deleteBranch(${id}) failed: ${res.status()} ${JSON.stringify(body)}`)
-  }
-}
-
-async function createSekolahSuperadmin(page, csrf, nama, spp, cabangId) {
-  const id = `sch-${cabangId.replace('cbg-', '')}-${SUFFIX}`
-  const res = await page.request.post('/api/sekolah.php', {
-    headers: { 'X-CSRF-Token': csrf },
-    data: { action: 'create', id, nama, spp, cabangId },
-  })
-  const body = await res.json()
-  if (!res.ok()) throw new Error(`createSekolah(${nama}) failed: ${res.status()} ${JSON.stringify(body)}`)
-  return { id, body }
-}
-
-async function deleteSekolah(page, csrf, id) {
-  const res = await page.request.post('/api/sekolah.php', {
-    headers: { 'X-CSRF-Token': csrf },
-    data: { id, action: 'delete' },
-  })
-  if (!res.ok() && res.status() !== 422) {
-    const body = await res.json()
-    throw new Error(`deleteSekolah(${id}) failed: ${res.status()} ${JSON.stringify(body)}`)
-  }
-}
-
-async function createTrainerSuperadmin(page, csrf, username, displayName, nama, cabangId, sekolahIds = []) {
-  const res = await page.request.post('/api/users.php', {
-    headers: { 'X-CSRF-Token': csrf },
-    data: {
-      action: 'create',
-      role: 'trainer',
-      username,
-      displayName,
-      cabangId,
-      trainer: { nama, wa: '08123456789', jadwal: 'Senin', honor: 50000, sekolahIds },
-    },
-  })
-  const body = await res.json()
-  if (!res.ok()) throw new Error(`createTrainerWithAccount(${username}) failed: ${res.status()} ${JSON.stringify(body)}`)
-  return body
-}
+// API helpers (primeCsrf, loginAndPrime, logout, readEntity, createBranch,
+// deleteBranch, createSekolahSuperadmin, deleteSekolah, createTrainerSuperadmin)
+// are imported from ./fixtures.js — see PM.0.1.
 
 test.describe('MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync', () => {
   test('CRUD writes feed back across sessions and branch isolation holds on re-read', async ({ page, pageErrors }) => {
@@ -145,14 +62,14 @@ test.describe('MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync', () => {
       // ---- Phase 1: superadmin creates two branches + a sekolah in each. ----
       let csrf = await loginAndPrime(page, 'superadmin')
 
-      const aBranch = await createBranch(page, csrf, branchACode, `Cabang Simulasi A ${SUFFIX}`)
+      const aBranch = await createBranch(page, csrf, branchACode, `Cabang Simulasi A ${SUFFIX}`, SUFFIX)
       branchAId = aBranch.id
-      const bBranch = await createBranch(page, csrf, branchBCode, `Cabang Simulasi B ${SUFFIX}`)
+      const bBranch = await createBranch(page, csrf, branchBCode, `Cabang Simulasi B ${SUFFIX}`, SUFFIX)
       branchBId = bBranch.id
 
-      const schA = await createSekolahSuperadmin(page, csrf, `Sekolah Simulasi A ${SUFFIX}`, 150000, branchAId)
+      const schA = await createSekolahSuperadmin(page, csrf, `Sekolah Simulasi A ${SUFFIX}`, 150000, branchAId, SUFFIX)
       schAId = schA.id
-      const schB = await createSekolahSuperadmin(page, csrf, `Sekolah Simulasi B ${SUFFIX}`, 150000, branchBId)
+      const schB = await createSekolahSuperadmin(page, csrf, `Sekolah Simulasi B ${SUFFIX}`, 150000, branchBId, SUFFIX)
       schBId = schB.id
 
       // ---- Phase 2: superadmin re-reads sekolah — both must be visible. ----

@@ -88,6 +88,19 @@ $pdo->prepare("INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :cabang
     ->execute([':id' => $sekolahB, ':cabang_id' => $branchB]);
 
 // --- spawn dev server -----------------------------------------------------
+// proc_open() uses 'php' verbatim — Windows test environments without PHP on
+// PATH (the common case once PHP is installed only as XAMPP) need the binary
+// location injected. Prefer PATH discovery; fall back to the well-known
+// XAMPP install path so the test stays runnable on a fresh machine.
+if (stripos((string) getenv('PATH'), 'xampp') === false) {
+    $xamppPhp = 'D:\\Games and Apps\\xampp\\php\\php.exe';
+    if (is_file($xamppPhp)) {
+        $dir = dirname($xamppPhp);
+        putenv('PATH=' . $dir . PATH_SEPARATOR . (string) getenv('PATH'));
+        $_ENV['PATH'] = (string) getenv('PATH');
+    }
+}
+
 $docroot = realpath(__DIR__ . '/../..');
 $port = 8199;
 $base = "http://127.0.0.1:$port";
@@ -103,15 +116,16 @@ $server = proc_open(
 // sleep — if a leftover process from a prior interrupted run is still
 // bound to $port, this fails loudly here instead of hanging later deep
 // inside a test.
+//
+// Windows quirk: proc_get_status() can transiently report 'running' =
+// false for a freshly-spawned `php -S` while the child is still
+// binding the socket (PHP bug #77568 family). The connection probe is
+// the real readiness signal; use it as the gate. We still consult
+// proc_get_status once the probe succeeds to fail loudly if the
+// process really did exit.
 $serverReady = false;
 for ($i = 0; $i < 20; $i++) {
     usleep(200000);
-    $status = proc_get_status($server);
-    if (!$status['running']) {
-        fwrite(STDERR, "php -S exited immediately — port $port is probably already in use by a leftover process.\n");
-        fwrite(STDERR, "Check with: netstat -ano | grep $port\n");
-        exit(1);
-    }
     $conn = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
     if ($conn) {
         fclose($conn);
@@ -120,7 +134,16 @@ for ($i = 0; $i < 20; $i++) {
     }
 }
 if (!$serverReady) {
-    fwrite(STDERR, "Server on port $port never became reachable after 4s.\n");
+    $status = proc_get_status($server);
+    fwrite(STDERR, "Server on port $port never became reachable after 4s. proc_get_status running=" . ($status['running'] ? 'true' : 'false') . " exitcode=" . ($status['exitcode'] ?? 'n/a') . "\n");
+    fwrite(STDERR, "--- dev server stderr ---\n" . implode('', array_slice(file($serverStderr) ?: [], -20)) . "\n");
+    fwrite(STDERR, "--- dev server stdout ---\n" . implode('', array_slice(file($serverStdout) ?: [], -20)) . "\n");
+    proc_terminate($server);
+    exit(1);
+}
+$status = proc_get_status($server);
+if (!$status['running'] && ($status['exitcode'] ?? 0) !== 0) {
+    fwrite(STDERR, "php -S died with non-zero exit after binding port. Check stderr above.\n");
     proc_terminate($server);
     exit(1);
 }

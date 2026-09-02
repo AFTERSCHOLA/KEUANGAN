@@ -1,4 +1,4 @@
-import { test, expect, loginAsAdmin } from './fixtures.js'
+import { test, expect, loginViaApi } from './fixtures.js'
 
 const APP = 'http://localhost:5173'
 const SCH = 'SD Harapan Bangsa'
@@ -28,6 +28,19 @@ async function resetStorage(page) {
 async function gotoApp(page) {
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
+}
+
+async function loginSuperadmin(page) {
+  // PM.1.1: pre-M4.2 the test used a soft-login `loginAsAdmin()` helper
+  // that opened the role picker and clicked through to Masuk. Post-M4.2
+  // there is no picker — the only login path is loginViaApi() against the
+  // seeded superadmin, after which the app bootstraps its role context
+  // through /api/auth/me.php. The UI flows that follow still write
+  // through writeRemote(), which populates afterschola_v4_* on success,
+  // so the existing getStoreJson() assertions remain valid against the
+  // local cache without needing an explicit /api/read.php round-trip.
+  await loginViaApi(page, 'superadmin')
+  await gotoApp(page)
 }
 
 function field(page, labelText) {
@@ -67,7 +80,7 @@ async function seed(page) {
 test('R3.1: siswa WA normalizes to 62 format on blur', async ({ page }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await loginAsAdmin(page)
+  await loginSuperadmin(page)
   await seed(page)
 
   await openTab(page, 'Data Siswa')
@@ -85,7 +98,7 @@ test('R3.1: siswa WA normalizes to 62 format on blur', async ({ page }) => {
 test('R3.2: trainer WA normalizes to 62 format on blur', async ({ page }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await loginAsAdmin(page)
+  await loginSuperadmin(page)
   await seed(page)
 
   await openTab(page, 'Data Trainer')
@@ -105,7 +118,7 @@ test('R3.2: trainer WA normalizes to 62 format on blur', async ({ page }) => {
 test('R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions', async ({ page }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await loginAsAdmin(page)
+  await loginSuperadmin(page)
   await seed(page)
 
   await openTab(page, 'Data Siswa')
@@ -135,7 +148,7 @@ test('R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions', async ({ pa
 test('R3.4: SPP ledger payment → Pemasukan SPP increments by nominal', async ({ page }) => {
   await resetStorage(page)
   await gotoApp(page)
-  await loginAsAdmin(page)
+  await loginSuperadmin(page)
   await seed(page)
 
   await openTab(page, 'Data Siswa')

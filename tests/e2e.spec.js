@@ -1,4 +1,4 @@
-import { test, expect, loginAsAdmin } from './fixtures.js'
+import { test, expect, loginViaApi } from './fixtures.js'
 
 // ============================================================
 // E2E suite mapped 1:1 onto Part 7 — Master Validation Table
@@ -55,6 +55,18 @@ function isAllowedRequestFailure(url) {
 async function gotoApp(page) {
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
+}
+
+async function loginSuperadmin(page) {
+  // PM.1.3: pre-M4.2 the suite called a soft-login `loginAsAdmin()`
+  // helper that opened the role picker. Post-M4.2 the only login path
+  // is loginViaApi() against the seeded superadmin; the app then
+  // bootstraps its role context through /api/auth/me.php. The UI
+  // flows still write through writeRemote(), which populates
+  // afterschola_v4_* on success, so the existing getStoreJson()
+  // assertions remain valid.
+  await loginViaApi(page, 'superadmin')
+  await gotoApp(page)
 }
 
 // The forms' <label>s are NOT linked to their inputs (no htmlFor/id), so
@@ -203,7 +215,7 @@ test.describe('#1 Boot', () => {
 
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // Title is driven by settings.title || 'Afterschola' (index.html has no static title).
     await expect(page).toHaveTitle('Afterschola')
@@ -230,7 +242,7 @@ test.describe('#2 Roundtrip — add sekolah+trainer+siswa, refresh, all persist'
   test('school, trainer and siswa survive a full page reload', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await openTab(page, 'Data Sekolah')
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
@@ -268,7 +280,7 @@ test.describe('#3 Inverse arrays', () => {
   test('assign via trainer form, assert both detail cards, delete propagates', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await openTab(page, 'Data Sekolah')
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
@@ -322,7 +334,7 @@ test.describe('#4 Rename integrity', () => {
   test('renamed trainer: absensi honor unchanged, history shows cached name', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await openTab(page, 'Data Sekolah')
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
@@ -378,7 +390,7 @@ test.describe('#5 Same-day sessions', () => {
   test('two sessions, one school, one day, two trainers → both persist in Riwayat', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await seedEntities(page)
 
@@ -403,7 +415,7 @@ test.describe('#6 Load-to-correct', () => {
   test('resubmit corrected absensi → one updated record, honor recomputed', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await seedEntities(page, { withSiswa: true })
 
@@ -443,7 +455,7 @@ test.describe('#7 Ledger', () => {
   test('partial → Lunaskan → delete entry → Sisa restores; history lists entries', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // Two Hadir sessions × 150k = 300k beban.
     await seedEntities(page, { honor: 150000 })
@@ -497,7 +509,7 @@ test.describe('#8 Basis', () => {
   test('unpaid sessions move memo rows only, never Laba/Rugi', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await seedEntities(page, { withSiswa: true })
 
@@ -544,7 +556,7 @@ test.describe('#9 Delete-trainer safety', () => {
   test('delete trainer after payments → Keuangan totals unchanged', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await seedEntities(page)
 
@@ -599,7 +611,7 @@ test.describe('#10 Sparse maps', () => {
   test('new siswa starts unpaid; ledger payment derives one paid period', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await seedEntities(page)
 
@@ -632,7 +644,7 @@ test.describe('#11 Year boundary', () => {
   test('2027/2028 + Januari → empty-but-correct; 2028-01-10 → periode 2028-01', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // Data in the DEFAULT (2026/2027) period.
     await seedEntities(page, { withSiswa: true })
@@ -676,7 +688,7 @@ test.describe('#12 Backup roundtrip', () => {
   test('export → wipe → restore → identical; corrupt file refused', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // Seed some data via the real UI.
     await seedEntities(page, { withSiswa: true })
@@ -718,7 +730,7 @@ test.describe('#12 Backup roundtrip', () => {
       }
     })
     await page.reload()
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
     await openTab(page, 'Data Sekolah')
     await expect(page.getByText('Belum ada data sekolah mitra.')).toBeVisible()
 
@@ -729,7 +741,7 @@ test.describe('#12 Backup roundtrip', () => {
     await page.getByRole('button', { name: 'Ya, Timpa Data' }).click()
     // SettingsModal's restore path only closes the modal — reload to re-read stores.
     await page.reload()
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // All six data keys byte-identical after restore.
     const afterData = await snapshotState()
@@ -763,7 +775,7 @@ test.describe('#13 Tunggakan', () => {
   test('filter matches spot-check; WA tagihan link prefilled', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // Default period is the running month — a fresh siswa is unpaid for that
     // elapsed month, so it shows up as tunggakan immediately.
@@ -822,7 +834,7 @@ test.describe('#14 CSV', () => {
   test('six exports open; filenames carry year+month keys; honor figures match UI', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     await seedEntities(page, { withSiswa: true })
     await recordSession(page, { date: '2026-07-10' })
@@ -853,7 +865,7 @@ test.describe('#15 Persisted UI', () => {
   test('refresh mid-tab → same tab/period state', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginAsAdmin(page)
+    await loginSuperadmin(page)
 
     // Switch to a non-default tab, year and month.
     await page.getByRole('combobox').first().selectOption({ label: '2026/2027' })

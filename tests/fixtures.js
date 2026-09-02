@@ -98,4 +98,116 @@ export async function loginViaApi(page, role, options = {}) {
   return user
 }
 
+// ============================================================
+// Shared API helpers (PM.0.1)
+//
+// Extracted from tests/multi-account-crud-sync.spec.js so every spec
+// seeds/reads entities through the same set of helpers. The helpers
+// all hit the real PHP backend via Vite's /api proxy — no localStorage
+// shortcut, no mock — so the suite exercises the production code path
+// (taste #61: server-side authorization is the authoritative contract).
+//
+// Per-spec test data uses a `SIM-` / `Simulasi-` prefix in nama/kode
+// and a runtime SUFFIX so concurrent runs don't collide and cleanup
+// can be surgical. The helpers that mint ids (createBranch /
+// createSekolahSuperadmin) accept an explicit `suffix` arg so specs
+// that need two records in one run (e.g. branch A and branch B) can
+// share a single suffix and land at predictable ids; specs that mint
+// one record at a time can pass `String(Date.now()).slice(-6)` and
+// not share suffix state with anyone.
+// ============================================================
+
+const APP = 'http://localhost:5173'
+
+export async function primeCsrf(page) {
+  const res = await page.request.get('/api/auth/csrf.php')
+  if (!res.ok()) throw new Error(`csrf prime failed: ${res.status()}`)
+  const body = await res.json()
+  return body.csrfToken
+}
+
+export async function loginAndPrime(page, role) {
+  await loginViaApi(page, role)
+  await page.goto(APP)
+  await page.waitForLoadState('domcontentloaded')
+  return primeCsrf(page)
+}
+
+export async function logout(page) {
+  await page.request.post('/api/auth/logout.php')
+}
+
+export async function readEntity(page, entity, csrf) {
+  const res = await page.request.get(`/api/read.php?entity=${entity}`, {
+    headers: csrf ? { 'X-CSRF-Token': csrf } : undefined,
+  })
+  if (!res.ok()) throw new Error(`readEntity(${entity}) failed: ${res.status()}`)
+  const body = await res.json()
+  // /api/read.php?entity=X returns a bare array (not wrapped). /api/read.php
+  // without ?entity returns an object map of all entities.
+  if (Array.isArray(body)) return body
+  return body[entity] || []
+}
+
+export async function createBranch(page, csrf, kode, nama, suffix) {
+  const id = `cbg-${kode}-${suffix}`
+  const res = await page.request.post('/api/cabang.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { action: 'create', id, kode, nama },
+  })
+  const body = await res.json()
+  if (!res.ok()) throw new Error(`createBranch(${kode}) failed: ${res.status()} ${JSON.stringify(body)}`)
+  return body
+}
+
+export async function deleteBranch(page, csrf, id) {
+  const res = await page.request.post('/api/cabang.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { id, action: 'delete' },
+  })
+  if (!res.ok() && res.status() !== 422) {
+    const body = await res.json()
+    throw new Error(`deleteBranch(${id}) failed: ${res.status()} ${JSON.stringify(body)}`)
+  }
+}
+
+export async function createSekolahSuperadmin(page, csrf, nama, spp, cabangId, suffix) {
+  const id = `sch-${cabangId.replace('cbg-', '')}-${suffix}`
+  const res = await page.request.post('/api/sekolah.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { action: 'create', id, nama, spp, cabangId },
+  })
+  const body = await res.json()
+  if (!res.ok()) throw new Error(`createSekolah(${nama}) failed: ${res.status()} ${JSON.stringify(body)}`)
+  return { id, body }
+}
+
+export async function deleteSekolah(page, csrf, id) {
+  const res = await page.request.post('/api/sekolah.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { id, action: 'delete' },
+  })
+  if (!res.ok() && res.status() !== 422) {
+    const body = await res.json()
+    throw new Error(`deleteSekolah(${id}) failed: ${res.status()} ${JSON.stringify(body)}`)
+  }
+}
+
+export async function createTrainerSuperadmin(page, csrf, username, displayName, nama, cabangId, sekolahIds = []) {
+  const res = await page.request.post('/api/users.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: {
+      action: 'create',
+      role: 'trainer',
+      username,
+      displayName,
+      cabangId,
+      trainer: { nama, wa: '08123456789', jadwal: 'Senin', honor: 50000, sekolahIds },
+    },
+  })
+  const body = await res.json()
+  if (!res.ok()) throw new Error(`createTrainerWithAccount(${username}) failed: ${res.status()} ${JSON.stringify(body)}`)
+  return body
+}
+
 export { expect }
