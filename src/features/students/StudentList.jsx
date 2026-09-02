@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote } from '../../lib/store.js'
+import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote, readRaw, writeRaw } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa, defaultCabang } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
@@ -91,6 +91,23 @@ export default function StudentList({ readOnly = false }) {
   if (result.status === 'forbidden') {
     return
   }
+  // AUDIT_FOLLOWUP M-AF1.3 — nullify absensi.entries[].siswaId for the
+  // deleted siswa in the local cache so attendanceStats() and the Rekap
+  // tab no longer count them. Server is the authoritative source of
+  // truth for this cascade; this is the local-cache mirror so the next
+  // render (or offline use) shows the same picture. sppPayments rows
+  // are intentionally untouched (append-only ledger, RD invariant).
+  const absensi = readRaw('absensi')
+  let touched = false
+  absensi.forEach(record => {
+    ;(record.siswaList || []).forEach(entry => {
+      if (entry && entry.siswaId === pendingRemoveId) {
+        entry.siswaId = null
+        touched = true
+      }
+    })
+  })
+  if (touched) writeRaw('absensi', absensi)
   setPendingRemoveId(null)
   setConfirmOpen(false)
   refresh()

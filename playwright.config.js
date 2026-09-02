@@ -7,6 +7,9 @@ export default defineConfig({
     port: 5173,
     reuseExistingServer: true,
   },
+  use: {
+    baseURL: 'http://localhost:5173',
+  },
   timeout: 60000,
   expect: {
     timeout: 10000,

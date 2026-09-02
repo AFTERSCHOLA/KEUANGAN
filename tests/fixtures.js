@@ -51,6 +51,16 @@ export async function loginViaApi(page, role, options = {}) {
   const credentials = options.credentials || TEST_USERS[role]
   if (!credentials) throw new Error(`Unknown test role: ${role}`)
 
+  // Prime the browser context with a real navigation so the APIRequestContext
+  // and the browser context share the same origin cookie jar. Without this,
+  // the first `page.request.post('/api/...')` in a fresh test attaches
+  // cookies to a synthetic origin that the subsequent `page.goto(APP)`
+  // never sees, and bootstrapAuth() then gets 401 on /api/auth/me.php.
+  if (!page.url() || !page.url().startsWith('http://localhost:5173')) {
+    await page.goto('/')
+    await page.waitForLoadState('domcontentloaded')
+  }
+
   // Prime the origin so the APIRequestContext shares cookies with the
   // browser context. A request through page.request against the
   // proxied /api/auth/login.php stores the Set-Cookie on this origin.
@@ -63,6 +73,28 @@ export async function loginViaApi(page, role, options = {}) {
     throw new Error(`loginViaApi(${role}) failed: ${loginResponse.status()} ${body}`)
   }
   const { user } = await loginResponse.json()
+
+  // Defensive copy: explicitly install the session cookie into the browser
+  // context. Playwright's `page.request` shares its cookie jar with the
+  // browser context, but that sharing is sensitive to the request having
+  // a real origin attached. Copying the value back through addCookies()
+  // makes the cookie visible to every subsequent `page.goto(APP)` no
+  // matter how the request-context / browser-context handoff played out.
+  const setCookie = loginResponse.headers()['set-cookie']
+  if (setCookie) {
+    const match = setCookie.match(/afterschola_session=([^;]+)/)
+    if (match) {
+      await page.context().addCookies([{
+        name: 'afterschola_session',
+        value: match[1],
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Lax',
+      }])
+    }
+  }
   return user
 }
 

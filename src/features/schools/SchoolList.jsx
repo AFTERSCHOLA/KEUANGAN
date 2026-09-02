@@ -54,6 +54,21 @@ async function save() {
     setAlertOpen(true)
     return
   }
+  // AUDIT_FOLLOWUP M-AF3.1 — pre-submit cabangId sanity check. The
+  // form's <select> only renders real branch options, but a devtools
+  // override of the React form state (or a stale `cabang` cache
+  // after a delete) can set form.cabangId to an id that no longer
+  // resolves. Reject early with the exact Indonesian copy the plan
+  // pins so a) the user sees a localized explanation rather than
+  // the generic 422 from sekolah.php:47-49, and b) no /api/sekolah.php
+  // request is fired (the school-form-validation spec asserts no
+  // network traffic — it's the only way to prove the early-return
+  // happened before writeRemote).
+  if (!form.cabangId || !cabang.some(c => c.id === form.cabangId)) {
+    setAlertMsg('Cabang tidak valid')
+    setAlertOpen(true)
+    return
+  }
   const prev = sekolah.find(s => s.id === form.id)
   const oldTrainerIds = prev ? prev.trainerIds : []
 
@@ -233,7 +248,7 @@ async function save() {
               />
                             <div className="absolute top-2 right-2 flex gap-1">
                 <button onClick={() => setInvoiceModalSchool(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm" title="Kelola Invoice"><svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>
-                <button onClick={() => openEdit(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"></button>
+                <button onClick={() => openEdit(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm" title="Edit" aria-label="Edit sekolah"><svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
                 <button onClick={() => remove(sch.id)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"><svg className="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2"/></svg></button>
               </div>
             </div>

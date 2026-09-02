@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Modal from './Modal.jsx'
 import BackupRestorePanel from './BackupRestorePanel.jsx'
-import { getSettings, setSettings } from '../lib/store'
+import { getSettings, setSettings, getRoleContext } from '../lib/store'
 import { inputClass } from '../lib/ui.js'
 
 // In-panel label style — kept local so the muted uppercase caption
@@ -20,13 +20,28 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const [rekeningAtasNama, setRekeningAtasNama] = useState(initial.rekeningAtasNama || '')
   const [penandatangan, setPenandatangan] = useState(initial.penandatangan || '')
 
+  // AUDIT_FOLLOWUP M-AF2.2 — close the read-side settings leak.
+  // The server already denies writes for non-superadmin (settings.php
+  // / manage_settings deny-list) and the entity itself is excluded
+  // from roleCanReadEntity() for non-superadmin. The remaining gap
+  // is the form rendering: getSettings() reads from localStorage,
+  // which a stale browser profile or a previously-superadmin session
+  // can leave populated. The role-gated render here is the local
+  // mirror of the server-side contract — non-superadmin callers
+  // never see bank rekening / penandatangan / alamatUsaha in the
+  // DOM, even if the data is sitting in localStorage.
+  const ctx = getRoleContext()
+  const canEditSettings = ctx.role === 'superadmin'
+
   function handleSaveIdentitas() {
+    if (!canEditSettings) return
     setSettings({ logoUrl: logoUrl.trim(), title: title.trim() })
     onSaved?.()
     onClose()
   }
 
   function handleSaveInvoiceInfo() {
+    if (!canEditSettings) return
     setSettings({
       alamatUsaha: alamatUsaha.trim(),
       rekeningBank: rekeningBank.trim(),
@@ -36,6 +51,19 @@ export default function SettingsModal({ open, onClose, onSaved }) {
     })
     onSaved?.()
     onClose()
+  }
+
+  if (open && !canEditSettings) {
+    return (
+      <Modal open={open} onClose={onClose} title="Pengaturan">
+        <div
+          data-testid="settings-readonly-notice"
+          className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600"
+        >
+          Hanya Superadmin yang dapat mengubah pengaturan global.
+        </div>
+      </Modal>
+    )
   }
 
   return (
