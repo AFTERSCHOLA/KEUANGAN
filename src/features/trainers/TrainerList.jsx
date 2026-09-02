@@ -4,7 +4,7 @@ import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
-import { readCached, getRoleContext, writeRemote, deleteRemote, upsert } from '../../lib/store.js'
+import { readCached, getRoleContext, writeRemote, deleteRemote, pullRemote } from '../../lib/store.js'
 
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => readCached('trainer'))
@@ -114,12 +114,8 @@ export default function TrainerList() {
       const serverTrainer = result.body?.trainer
 const initialPassword = result.body?.initialPassword
 if (serverTrainer && initialPassword) {
-  // Adopt the server's trainer.id so the local cache reflects truth.
   form.id = serverTrainer.id
-  // FIX: writeRemote('users', ...) di atas cuma nulis ke cache lokal
-  // 'users', bukan 'trainer' — jadi trainer baru harus dimasukin manual
-  // ke cache 'trainer' supaya langsung muncul tanpa perlu refresh/pull.
-  upsert('trainer', serverTrainer)
+  await pullRemote('trainer')
   setInitialPasswordDialog({
     username: username.trim(),
     password: initialPassword,
@@ -173,13 +169,7 @@ if (serverTrainer && initialPassword) {
     let schoolUpdateFailed = false
 
     for (const s of schoolUpdates) {
-      const payload = { ...s }
-
-      if (getRoleContext().role === 'admin_cabang') {
-        delete payload.cabangId
-      }
-
-      const schoolResult = await writeRemote('sekolah', payload)
+      const schoolResult = await writeRemote('sekolah', s)
 
       if (
         schoolResult.status === 'forbidden' ||

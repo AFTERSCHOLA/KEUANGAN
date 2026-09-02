@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { readCached, write, upsert, getRoleContext, writeRemote } from '../../lib/store.js'
+import { readCached, write, getRoleContext, writeRemote, deleteRemote } from '../../lib/store.js'
 import { newCabang, defaultCabang } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -176,21 +176,44 @@ export default function BranchManager() {
     setConfirmOpen(true)
   }
 
-  function doDelete() {
-    const updated = cabang.filter(c => c.id !== pendingDeleteId)
-    write('cabang', updated)
-    setConfirmOpen(false)
-    setPendingDeleteId(null)
-    refresh()
+  async function doDelete() {
+    if (!pendingDeleteId || saving) return
+    setSaving(true)
+    try {
+      const result = await deleteRemote('cabang', pendingDeleteId)
+      if (result.status === 'forbidden') {
+        showError(result.message || 'Kamu tidak punya izin untuk menghapus cabang ini.')
+        return
+      }
+      setConfirmOpen(false)
+      setPendingDeleteId(null)
+      refresh()
+    } catch (error) {
+      showError(error?.message || 'Gagal menghapus cabang.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function assignSchool(schoolId, branchId) {
+  async function assignSchool(schoolId, branchId) {
     if (ctx.role !== 'superadmin') return
     const sch = sekolah.find(s => s.id === schoolId)
     if (!sch) return
-    upsert('sekolah', { ...sch, cabangId: branchId })
-    setAssignPickerFor(null)
-    refresh()
+    setSaving(true)
+    try {
+      const result = await writeRemote('sekolah', { ...sch, cabangId: branchId })
+      if (result.status === 'forbidden') {
+        showError(result.message || 'Tidak punya izin untuk memindahkan sekolah ini.')
+      } else if (result.status === 'conflict') {
+        showError('Data sekolah ini sudah berubah di server. Muat ulang halaman sebelum memindahkan lagi.')
+      }
+    } catch (error) {
+      showError(error?.message || 'Gagal memindahkan sekolah.')
+    } finally {
+      setAssignPickerFor(null)
+      refresh()
+      setSaving(false)
+    }
   }
 
   if (ctx.role !== 'superadmin') {

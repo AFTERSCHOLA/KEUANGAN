@@ -282,6 +282,47 @@ const WRITE_ENDPOINTS = {
   users: '/api/users.php',
 }
 
+// MULTI_ACCOUNT_SYNC M-MAS1.1 — single owner of the per-entity `cabangId`
+// policy. Each branch mirrors the server-side rule so callers don't need to
+// know whether a given endpoint rejects body-supplied cabangId outright
+// (sekolah/trainer/users for admin_cabang, siswa for any role) or accepts it
+// (superadmin-supplied cabangId for sekolah/users, client-supplied for the
+// three ledgers).
+export function prepareWritePayload(key, record, ctx) {
+  if (record == null || typeof record !== 'object') return record
+  const role = ctx?.role ?? null
+  const copy = { ...record }
+
+  switch (key) {
+    case 'cabang':
+      return copy
+
+    case 'sekolah':
+      if (role === 'admin_cabang') delete copy.cabangId
+      return copy
+
+    case 'trainer':
+      if (role === 'admin_cabang') delete copy.cabangId
+      return copy
+
+    case 'siswa':
+      delete copy.cabangId
+      return copy
+
+    case 'users':
+      if (role === 'admin_cabang') delete copy.cabangId
+      return copy
+
+    case 'absensi':
+    case 'sppPayments':
+    case 'honorPayments':
+      return copy
+
+    default:
+      return copy
+  }
+}
+
 // Mengirim satu record ke server. TIDAK throw untuk 409/403 — keduanya
 // adalah hasil bisnis yang wajar (bukan bug), jadi dikembalikan sebagai
 // status terstruktur supaya pemanggil (UI) bisa menampilkan pesan yang
@@ -309,6 +350,9 @@ export async function writeRemote(key, record) {
   const url = WRITE_ENDPOINTS[key]
   if (!url) throw new Error(`writeRemote: entitas "${key}" belum punya endpoint server`)
 
+  const ctx = getRoleContext()
+  const sanitized = prepareWritePayload(key, record, ctx)
+
 // record.id being absent means the ID is server-generated (e.g. users.php's
 // createUser()), not client-pregenerated (trainer/siswa/sekolah/cabang via
 // generateId()) — never treat this as "update" by matching against an
@@ -320,7 +364,7 @@ const isUpdate = record.id != null && readRaw(key).some(r => r.id === record.id)
   try {
     const result = await apiRequest(url, {
       method: 'POST',
-      body: isUpdate ? { ...record, action: 'update' } : { ...record, action: 'create' },
+      body: isUpdate ? { ...sanitized, action: 'update' } : { ...sanitized, action: 'create' },
     })
     // Server is authoritative — merge its response (e.g. server-derived
     // cabangId, bumped version) into the local cache so readCached()
