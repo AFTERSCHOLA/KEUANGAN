@@ -2,7 +2,7 @@ import { test, expect, loginViaApi, TEST_USERS } from './fixtures.js'
 import { execFileSync } from 'node:child_process'
 
 const APP = 'http://localhost:5173'
-const PHP = 'D:/Games and Apps/xampp/php/php.exe'
+const PHP = process.env.PHP_BIN || 'php'
 const SEED_USERS = 'C:/Users/barak/AppData/Local/Temp/seed_users.php'
 const CLEANUP = 'C:/Users/barak/AppData/Local/Temp/cleanup_phase.php'
 const SEED_PHASE = 'C:/Users/barak/AppData/Local/Temp/seed_phase567.php'
