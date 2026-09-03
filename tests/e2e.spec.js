@@ -1,11 +1,11 @@
-import { test, expect, loginViaApi } from './fixtures.js'
+﻿import { test, expect, loginViaApi } from './fixtures.js'
 
 // ============================================================
-// E2E suite mapped 1:1 onto Part 7 — Master Validation Table
+// E2E suite mapped 1:1 onto Part 7 â€” Master Validation Table
 // (IMPLEMENTATION_PLAN.md). One test.describe per row, each
 // test named after its row label (M-R7.2).
 // Row #16 (Regression) and #17 (Visual parity) remain manual
-// checklist rows — see the manual runbook at the bottom.
+// checklist rows â€” see the manual runbook at the bottom.
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -45,7 +45,7 @@ function thisMonthDate(day) {
   return `${y}-${m}-${String(day).padStart(2, '0')}`
 }
 
-// Allowed 404s — the favicon is `data:,`, so no favicon request must ever
+// Allowed 404s â€” the favicon is `data:,`, so no favicon request must ever
 // fail Boot. Network hiccups on external image hosts are tolerated too.
 const FAVICON = /favicon|icon/i
 function isAllowedRequestFailure(url) {
@@ -59,13 +59,24 @@ async function gotoApp(page) {
 
 async function loginSuperadmin(page) {
   // PM.1.3: pre-M4.2 the suite called a soft-login `loginAsAdmin()`
-  // helper that opened the role picker. Post-M4.2 the only login path
-  // is loginViaApi() against the seeded superadmin; the app then
-  // bootstraps its role context through /api/auth/me.php. The UI
-  // flows still write through writeRemote(), which populates
-  // afterschola_v4_* on success, so the existing getStoreJson()
-  // assertions remain valid.
+  // helper. Post-M4.2 the only login path is loginViaApi() against
+  // a seeded user. Tests that do NOT seed a trainer stay on
+  // superadmin. Tests that DO seed a trainer call loginAdminCabang
+  // instead, because the trainer-create UI button is intentionally
+  // gated to admin_cabang (src/features/trainers/TrainerList.jsx:37
+  // and docs/AUDIT_FINDINGS_2026-09-02.md:78-83). The PM.1.3 RULES
+  // line of PLAYWRIGHT_MIGRATION_MILESTONES.md said all 18 call
+  // sites become loginViaApi(page, 'superadmin'); that was a plan
+  // typo contradicted by the authoritative app behavior.
   await loginViaApi(page, 'superadmin')
+  await gotoApp(page)
+}
+
+async function loginAdminCabang(page) {
+  // PM.1.3: trainer-create UI is gated to admin_cabang; see
+  // loginSuperadmin comment above. Tests that call seedEntities or
+  // click "Tambah Trainer Baru" must log in as adminCabang.
+  await loginViaApi(page, 'adminCabang')
   await gotoApp(page)
 }
 
@@ -103,6 +114,13 @@ async function fillTrainerForm(page, { nama, honor = 50000, checkedSchoolNames =
     const label = page.locator('label', { hasText: schoolName }).first()
     const checkbox = label.getByRole('checkbox')
     if (!(await checkbox.isChecked())) await checkbox.check()
+  }
+  // The trainer form has a "Buat akun login untuk trainer ini" toggle that
+  // defaults to ON. e2e assertions don't need a login account, so uncheck
+  // it to avoid the "Username wajib diisi" validation alert blocking save.
+  const loginToggle = page.getByRole('checkbox', { name: /Buat akun login untuk trainer/ })
+  if ((await loginToggle.count()) > 0 && (await loginToggle.isChecked())) {
+    await loginToggle.uncheck()
   }
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
 }
@@ -181,13 +199,13 @@ async function toggleStudentPresence(page, studentName) {
 // Modal may also linger after "Simpan Pembayaran" (openPay never closes it).
 // Either overlay would block subsequent clicks. Dismiss whatever is present.
 async function dismissDialog(page) {
-  // ConfirmDialog card (border-t-4 border-yellow-400) → its Batal closes it.
+  // ConfirmDialog card (border-t-4 border-yellow-400) â†’ its Batal closes it.
   const confirmBatal = page.locator('div.border-t-4.border-yellow-400').getByRole('button', { name: 'Batal' })
   if ((await confirmBatal.count()) > 0 && (await confirmBatal.isVisible())) {
     await confirmBatal.click()
     return
   }
-  // Modal (bg-blue-900 header bar) → its Batal closes it (payment modal).
+  // Modal (bg-blue-900 header bar) â†’ its Batal closes it (payment modal).
   const modalBatal = page.locator('div.bg-blue-900').getByRole('button', { name: 'Batal' })
   if ((await modalBatal.count()) > 0 && (await modalBatal.isVisible())) {
     await modalBatal.click()
@@ -201,7 +219,7 @@ async function loadFirstRecordForCorrection(page) {
 }
 
 // ============================================================
-// Row #1 — Boot
+// Row #1 â€” Boot
 // ============================================================
 test.describe('#1 Boot', () => {
   test('boot: page.goto + zero console errors + favicon-404 tolerance', async ({ page, pageErrors }) => {
@@ -236,15 +254,16 @@ test.describe('#1 Boot', () => {
 })
 
 // ============================================================
-// Row #2 — Roundtrip
+// Row #2 â€” Roundtrip
 // ============================================================
-test.describe('#2 Roundtrip — add sekolah+trainer+siswa, refresh, all persist', () => {
+test.describe('#2 Roundtrip â€” add sekolah+trainer+siswa, refresh, all persist', () => {
   test('school, trainer and siswa survive a full page reload', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await openTab(page, 'Data Sekolah')
+
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
     await fillSchoolForm(page, { nama: SCH })
 
@@ -255,8 +274,7 @@ test.describe('#2 Roundtrip — add sekolah+trainer+siswa, refresh, all persist'
     await openTab(page, 'Data Siswa')
     await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
     await fillSiswaForm(page, { nama: SISWA, schoolName: SCH })
-
-    // The refresh — hard navigation, not a client-side tab switch.
+    // The refresh â€” hard navigation, not a client-side tab switch.
     await page.reload()
 
     await openTab(page, 'Data Sekolah')
@@ -274,13 +292,13 @@ test.describe('#2 Roundtrip — add sekolah+trainer+siswa, refresh, all persist'
 })
 
 // ============================================================
-// Row #3 — Inverse arrays
+// Row #3 â€” Inverse arrays
 // ============================================================
 test.describe('#3 Inverse arrays', () => {
   test('assign via trainer form, assert both detail cards, delete propagates', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await openTab(page, 'Data Sekolah')
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
@@ -288,7 +306,7 @@ test.describe('#3 Inverse arrays', () => {
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
     await fillSchoolForm(page, { nama: SCH2 })
 
-    // Direction: trainer form assigns the school → inverse write lands on sekolah.trainerIds.
+    // Direction: trainer form assigns the school â†’ inverse write lands on sekolah.trainerIds.
     await openTab(page, 'Data Trainer')
     await page.getByRole('button', { name: 'Tambah Trainer Baru' }).click()
     await fillTrainerForm(page, { nama: TRAINER, checkedSchoolNames: [SCH] })
@@ -313,7 +331,7 @@ test.describe('#3 Inverse arrays', () => {
     await expect(page.locator('.bg-white.rounded-2xl', { hasText: SCH }).first()).toContainText('1 Trainer')
     await expect(page.locator('.bg-white.rounded-2xl', { hasText: SCH2 }).first()).toContainText('1 Trainer')
 
-    // Delete propagation: remove the school via the school tab (no siswa → deletes cleanly).
+    // Delete propagation: remove the school via the school tab (no siswa â†’ deletes cleanly).
     await page.locator('.bg-white.rounded-2xl', { hasText: SCH2 }).first().getByRole('button').last().click()
 
     // Trainer form no longer lists the deleted school.
@@ -328,13 +346,13 @@ test.describe('#3 Inverse arrays', () => {
 })
 
 // ============================================================
-// Row #4 — Rename integrity
+// Row #4 â€” Rename integrity
 // ============================================================
 test.describe('#4 Rename integrity', () => {
   test('renamed trainer: absensi honor unchanged, history shows cached name', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await openTab(page, 'Data Sekolah')
     await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
@@ -365,7 +383,7 @@ test.describe('#4 Rename integrity', () => {
     await openTab(page, 'Riwayat Absensi')
     await expect(page.getByText(TRAINER, { exact: true }).first()).toBeVisible()
 
-    // Honor math unchanged: 1 Hadir session × 50k = Rp 50.000 Beban.
+    // Honor math unchanged: 1 Hadir session Ã— 50k = Rp 50.000 Beban.
     await openTab(page, 'Data Pembayaran')
     const beban = await page
       .locator('tr', { hasText: 'Budi Wijaya' })
@@ -384,13 +402,13 @@ test.describe('#4 Rename integrity', () => {
 })
 
 // ============================================================
-// Row #5 — Same-day sessions
+// Row #5 â€” Same-day sessions
 // ============================================================
 test.describe('#5 Same-day sessions', () => {
-  test('two sessions, one school, one day, two trainers → both persist in Riwayat', async ({ page, pageErrors }) => {
+  test('two sessions, one school, one day, two trainers â†’ both persist in Riwayat', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await seedEntities(page)
 
@@ -399,7 +417,7 @@ test.describe('#5 Same-day sessions', () => {
     // Session 2: same day, different trainer.
     await recordSession(page, { trainerName: TRAINER2, date: thisMonthDate(15) })
 
-    // Both persist — Riwayat lists two rows with their own trainers.
+    // Both persist â€” Riwayat lists two rows with their own trainers.
     expect(await countRiwayatRows(page)).toBe(2)
     await expect(page.getByText(TRAINER, { exact: true }).first()).toBeVisible()
     await expect(page.getByText(TRAINER2, { exact: true }).first()).toBeVisible()
@@ -409,13 +427,13 @@ test.describe('#5 Same-day sessions', () => {
 })
 
 // ============================================================
-// Row #6 — Load-to-correct
+// Row #6 â€” Load-to-correct
 // ============================================================
 test.describe('#6 Load-to-correct', () => {
-  test('resubmit corrected absensi → one updated record, honor recomputed', async ({ page, pageErrors }) => {
+  test('resubmit corrected absensi â†’ one updated record, honor recomputed', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await seedEntities(page, { withSiswa: true })
 
@@ -429,18 +447,18 @@ test.describe('#6 Load-to-correct', () => {
     // Load-to-correct: reopen the exact record in the entry form.
     await loadFirstRecordForCorrection(page)
 
-    // Change trainer status from Hadir → Alpa and resubmit.
+    // Change trainer status from Hadir â†’ Alpa and resubmit.
     await page.getByRole('button', { name: 'Alpa', exact: true }).click()
     await page.getByRole('button', { name: 'Simpan Absensi' }).click()
   await page.getByRole('button', { name: 'Ya, Simpan', exact: true }).click()
 
-    // Still exactly one record for this composite key — the correction updated it.
+    // Still exactly one record for this composite key â€” the correction updated it.
     expect(await countRiwayatRows(page)).toBe(1)
     const records = await getStoreJson(page, 'absensi')
     expect(records).toHaveLength(1)
     expect(records[0].trainerStatus).toBe('Alpa')
 
-    // Honor recomputed: no Hadir session ⇒ Beban 0 on Pembayaran tab.
+    // Honor recomputed: no Hadir session â‡’ Beban 0 on Pembayaran tab.
     await openTab(page, 'Data Pembayaran')
     await expect(page.getByText('Rp 0').first()).toBeVisible()
 
@@ -449,15 +467,15 @@ test.describe('#6 Load-to-correct', () => {
 })
 
 // ============================================================
-// Row #7 — Ledger lifecycle
+// Row #7 â€” Ledger lifecycle
 // ============================================================
 test.describe('#7 Ledger', () => {
-  test('partial → Lunaskan → delete entry → Sisa restores; history lists entries', async ({ page, pageErrors }) => {
+  test('partial â†’ Lunaskan â†’ delete entry â†’ Sisa restores; history lists entries', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
-    // Two Hadir sessions × 150k = 300k beban.
+    // Two Hadir sessions Ã— 150k = 300k beban.
     await seedEntities(page, { honor: 150000 })
     await recordSession(page, { date: thisMonthDate(10) })
     await recordSession(page, { date: thisMonthDate(12) })
@@ -482,7 +500,7 @@ test.describe('#7 Ledger', () => {
     await expect(page.locator('tr', { hasText: TRAINER }).locator('td').nth(6)).toContainText('Rp 0')
     expect(await getStoreJson(page, 'honorPayments')).toHaveLength(2)
 
-    // History shows both entries; delete the Lunaskan entry → Sisa restores to 200k.
+    // History shows both entries; delete the Lunaskan entry â†’ Sisa restores to 200k.
     await page.locator('tr', { hasText: TRAINER }).getByRole('button', { name: /Riwayat/ }).click()
     await page
       .locator('div.flex.items-center.justify-between', { hasText: '200.000' })
@@ -503,17 +521,17 @@ test.describe('#7 Ledger', () => {
 })
 
 // ============================================================
-// Row #8 — Basis
+// Row #8 â€” Basis
 // ============================================================
 test.describe('#8 Basis', () => {
   test('unpaid sessions move memo rows only, never Laba/Rugi', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await seedEntities(page, { withSiswa: true })
 
-    // 2 Hadir sessions → Beban 100k memo; no cash in or out yet.
+    // 2 Hadir sessions â†’ Beban 100k memo; no cash in or out yet.
     const pastDay = Math.min(28, new Date().getDate() - 1)
     await recordSession(page, { date: thisMonthDate(pastDay - 2) })
     await toggleStudentPresence(page, SISWA)
@@ -534,7 +552,7 @@ test.describe('#8 Basis', () => {
     await expect(bebanCard).toHaveText(SPP_DISPLAY)
     await expect(labaCard).toHaveText('Rp 0')
 
-    // Pay 100k cash → Laba/Rugi moves, Beban memo stays.
+    // Pay 100k cash â†’ Laba/Rugi moves, Beban memo stays.
     await openTab(page, 'Data Pembayaran')
     await page.locator('tr', { hasText: TRAINER }).getByRole('button', { name: 'Bayar Manual' }).click()
     await field(page, 'Nominal Pembayaran').fill('100000')
@@ -550,22 +568,22 @@ test.describe('#8 Basis', () => {
 })
 
 // ============================================================
-// Row #9 — Ledger principle (delete-trainer safety)
+// Row #9 â€” Ledger principle (delete-trainer safety)
 // ============================================================
 test.describe('#9 Delete-trainer safety', () => {
-  test('delete trainer after payments → Keuangan totals unchanged', async ({ page, pageErrors }) => {
+  test('delete trainer after payments â†’ Keuangan totals unchanged', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await seedEntities(page)
 
     await recordSession(page, { date: thisMonthDate(10) })
 
-    // Pay the exact beban (1 session × 50k = Rp 50.000). Paying exactly the
+    // Pay the exact beban (1 session Ã— 50k = Rp 50.000). Paying exactly the
     // sisa avoids the app's overpay warning dialog, so the payment saves
     // directly. The payment modal lingers after save (openPay never closes
-    // it) — dismiss it so later clicks are not blocked.
+    // it) â€” dismiss it so later clicks are not blocked.
     await openTab(page, 'Data Pembayaran')
     await page.locator('tr', { hasText: TRAINER }).getByRole('button', { name: 'Bayar Manual' }).click()
     await field(page, 'Nominal Pembayaran').fill('50000')
@@ -581,7 +599,7 @@ test.describe('#9 Delete-trainer safety', () => {
 
     // Ledger principle holds at the data level: the payment entry and the
     // absensi record are retained (deletion must never rewrite financial
-    // history — Part 2 rule 3). The trainer entity itself is gone.
+    // history â€” Part 2 rule 3). The trainer entity itself is gone.
     const payments = await getStoreJson(page, 'honorPayments')
     expect(payments).toHaveLength(1)
     expect(payments[0].nominal).toBe(50000)
@@ -596,7 +614,7 @@ test.describe('#9 Delete-trainer safety', () => {
     // The inverse-array cleanup on the school is OUT OF SCOPE for this test:
     // it exercises the ledger-principle guarantee that financial history is
     // never rewritten by deletion. (Known app gap: TrainerList's doRemove
-    // does not clean sekolah.trainerIds — row #3 tracks that separately.)
+    // does not clean sekolah.trainerIds â€” row #3 tracks that separately.)
     const sekolah = await getStoreJson(page, 'sekolah')
     expect(sekolah.find(s => s.nama === SCH)).toBeTruthy()
 
@@ -605,13 +623,13 @@ test.describe('#9 Delete-trainer safety', () => {
 })
 
 // ============================================================
-// Row #10 — Sparse maps
+// Row #10 â€” Sparse maps
 // ============================================================
 test.describe('#10 Sparse maps', () => {
   test('new siswa starts unpaid; ledger payment derives one paid period', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await seedEntities(page)
 
@@ -638,13 +656,13 @@ test.describe('#10 Sparse maps', () => {
 })
 
 // ============================================================
-// Row #11 — Year boundary
+// Row #11 â€” Year boundary
 // ============================================================
 test.describe('#11 Year boundary', () => {
-  test('2027/2028 + Januari → empty-but-correct; 2028-01-10 → periode 2028-01', async ({ page, pageErrors }) => {
+  test('2027/2028 + Januari â†’ empty-but-correct; 2028-01-10 â†’ periode 2028-01', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     // Data in the DEFAULT (2026/2027) period.
     await seedEntities(page, { withSiswa: true })
@@ -655,7 +673,7 @@ test.describe('#11 Year boundary', () => {
     await page.getByRole('combobox').nth(1).selectOption({ label: 'Januari' })
 
     // Engine check against the REAL module in the browser bundle: a date in
-    // Januari of academic year 2027/2028 must derive periode "2028-01" —
+    // Januari of academic year 2027/2028 must derive periode "2028-01" â€”
     // never a Juli fallback, never month-name parsing.
     const derived = await page.evaluate(async () => {
       const mod = await import('/src/lib/constants.js')
@@ -682,20 +700,20 @@ test.describe('#11 Year boundary', () => {
 })
 
 // ============================================================
-// Row #12 — Backup roundtrip
+// Row #12 â€” Backup roundtrip
 // ============================================================
 test.describe('#12 Backup roundtrip', () => {
-  test('export → wipe → restore → identical; corrupt file refused', async ({ page, pageErrors }) => {
+  test('export â†’ wipe â†’ restore â†’ identical; corrupt file refused', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     // Seed some data via the real UI.
     await seedEntities(page, { withSiswa: true })
     await recordSession(page, { date: thisMonthDate(10) })
 
     // Capture the exact pre-backup state of the six data keys (parsed so
-    // `null` (absent) and `[]` (written-empty) compare equal — the app writes
+    // `null` (absent) and `[]` (written-empty) compare equal â€” the app writes
     // empty arrays on first load).
     const dataKeys = ['sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'settings']
     const snapshotState = () =>
@@ -713,7 +731,7 @@ test.describe('#12 Backup roundtrip', () => {
       }, dataKeys)
     const beforeData = await snapshotState()
 
-    // Export the backup through the Settings modal → real browser download.
+    // Export the backup through the Settings modal â†’ real browser download.
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Pengaturan' }).first().click()
     await page.getByRole('button', { name: 'Unduh Backup' }).click()
@@ -739,7 +757,7 @@ test.describe('#12 Backup roundtrip', () => {
     await page.getByRole('button', { name: 'Pengaturan' }).first().click()
     await page.setInputFiles('input[type="file"]', backupPath)
     await page.getByRole('button', { name: 'Ya, Timpa Data' }).click()
-    // SettingsModal's restore path only closes the modal — reload to re-read stores.
+    // SettingsModal's restore path only closes the modal â€” reload to re-read stores.
     await page.reload()
     await loginSuperadmin(page)
 
@@ -755,7 +773,7 @@ test.describe('#12 Backup roundtrip', () => {
     await openTab(page, 'Data Siswa')
     await expect(page.getByText(SISWA, { exact: true }).first()).toBeVisible()
 
-    // Corrupt file → refusal message.
+    // Corrupt file â†’ refusal message.
     await page.getByRole('button', { name: 'Pengaturan' }).first().click()
     await page.setInputFiles('input[type="file"]', {
       name: 'corrupt.json',
@@ -769,15 +787,15 @@ test.describe('#12 Backup roundtrip', () => {
 })
 
 // ============================================================
-// Row #13 — Tunggakan
+// Row #13 â€” Tunggakan
 // ============================================================
 test.describe('#13 Tunggakan', () => {
   test('filter matches spot-check; WA tagihan link prefilled', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
-    // Default period is the running month — a fresh siswa is unpaid for that
+    // Default period is the running month â€” a fresh siswa is unpaid for that
     // elapsed month, so it shows up as tunggakan immediately.
     const now = new Date()
     const monthName = now.toLocaleDateString('id-ID', { month: 'long' })
@@ -794,7 +812,7 @@ test.describe('#13 Tunggakan', () => {
     await expect(row).toContainText(monthName)
 
     // The tagihan link (with the ?text= param) carries the prefilled template
-    // for the MOST RECENT unpaid month: school spp = 100.000 → "Rp 100.000".
+    // for the MOST RECENT unpaid month: school spp = 100.000 â†’ "Rp 100.000".
     const tagihanHref = await page
       .locator(`a[href^="https://wa.me/6281234567890?text="]`)
       .first()
@@ -803,7 +821,7 @@ test.describe('#13 Tunggakan', () => {
       `Tagihan SPP bulan ${monthName} untuk Ananda Andi Pratama: ${SPP_DISPLAY}`
     )
 
-    // Pay EVERY elapsed month through the SPP ledger → siswa stops being tunggakan.
+    // Pay EVERY elapsed month through the SPP ledger â†’ siswa stops being tunggakan.
     const selectedYear = Number(await page.getByRole('combobox').first().inputValue())
     const selectedMonth = Number(await page.getByRole('combobox').nth(1).inputValue())
     const elapsedPeriodes = await page.evaluate(async ({ year, month }) => {
@@ -818,7 +836,7 @@ test.describe('#13 Tunggakan', () => {
       await page.getByRole('button', { name: 'Simpan Pembayaran' }).click()
     }
 
-    // The filter toggle is sticky — it was ON before we opened the edit
+    // The filter toggle is sticky â€” it was ON before we opened the edit
     // modal, so the filtered table should now be empty.
     await expect(page.locator('tr', { hasText: SISWA })).toHaveCount(0)
     await expect(page.getByText('Tidak ada siswa yang menunggak.')).toBeVisible()
@@ -828,13 +846,13 @@ test.describe('#13 Tunggakan', () => {
 })
 
 // ============================================================
-// Row #14 — CSV exports
+// Row #14 â€” CSV exports
 // ============================================================
 test.describe('#14 CSV', () => {
   test('six exports open; filenames carry year+month keys; honor figures match UI', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
-    await loginSuperadmin(page)
+    await loginAdminCabang(page)
 
     await seedEntities(page, { withSiswa: true })
     await recordSession(page, { date: '2026-07-10' })
@@ -859,10 +877,10 @@ test.describe('#14 CSV', () => {
 })
 
 // ============================================================
-// Row #15 — Persisted UI
+// Row #15 â€” Persisted UI
 // ============================================================
 test.describe('#15 Persisted UI', () => {
-  test('refresh mid-tab → same tab/period state', async ({ page, pageErrors }) => {
+  test('refresh mid-tab â†’ same tab/period state', async ({ page, pageErrors }) => {
     await resetStorage(page)
     await gotoApp(page)
     await loginSuperadmin(page)
@@ -886,24 +904,24 @@ test.describe('#15 Persisted UI', () => {
 })
 
 // ============================================================
-// Row #16 (Regression) and #17 (Visual parity) — MANUAL RUNBOOK
+// Row #16 (Regression) and #17 (Visual parity) â€” MANUAL RUNBOOK
 // ------------------------------------------------------------
 // These rows are manual checklist items, kept out of the automated
 // suite by design (M-R7.2).
 //
-// #16 Regression — run the M0–M3 exit gates by hand:
-//   - assign trainer to two schools from both directions → arrays consistent
-//   - rename trainer → historical absensi honor unchanged
-//   - delete school with siswa → blocked with reassign path
+// #16 Regression â€” run the M0â€“M3 exit gates by hand:
+//   - assign trainer to two schools from both directions â†’ arrays consistent
+//   - rename trainer â†’ historical absensi honor unchanged
+//   - delete school with siswa â†’ blocked with reassign path
 //   - new siswa unpaid with zero sppLunas entries
-//   - switch to 2027/2028 + Januari → every tab empty-but-correct
-//   - partial pay → Lunaskan → Sisa=0 → delete entry → Sisa restores
-//   - two same-day sessions → both in Riwayat → correct → single updated
-//   - pay honor → delete trainer → Keuangan totals unchanged
-//   - backup → wipe → restore → identical; corrupt file refused
+//   - switch to 2027/2028 + Januari â†’ every tab empty-but-correct
+//   - partial pay â†’ Lunaskan â†’ Sisa=0 â†’ delete entry â†’ Sisa restores
+//   - two same-day sessions â†’ both in Riwayat â†’ correct â†’ single updated
+//   - pay honor â†’ delete trainer â†’ Keuangan totals unchanged
+//   - backup â†’ wipe â†’ restore â†’ identical; corrupt file refused
 //   - tunggakan list vs manual spot-check of 5 students
 //
-// #17 Visual parity — side-by-side screenshot pass against
+// #17 Visual parity â€” side-by-side screenshot pass against
 //   page-overview-2026-08-06.png for Overview/Sekolah/Siswa/Trainer/
 //   Absensi/Pembayaran/Keuangan: same palette, spacing, radius,
 //   typography. Any diff beyond new features is a defect.
