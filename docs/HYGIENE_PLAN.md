@@ -174,6 +174,14 @@ Option B (full re-read of every doc) is rejected as unbounded. Option C
 (grep only for the most-recently-touched docs) is rejected because the
 drift is uniformly distributed (no signal in recency).
 
+Cross-link (added 2026-09-03, HY.4.2): the two PM.1 plan contradictions
+referenced above (PM.1.1 RULES `superadmin` → `adminCabang` for
+trainer-creating specs, and the `Buat akun login` toggle workaround)
+are now durably recorded in `docs/PLAYWRIGHT_MIGRATION_MILESTONES.md`
+under PM.0.2 (new sub-bullet) and PM.1.1 / PM.1.3 (RULES amended).
+The next source-touching chain (PM.5) cites PM.0.2 as the canonical
+record of the toggle workaround.
+
 ## 5. Sequencing
 
 The chain has natural ordering from cheapest environmental fix to

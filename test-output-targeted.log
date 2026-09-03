@@ -1,0 +1,292 @@
+﻿
+Running 19 tests using 1 worker
+
+[AUDIT][superadmin] tab=Overview buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Sekolah buttons=1 form-fields=1
+[AUDIT][superadmin] tab=Data Siswa buttons=1 form-fields=2
+[AUDIT][superadmin] tab=Data Trainer buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Absensi buttons=2 form-fields=0
+[AUDIT][superadmin] tab=Riwayat Absensi buttons=3 form-fields=1
+[AUDIT][superadmin] tab=Data Pembayaran buttons=0 form-fields=2
+[AUDIT][superadmin] tab=Data Keuangan buttons=11 form-fields=0
+[AUDIT][superadmin] tab=Umur Piutang buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Cabang buttons=4 form-fields=0
+  ok  1 [default] › tests\audit-crud-styling.spec.js:33:1 › AUDIT: superadmin — every tab reachable, every visible button responds (7.1s)
+[AUDIT][superadmin] Sekolah form fields=6
+[AUDIT][superadmin] Filter Cabang options=2
+  ok  2 [default] › tests\audit-crud-styling.spec.js:57:1 › AUDIT: superadmin Data Sekolah — CRUD buttons + form behavior (3.3s)
+[AUDIT][superadmin] Siswa form fields=8
+  ok  3 [default] › tests\audit-crud-styling.spec.js:89:1 › AUDIT: superadmin Data Siswa — Tambah Siswa Baru + Aksi column (3.2s)
+[AUDIT][superadmin] Tambah Trainer Baru count=0
+  ok  4 [default] › tests\audit-crud-styling.spec.js:107:1 › AUDIT: superadmin Data Trainer — Tambah Trainer Baru availability (2.1s)
+[AUDIT][superadmin] Cabang form fields=5
+  ok  5 [default] › tests\audit-crud-styling.spec.js:122:1 › AUDIT: superadmin Data Cabang — CRUD + assign school (3.1s)
+[AUDIT][superadmin] Absensi form fields=0
+  ok  6 [default] › tests\audit-crud-styling.spec.js:137:1 › AUDIT: superadmin Data Absensi — Input Absensi form (2.9s)
+[AUDIT][superadmin] Semester toggle options visible
+  ok  7 [default] › tests\audit-crud-styling.spec.js:155:1 › AUDIT: superadmin Data Keuangan — semester toggle + chart (3.7s)
+[AUDIT][admin_cabang] Data Cabang hidden — correct
+[AUDIT][admin_cabang] Trainer form fields=6
+  ok  8 [default] › tests\audit-crud-styling.spec.js:176:1 › AUDIT: admin_cabang — scoped tabs + branch filter (3.3s)
+[AUDIT][trainer] nav count=0
+  ok  9 [default] › tests\audit-crud-styling.spec.js:210:1 › AUDIT: trainer — 4 tabs only, read-only Siswa, no Tambah (2.9s)
+[AUDIT][styling] superadmin overview {
+  "h1": {
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "color": "oklch(0.905 0.182 98.111)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "700",
+    "borderRadius": "0px",
+    "padding": "0px"
+  },
+  "h2": {
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "color": "oklch(0.279 0.041 260.031)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "700",
+    "borderRadius": "0px",
+    "padding": "0px"
+  },
+  "card": {
+    "backgroundColor": "rgb(255, 255, 255)",
+    "color": "oklch(0.279 0.041 260.031)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "400",
+    "borderRadius": "16px",
+    "padding": "16px"
+  },
+  "accentButton": {
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "color": "rgb(255, 255, 255)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "600",
+    "borderRadius": "8px",
+    "padding": "10px 12px"
+  }
+}
+  ok 10 [default] › tests\audit-crud-styling.spec.js:239:1 › AUDIT: visual styling — overview card colors + typography (3.3s)
+[AUDIT] report written: audit-report.md (1 findings)
+  ok 11 [default] › tests\audit-crud-styling.spec.js:272:1 › AUDIT: write report (420ms)
+  ok 12 [default] › tests\flow-simulation.spec.js:36:1 › flow simulation: superadmin reaches the dashboard via loginViaApi (1.8s)
+  x  13 [default] › tests\flow-simulation.spec.js:49:1 › flow simulation: trainer reaches the dashboard via loginViaApi (13.5s)
+  ok 14 [default] › tests\honor-delete-403.spec.js:26:1 › M-AF2.1: trainer direct POST to /api/honorPayments.php returns 403 and local cache is unchanged (1.6s)
+  x  15 [default] › tests\phase567-exit-gate.spec.js:76:1 › Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation (13.9s)
+  x  16 [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur (5.5s)
+  ok 17 [default] › tests\r3-verify.spec.js:115:1 › R3.2: trainer WA normalizes to 62 format on blur (2.7s)
+node.exe : R3.3 API seed failed: createSekolah(SD R3.3 Sim 961796) failed: 422 {"error":"cabangId tidak ditemukan"}
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (R3.3 API seed f...dak ditemukan"}:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  x  18 [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions (1.0m)
+  x  19 [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal (2.8s)
+
+
+  1) [default] › tests\flow-simulation.spec.js:49:1 › flow simulation: trainer reaches the dashboard via loginViaApi 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('navigation').getByRole('button')
+    Expected: 4
+    Received: 0
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 10000ms
+      - waiting for getByRole('navigation').getByRole('button')
+        23 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      55 |   // Trainer landing is the 4-tab reduced surface, not the full admin nav.
+      56 |   const nav = page.getByRole('navigation').getByRole('button')
+    > 57 |   await expect(nav).toHaveCount(4)
+         |                     ^
+      58 |
+      59 |   expect(pageErrors).toHaveLength(0)
+      60 | })
+        at D:\Games and Apps\Coding\AdminDashboard\tests\flow-simulation.spec.js:57:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\flow-simulation-flow-simul-8dd16-e-dashboard-via-loginViaApi-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\flow-simulation-flow-simul-8dd16-e-dashboard-via-loginViaApi-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\flow-simulation-flow-simul-8dd16-e-dashboard-via-loginViaApi-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\flow-simulation-flow-simul-8dd16-e-dashboard-via-loginViaApi-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\flow-simulation-flow-simul-8dd16-e-dashboard-via-loginViaApi-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [default] › tests\phase567-exit-gate.spec.js:76:1 › Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Rekap Saya', exact: true })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('button', { name: 'Rekap Saya', exact: true })
+
+
+      88 |   await page.waitForLoadState('domcontentloaded')
+      89 |   // Wait for the trainer Rekap Saya to finish hydrating sekolah/sekolahIds.
+    > 90 |   await expect(page.getByRole('button', { name: 'Rekap Saya', exact: true })).toBeVisible()
+         |                                                                               ^
+      91 |   await page.waitForFunction(() => {
+      92 |     const raw = localStorage.getItem('afterschola_v4_trainer')
+      93 |     if (!raw) return false
+        at D:\Games and Apps\Coding\AdminDashboard\tests\phase567-exit-gate.spec.js:90:79
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur ─────
+
+    TypeError: Cannot read properties of undefined (reading 'wa')
+
+      109 |   // value in the form was normalized on blur, so the saved record is 62...
+      110 |   const siswa = await getStoreJson(page, 'siswa')
+    > 111 |   expect(siswa[0].wa).toBe('6281234567890')
+          |                   ^
+      112 | })
+      113 |
+      114 | // R3.2 — trainer WA blur normalizes (form shows 6281234567890)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:111:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for locator('div:has(> label:text("Sekolah")) input, div:has(> label:text("Sekolah")) textarea, div:has(> label:text("Sekolah")) select').first()
+        - locator resolved to <select class="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">…</select>
+      - attempting select option action
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+        - waiting 20ms
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+          - waiting 100ms
+        112 × waiting for element to be visible and enabled
+            - did not find some options
+          - retrying select option action
+            - waiting 500ms
+
+
+      198 |   await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
+      199 |   await field(page, 'Nama Siswa').fill(SIM_SW_NAME)
+    > 200 |   await field(page, 'Sekolah').selectOption({ label: SIM_SCH_NAME })
+          |                                ^
+      201 |   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+      202 |
+      203 |   for (const day of [5, 9]) {
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:200:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal 
+
+    Error: createSekolah(SD R3.4 Sim 025790) failed: 422 {"error":"cabangId tidak ditemukan"}
+
+       at fixtures.js:201
+
+      199 |   })
+      200 |   const body = await res.json()
+    > 201 |   if (!res.ok()) throw new Error(`createSekolah(${nama}) failed: ${res.status()} ${JSON.stringify(body)}`)
+          |                        ^
+      202 |   return { id, body }
+      203 | }
+      204 |
+        at createSekolahSuperadmin (D:\Games and Apps\Coding\AdminDashboard\tests\fixtures.js:201:24)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:236:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    [default] › tests\flow-simulation.spec.js:49:1 › flow simulation: trainer reaches the dashboard via loginViaApi 
+    [default] › tests\phase567-exit-gate.spec.js:76:1 › Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation 
+    [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur ──────
+    [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions 
+    [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal 
+  14 passed (2.5m)

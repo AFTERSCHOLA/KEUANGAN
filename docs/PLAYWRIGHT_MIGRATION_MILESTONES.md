@@ -38,6 +38,33 @@ Helpers to extract from `multi-account-crud-sync.spec.js:43-115`:
 `deleteBranch`, `createSekolahSuperadmin`, `deleteSekolah`,
 `createTrainerSuperadmin`, `createTrainerWithAccount`.
 
+#### PM.0.2 Tambah Trainer Baru — "Buat akun login" toggle workaround (HY.4.2 amendment)
+
+The `Tambah Trainer Baru` form in the Admin Cabang / Superadmin flow has
+a `Buat akun login untuk trainer ini` toggle that defaults to ON. When
+left ON, the form requires a `Username` value (server-side validation
+returns the Indonesian message `Username wajib diisi`). The seed and
+form-fill helpers in this chain therefore **uncheck** that toggle before
+submitting the form, so the spec does not get tripped by the validation
+alert even when it is only asserting the trainer profile fields.
+
+Concrete references:
+
+- The toggle is rendered in the trainer form component (see
+  `src/features/trainers/TrainerList.jsx` — the `Buat akun login untuk
+  trainer ini` label is bound to a controlled checkbox that defaults
+  to `true`).
+- The seed helper `seed()` in `tests/r3-verify.spec.js` and the
+  `fillTrainerForm()` helper in `tests/e2e.spec.js` both explicitly
+  uncheck the toggle (locator: `getByLabel('Buat akun login untuk
+  trainer ini', { exact: true })` or equivalent) before clicking the
+  form's `Simpan` button.
+
+This sub-bullet is documentation of an already-shipped workaround, not
+a new microtask. If the form is later refactored to default the toggle
+to OFF, this sub-bullet and the helper uncheck calls can be removed
+together.
+
 ## Gate PM.1 — Group B (import + UI-seeded-fixture rewrite)
 
 ### PM.1.1 Rewrite r3-verify.spec.js
@@ -45,9 +72,9 @@ Helpers to extract from `multi-account-crud-sync.spec.js:43-115`:
 ```text
 MICROTASK: Rewrite r3
   EDIT:    tests/r3-verify.spec.js
-  RULES:   replace loginAsAdmin with loginViaApi(page, 'superadmin') + page.goto(APP); replace localStorage afterschola_v4_{siswa,trainer} assertions with /api/read.php?entity=... re-reads; preserve the four R3.* assertions (WA normalization + attendance counts + SPP ledger)
+  RULES:   replace loginAsAdmin with loginViaApi(page, 'adminCabang') + page.goto(APP); trainer creation must go through the admin_cabang session per the privilege matrix (see src/features/trainers/TrainerList.jsx:37 and docs/AUDIT_FINDINGS_2026-09-02.md:78-83 — superadmin cannot create trainers via the UI, only edit existing records); the `loginViaApi(page, 'superadmin')` call in the original RULES line was a plan typo; replace localStorage afterschola_v4_{siswa,trainer} assertions with /api/read.php?entity=... re-reads; preserve the four R3.* assertions (WA normalization + attendance counts + SPP ledger); see PM.0.2 for the "Buat akun login" toggle workaround that fillTrainerForm() in this spec applies before clicking Simpan
   DEPENDS: PM.0.1
-  OUTCOME: r3 spec exercises the WA normalization, attendance counts, and SPP-ledger increment shape against real auth + real backend
+  OUTCOME: r3 spec exercises the WA normalization, attendance counts, and SPP-ledger increment shape against real auth + real backend, through the admin_cabang role
   VERIFY:  npx playwright test tests/r3-verify.spec.js --workers=1 exits 0 with zero page errors
   DONE-IF: verify passes; only r3 changed
 ```
@@ -69,7 +96,7 @@ MICROTASK: Rewrite r5
 ```text
 MICROTASK: Rewrite e2e
   EDIT:    tests/e2e.spec.js
-  RULES:   same as PM.1.1; the 18 loginAsAdmin call sites all become loginViaApi(page, 'superadmin'); localStorage entity reads in the 17 IMPLEMENTATION_PLAN.md Part 7 rows migrate to /api/read.php
+  RULES:   same as PM.1.1 with one carve-out: the 18 loginAsAdmin call sites become loginViaApi(page, 'adminCabang') only for specs that create trainers; specs that only read data or that create non-trainer entities (cabang, sekolah, siswa) keep loginViaApi(page, 'superadmin') because the privilege matrix (`src/features/trainers/TrainerList.jsx:37`, `docs/AUDIT_FINDINGS_2026-09-02.md:78-83`) restricts trainer creation to admin_cabang, while superadmin keeps the read-scope-it-owns role for the other CRUD checks; localStorage entity reads in the 17 IMPLEMENTATION_PLAN.md Part 7 rows migrate to /api/read.php; see PM.0.2 for the "Buat akun login" toggle workaround that fillTrainerForm() applies for the trainer rows in Part 7
   DEPENDS: PM.1.2
   OUTCOME: e2e suite loads; every M-R7.2 row runs end-to-end
   VERIFY:  npx playwright test tests/e2e.spec.js --workers=1 exits 0 with zero page errors

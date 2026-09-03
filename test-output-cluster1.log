@@ -1,0 +1,109 @@
+﻿
+Running 15 tests using 1 worker
+
+[AUDIT][superadmin] tab=Overview buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Sekolah buttons=1 form-fields=1
+[AUDIT][superadmin] tab=Data Siswa buttons=1 form-fields=2
+[AUDIT][superadmin] tab=Data Trainer buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Absensi buttons=2 form-fields=0
+[AUDIT][superadmin] tab=Riwayat Absensi buttons=3 form-fields=1
+[AUDIT][superadmin] tab=Data Pembayaran buttons=0 form-fields=2
+[AUDIT][superadmin] tab=Data Keuangan buttons=11 form-fields=0
+[AUDIT][superadmin] tab=Umur Piutang buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Cabang buttons=4 form-fields=0
+  ok  1 [default] › tests\audit-crud-styling.spec.js:33:1 › AUDIT: superadmin — every tab reachable, every visible button responds (7.4s)
+[AUDIT][superadmin] Sekolah form fields=6
+[AUDIT][superadmin] Filter Cabang options=2
+  ok  2 [default] › tests\audit-crud-styling.spec.js:57:1 › AUDIT: superadmin Data Sekolah — CRUD buttons + form behavior (2.7s)
+[AUDIT][superadmin] Siswa form fields=8
+  ok  3 [default] › tests\audit-crud-styling.spec.js:89:1 › AUDIT: superadmin Data Siswa — Tambah Siswa Baru + Aksi column (2.9s)
+[AUDIT][superadmin] Tambah Trainer Baru count=0
+  ok  4 [default] › tests\audit-crud-styling.spec.js:107:1 › AUDIT: superadmin Data Trainer — Tambah Trainer Baru availability (2.2s)
+[AUDIT][superadmin] Cabang form fields=5
+  ok  5 [default] › tests\audit-crud-styling.spec.js:122:1 › AUDIT: superadmin Data Cabang — CRUD + assign school (3.2s)
+[AUDIT][superadmin] Absensi form fields=0
+  ok  6 [default] › tests\audit-crud-styling.spec.js:137:1 › AUDIT: superadmin Data Absensi — Input Absensi form (2.7s)
+[AUDIT][superadmin] Semester toggle options visible
+  ok  7 [default] › tests\audit-crud-styling.spec.js:155:1 › AUDIT: superadmin Data Keuangan — semester toggle + chart (3.2s)
+[AUDIT][admin_cabang] Data Cabang hidden — correct
+[AUDIT][admin_cabang] Trainer form fields=6
+  ok  8 [default] › tests\audit-crud-styling.spec.js:176:1 › AUDIT: admin_cabang — scoped tabs + branch filter (3.2s)
+[AUDIT][trainer] nav count=0
+  ok  9 [default] › tests\audit-crud-styling.spec.js:210:1 › AUDIT: trainer — 4 tabs only, read-only Siswa, no Tambah (3.0s)
+[AUDIT][styling] superadmin overview {
+  "h1": {
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "color": "oklch(0.905 0.182 98.111)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "700",
+    "borderRadius": "0px",
+    "padding": "0px"
+  },
+  "h2": {
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "color": "oklch(0.279 0.041 260.031)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "700",
+    "borderRadius": "0px",
+    "padding": "0px"
+  },
+  "card": {
+    "backgroundColor": "rgb(255, 255, 255)",
+    "color": "oklch(0.279 0.041 260.031)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "400",
+    "borderRadius": "16px",
+    "padding": "16px"
+  },
+  "accentButton": {
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "color": "rgb(255, 255, 255)",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", \"Noto Sans\", Arial, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "fontWeight": "600",
+    "borderRadius": "8px",
+    "padding": "10px 12px"
+  }
+}
+  ok 10 [default] › tests\audit-crud-styling.spec.js:239:1 › AUDIT: visual styling — overview card colors + typography (2.9s)
+[AUDIT] report written: audit-report.md (1 findings)
+  ok 11 [default] › tests\audit-crud-styling.spec.js:272:1 › AUDIT: write report (449ms)
+  x  12 [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur (6.2s)
+  ok 13 [default] › tests\r3-verify.spec.js:115:1 › R3.2: trainer WA normalizes to 62 format on blur (3.4s)
+  ok 14 [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions (8.6s)
+  ok 15 [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal (5.7s)
+
+
+  1) [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur ─────
+
+    TypeError: Cannot read properties of undefined (reading 'wa')
+
+      109 |   // value in the form was normalized on blur, so the saved record is 62...
+      110 |   const siswa = await getStoreJson(page, 'siswa')
+    > 111 |   expect(siswa[0].wa).toBe('6281234567890')
+          |                   ^
+      112 | })
+      113 |
+      114 | // R3.2 — trainer WA blur normalizes (form shows 6281234567890)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:111:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur ──────
+  14 passed (1.0m)

@@ -1,0 +1,1132 @@
+﻿
+Running 82 tests using 1 worker
+
+[AUDIT][superadmin] tab=Overview buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Sekolah buttons=1 form-fields=1
+[AUDIT][superadmin] tab=Data Siswa buttons=1 form-fields=2
+[AUDIT][superadmin] tab=Data Trainer buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Absensi buttons=2 form-fields=0
+[AUDIT][superadmin] tab=Riwayat Absensi buttons=3 form-fields=1
+[AUDIT][superadmin] tab=Data Pembayaran buttons=0 form-fields=2
+[AUDIT][superadmin] tab=Data Keuangan buttons=11 form-fields=0
+[AUDIT][superadmin] tab=Umur Piutang buttons=0 form-fields=0
+[AUDIT][superadmin] tab=Data Cabang buttons=4 form-fields=0
+  ok  1 [default] › tests\audit-crud-styling.spec.js:33:1 › AUDIT: superadmin — every tab reachable, every visible button responds (7.5s)
+[AUDIT][superadmin] Sekolah form fields=6
+[AUDIT][superadmin] Filter Cabang options=2
+  ok  2 [default] › tests\audit-crud-styling.spec.js:57:1 › AUDIT: superadmin Data Sekolah — CRUD buttons + form behavior (3.4s)
+[AUDIT][superadmin] Siswa form fields=8
+  ok  3 [default] › tests\audit-crud-styling.spec.js:89:1 › AUDIT: superadmin Data Siswa — Tambah Siswa Baru + Aksi column (3.2s)
+[AUDIT][superadmin] Tambah Trainer Baru count=0
+  ok  4 [default] › tests\audit-crud-styling.spec.js:107:1 › AUDIT: superadmin Data Trainer — Tambah Trainer Baru availability (2.4s)
+[AUDIT][superadmin] Cabang form fields=5
+  ok  5 [default] › tests\audit-crud-styling.spec.js:122:1 › AUDIT: superadmin Data Cabang — CRUD + assign school (3.4s)
+[AUDIT][superadmin] Absensi form fields=0
+  ok  6 [default] › tests\audit-crud-styling.spec.js:137:1 › AUDIT: superadmin Data Absensi — Input Absensi form (2.9s)
+  x   7 [default] › tests\audit-crud-styling.spec.js:155:1 › AUDIT: superadmin Data Keuangan — semester toggle + chart (1.2m)
+  -   8 [default] › tests\audit-crud-styling.spec.js:176:1 › AUDIT: admin_cabang — scoped tabs + branch filter
+  -   9 [default] › tests\audit-crud-styling.spec.js:210:1 › AUDIT: trainer — 4 tabs only, read-only Siswa, no Tambah
+  -  10 [default] › tests\audit-crud-styling.spec.js:239:1 › AUDIT: visual styling — overview card colors + typography
+  -  11 [default] › tests\audit-crud-styling.spec.js:272:1 › AUDIT: write report
+  ok 12 [default] › tests\audit2-crud-deep.spec.js:37:1 › AUDIT2: superadmin Sekolah — full CRUD roundtrip (4.4s)
+[AUDIT2][admin_cabang] Sekolah form fields=5
+[AUDIT2][admin_cabang] Cabang select disabled=false
+  ok 13 [default] › tests\audit2-crud-deep.spec.js:100:1 › AUDIT2: admin_cabang Sekolah — branch-scoped create (3.1s)
+[AUDIT2][superadmin] Cabang created visible=1
+  ok 14 [default] › tests\audit2-crud-deep.spec.js:117:1 › AUDIT2: superadmin Cabang — full create + visible (5.6s)
+[AUDIT2][trainer] Input Absensi button count=1
+  ok 15 [default] › tests\audit2-crud-deep.spec.js:151:1 › AUDIT2: trainer Absensi — QuickSession and Simpan flow shape (3.1s)
+[AUDIT2][styling] buttons: []
+[AUDIT2][styling] cards: []
+  ok 16 [default] › tests\audit2-crud-deep.spec.js:168:1 › AUDIT2: visual — palette consistency across tabs (7.9s)
+[AUDIT2] report: audit-report-2.md
+  ok 17 [default] › tests\audit2-crud-deep.spec.js:199:1 › AUDIT2: write report (408ms)
+  x  18 [default] › tests\e2e.spec.js:225:3 › #1 Boot › boot: page.goto + zero console errors + favicon-404 tolerance (13.6s)
+  ok 19 [default] › tests\e2e.spec.js:260:3 › #2 Roundtrip â€” add sekolah+trainer+siswa, refresh, all persist › school, trainer and siswa survive a full page reload (6.5s)
+  x  20 [default] › tests\e2e.spec.js:298:3 › #3 Inverse arrays › assign via trainer form, assert both detail cards, delete propagates (18.1s)
+  ok 21 [default] › tests\e2e.spec.js:352:3 › #4 Rename integrity › renamed trainer: absensi honor unchanged, history shows cached name (9.9s)
+  ok 22 [default] › tests\e2e.spec.js:408:3 › #5 Same-day sessions › two sessions, one school, one day, two trainers â†’ both persist in Riwayat (11.0s)
+  x  23 [default] › tests\e2e.spec.js:433:3 › #6 Load-to-correct › resubmit corrected absensi â†’ one updated record, honor recomputed (15.5s)
+  x  24 [default] › tests\e2e.spec.js:473:3 › #7 Ledger › partial â†’ Lunaskan â†’ delete entry â†’ Sisa restores; history lists entries (14.9s)
+  x  25 [default] › tests\e2e.spec.js:527:3 › #8 Basis › unpaid sessions move memo rows only, never Laba/Rugi (13.7s)
+  x  26 [default] › tests\e2e.spec.js:574:3 › #9 Delete-trainer safety › delete trainer after payments â†’ Keuangan totals unchanged (12.1s)
+  x  27 [default] › tests\e2e.spec.js:629:3 › #10 Sparse maps › new siswa starts unpaid; ledger payment derives one paid period (13.9s)
+  x  28 [default] › tests\e2e.spec.js:662:3 › #11 Year boundary › 2027/2028 + Januari â†’ empty-but-correct; 2028-01-10 â†’ periode 2028-01 (1.1m)
+  x  29 [default] › tests\e2e.spec.js:706:3 › #12 Backup roundtrip › export â†’ wipe â†’ restore â†’ identical; corrupt file refused (1.1m)
+  x  30 [default] › tests\e2e.spec.js:793:3 › #13 Tunggakan › filter matches spot-check; WA tagihan link prefilled (25.3s)
+  x  31 [default] › tests\e2e.spec.js:852:3 › #14 CSV › six exports open; filenames carry year+month keys; honor figures match UI (1.1m)
+  x  32 [default] › tests\e2e.spec.js:883:3 › #15 Persisted UI › refresh mid-tab â†’ same tab/period state (1.1m)
+  ok 33 [default] › tests\flow-simulation.spec.js:36:1 › flow simulation: superadmin reaches the dashboard via loginViaApi (2.1s)
+  ok 34 [default] › tests\flow-simulation.spec.js:49:1 › flow simulation: trainer reaches the dashboard via loginViaApi (1.9s)
+  ok 35 [default] › tests\honor-delete-403.spec.js:26:1 › M-AF2.1: trainer direct POST to /api/honorPayments.php returns 403 and local cache is unchanged (1.4s)
+  ok 36 [default] › tests\ki1-trainer-cabangid.spec.js:78:1 › KI-1: Admin Cabang create trainer persists with matching cabangId (not silently dropped) (5.6s)
+  ok 37 [default] › tests\ki1-trainer-cabangid.spec.js:118:1 › KI-1: created trainer is visible again to the same Admin Cabang (round-trip through isWithinScope) (5.6s)
+  ok 38 [default] › tests\m1-scope-shell-navigation.spec.js:28:3 › M1.3 — scope shell navigation (authenticated) › Trainer sees exactly the four allowed tabs (1.7s)
+  ok 39 [default] › tests\m1-scope-shell-navigation.spec.js:42:3 › M1.3 — scope shell navigation (authenticated) › Trainer landing on an admin-only saved tab is redirected to Rekap Saya (2.1s)
+  ok 40 [default] › tests\m1-scope-shell-navigation.spec.js:59:3 › M1.3 — scope shell navigation (authenticated) › Admin Cabang lacks branch management and is redirected off a superadmin-only saved tab (2.1s)
+  x  41 [default] › tests\m1-scope-shell-navigation.spec.js:75:3 › M1.3 — scope shell navigation (authenticated) › Superadmin can see all admin tabs including Data Cabang (13.2s)
+  ok 42 [default] › tests\m51-verify.spec.js:17:1 › M5.1.1: loginViaApi session survives refresh; anonymous refresh returns to login (3.4s)
+  ok 43 [default] › tests\m512-verify.spec.js:38:1 › M5.1.2: role-branched tab registry (superadmin 10 / trainer 4) + hidden-tab redirect (4.1s)
+  ok 44 [default] › tests\m513-verify.spec.js:21:1 › M5.1.3: trainer sees only own assigned school data (role-context filtered read) (2.5s)
+  ok 45 [default] › tests\m52-verify.spec.js:29:1 › M5.2.1: newAbsensi() factory carries all six new fields with sparse defaults (1.8s)
+  ok 46 [default] › tests\m52-verify.spec.js:68:1 › M5.2.2: assistant list excludes main trainer (factory filter) (1.6s)
+  ok 47 [default] › tests\m52-verify.spec.js:85:1 › M5.2.3b: save-time sanity prompt copy is present in ConfirmDialog render (1.7s)
+  ok 48 [default] › tests\m52-verify.spec.js:103:1 › M5.2.4: QuickSession "Semua Hadir?" counter is derived from factory siswaList (1.7s)
+  ok 49 [default] › tests\m53-verify.spec.js:32:1 › M5.3.1: queue uses persisted proof, historical context, verification gate, and Semua history (3.0s)
+  ok 50 [default] › tests\m53-verify.spec.js:70:1 › M5.3.2: trainer dashboard renders rekap summary from seeded attendance (2.9s)
+  ok 51 [default] › tests\m53-verify.spec.js:80:1 › M5.3.3: trainer Data Siswa tab is read-only (no Tambah, no Aksi, no SPP action) (2.6s)
+  ok 52 [default] › tests\m54-verify.spec.js:21:1 › M5.4.1: newSiswa() factory defaults to Aktif status and null trialMulai (3.0s)
+  ok 53 [default] › tests\m54-verify.spec.js:36:1 › M5.4.3: 30 Active plus 2 Trial students bill only 30 (2.6s)
+  ok 54 [default] › tests\m54-verify.spec.js:65:1 › M5.4 exit gate: finance invariant survives verifikasi admin (no change to labaRugi) (2.1s)
+  ok 55 [default] › tests\m61-verify.spec.js:24:1 › M6.1 SPP ledger: collect, derive, finance, correct, persist (2.4s)
+  ok 56 [default] › tests\m62-verify.spec.js:23:1 › M6.2.1 Slip Honor prints the selected payment entry (2.1s)
+  ok 57 [default] › tests\m62-verify.spec.js:56:1 › M6.2.2 Invoice totals 30 students at SPP 100.000 = Rp 3.000.000 (2.2s)
+  ok 58 [default] › tests\m63-verify.spec.js:59:1 › M6.3.1 Aging report buckets two months of unpaid SPP into 2+ months (1.8s)
+  ok 59 [default] › tests\m63-verify.spec.js:87:1 › M6.3.2 Semester Ganjil renders six monthly columns + Total in FinanceReport (2.5s)
+  ok 60 [default] › tests\m63-verify.spec.js:98:1 › M6.3.3 Overview summary shows 3 Sorotan Utama + Laba/Rugi = Rp 250.000 for the fixture (2.0s)
+  x  61 [default] › tests\m64-verify.spec.js:58:1 › M6.4.1 Jul 2026 compares Jun 2026 and Jul 2025 with deltas (1.1m)
+  ok 62 [default] › tests\m71-verify.spec.js:31:1 › M7.1.1: default branch and school branch dropdown (4.0s)
+  ok 63 [default] › tests\m71-verify.spec.js:45:1 › M7.1.2: migration prefixes IDs, remaps references, and is idempotent (2.5s)
+  ok 64 [default] › tests\m71-verify.spec.js:70:1 › M7.1.3: superadmin sees Data Cabang; admin_cabang does not (2.5s)
+  x  65 [default] › tests\m72-verify.spec.js:21:1 › M7.2.1: offline cache renders and pending sync resolves online (12.8s)
+  ok 66 [default] › tests\m72-verify.spec.js:55:1 › M7.2.3: large photo compresses below 500KB and stays in IndexedDB (1.3s)
+  x  67 [default] › tests\m73-verify.spec.js:45:1 › M7.3.3: superadmin branch selection scopes every Overview-derived view (12.5s)
+  ok 68 [default] › tests\m73-verify.spec.js:67:1 › M7.3.3: admin does not see the superadmin branch selector (1.4s)
+  x  69 [default] › tests\multi-account-crud-sync.spec.js:52:3 › MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync › CRUD writes feed back across sessions and branch isolation holds on re-read (3.2s)
+  x  70 [default] › tests\phase567-exit-gate.spec.js:76:1 › Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation (1.1m)
+  x  71 [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur (5.4s)
+  ok 72 [default] › tests\r3-verify.spec.js:115:1 › R3.2: trainer WA normalizes to 62 format on blur (2.3s)
+node.exe : R3.3 API seed failed: createSekolah(SD R3.3 Sim 291357) failed: 422 {"error":"cabangId tidak ditemukan"}
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (R3.3 API seed f...dak ditemukan"}:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  x  73 [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions (1.0m)
+  x  74 [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal (2.7s)
+  ok 75 [default] › tests\r5-verify.spec.js:83:1 › M-R5.4: delete school with 3 siswa reassigns them to school B (6.9s)
+  ok 76 [default] › tests\r5-verify.spec.js:145:1 › M-R5.1/2: confirm shows yellow strip, alert shows emerald strip (6.9s)
+  ok 77 [default] › tests\school-form-validation.spec.js:40:1 › M-AF3.1: invalid cabangId via devtools override shows "Cabang tidak valid" and never hits /api/sekolah.php (4.5s)
+  ok 78 [default] › tests\school-list-actions.spec.js:5:1 › school-list-actions: superadmin sees three icon actions per school card and Edit opens the edit modal (2.8s)
+  ok 79 [default] › tests\settings-read-leak.spec.js:50:1 › M-AF2.2: trainer SettingsModal renders the read-only notice and shows no bank / penandatangan / alamatUsaha fields (3.0s)
+  ok 80 [default] › tests\settings-read-leak.spec.js:91:1 › M-AF2.2: superadmin SettingsModal still shows the editable form (regression check) (3.8s)
+=== PHASE A: SUPERADMIN ===
+  x  81 [default] › tests\stress-simulation.spec.js:107:1 › full three-role stress simulation (8.8m)
+  x  82 [default] › tests\student-delete-absensi.spec.js:46:1 › M-AF1.3: siswa delete nullifies absensi siswaId, spares sppPayments, drops Rekap count (4.9s)
+
+
+  1) [default] › tests\audit-crud-styling.spec.js:155:1 › AUDIT: superadmin Data Keuangan — semester toggle + chart 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('navigation').getByRole('button', { name: 'Data Keuangan', exact: true })
+
+
+      28 |
+      29 | async function openTab(page, label) {
+    > 30 |   await page.getByRole('navigation').getByRole('button', { name: label, exact: true }).click()
+         |                                                                                        ^
+      31 | }
+      32 |
+      33 | test('AUDIT: superadmin — every tab reachable, every visible button responds', async ({ page }) => {
+        at openTab (D:\Games and Apps\Coding\AdminDashboard\tests\audit-crud-styling.spec.js:30:88)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\audit-crud-styling.spec.js:159:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\audit-crud-styling-AUDIT-s-0fd29-gan-—-semester-toggle-chart-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\audit-crud-styling-AUDIT-s-0fd29-gan-—-semester-toggle-chart-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\audit-crud-styling-AUDIT-s-0fd29-gan-—-semester-toggle-chart-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\audit-crud-styling-AUDIT-s-0fd29-gan-—-semester-toggle-chart-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\audit-crud-styling-AUDIT-s-0fd29-gan-—-semester-toggle-chart-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [default] › tests\e2e.spec.js:225:3 › #1 Boot › boot: page.goto + zero console errors + favicon-404 tolerance 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Tahun Ajaran')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Tahun Ajaran')
+
+
+      240 |
+      241 |     // M-R6.3: the persisted-storage indicator chip sits next to the year label.
+    > 242 |     await expect(page.getByText('Tahun Ajaran')).toBeVisible()
+          |                                                  ^
+      243 |     await expect(page.getByText('Tersimpan lokal')).toBeVisible()
+      244 |
+      245 |     // Only afterschola_v4_* keys are touched (nothing else, no v3 leftovers).
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:242:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--1-Boot-boot-page-goto-d589b-rrors-favicon-404-tolerance-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--1-Boot-boot-page-goto-d589b-rrors-favicon-404-tolerance-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--1-Boot-boot-page-goto-d589b-rrors-favicon-404-tolerance-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--1-Boot-boot-page-goto-d589b-rrors-favicon-404-tolerance-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--1-Boot-boot-page-goto-d589b-rrors-favicon-404-tolerance-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [default] › tests\e2e.spec.js:298:3 › #3 Inverse arrays › assign via trainer form, assert both detail cards, delete propagates 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('.bg-white.rounded-2xl').filter({ hasText: 'SD Harapan Bangsa' }).first()
+    Expected substring: "1 Trainer"
+    Received string:    "SD Harapan BangsaPSTJl. Merdeka 10Trainer2 TrainerJumlah Siswa1 SiswaJadwal KelasBelum diaturSPP BulananRp 100.000"
+    Timeout: 10000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 10000ms
+      - waiting for locator('.bg-white.rounded-2xl').filter({ hasText: 'SD Harapan Bangsa' }).first()
+        23 × locator resolved to <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100 flex flex-col hover:shadow-md transition">…</div>
+           - unexpected value "SD Harapan BangsaPSTJl. Merdeka 10Trainer2 TrainerJumlah Siswa1 SiswaJadwal KelasBelum diaturSPP BulananRp 100.000"
+
+
+      315 |     await openTab(page, 'Data Sekolah')
+      316 |     const schCard = page.locator('.bg-white.rounded-2xl', { hasText: SCH }).first()
+    > 317 |     await expect(schCard).toContainText('1 Trainer')
+          |                           ^
+      318 |     const sch2Card = page.locator('.bg-white.rounded-2xl', { hasText: SCH2 }).first()
+      319 |     await expect(sch2Card).toContainText('0 Trainer')
+      320 |
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:317:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--3-Inverse-arrays-assi-540e5-ail-cards-delete-propagates-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--3-Inverse-arrays-assi-540e5-ail-cards-delete-propagates-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--3-Inverse-arrays-assi-540e5-ail-cards-delete-propagates-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--3-Inverse-arrays-assi-540e5-ail-cards-delete-propagates-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--3-Inverse-arrays-assi-540e5-ail-cards-delete-propagates-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [default] › tests\e2e.spec.js:433:3 › #6 Load-to-correct › resubmit corrected absensi â†’ one updated record, honor recomputed 
+
+    Error: locator.click: Error: strict mode violation: getByText('Andi Pratama', { exact: true }) resolved to 3 elements:
+        1) <span class="font-semibold text-slate-700">Andi Pratama</span> aka getByText('Andi Pratama').first()
+        2) <span class="font-semibold text-slate-700">Andi Pratama</span> aka getByText('Andi Pratama').nth(1)
+        3) <span class="font-semibold text-slate-700">Andi Pratama</span> aka getByText('Andi Pratama').nth(2)
+
+    Call log:
+      - waiting for getByText('Andi Pratama', { exact: true })
+
+
+      193 | // In the absensi form, tap a student's row to toggle their attendance.
+      194 | async function toggleStudentPresence(page, studentName) {
+    > 195 |   await page.getByText(studentName, { exact: true }).click()
+          |                                                      ^
+      196 | }
+      197 |
+      198 | // PaymentTable's ConfirmDialog never closes on confirm, and its payment
+        at toggleStudentPresence (D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:195:54)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:443:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--6-Load-to-correct-res-497b1-ted-record-honor-recomputed-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--6-Load-to-correct-res-497b1-ted-record-honor-recomputed-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--6-Load-to-correct-res-497b1-ted-record-honor-recomputed-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--6-Load-to-correct-res-497b1-ted-record-honor-recomputed-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--6-Load-to-correct-res-497b1-ted-record-honor-recomputed-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [default] › tests\e2e.spec.js:473:3 › #7 Ledger › partial â†’ Lunaskan â†’ delete entry â†’ Sisa restores; history lists entries 
+
+    Error: locator.click: Error: strict mode violation: locator('tr').filter({ hasText: 'Budi Santoso' }).getByRole('button', { name: 'Bayar Manual' }) resolved to 5 elements:
+        1) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(1)
+        2) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(2)
+        3) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(3)
+        4) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(5)
+        5) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka locator('tr:nth-child(8) > td:nth-child(8) > .flex > .bg-blue-600')
+
+    Call log:
+      - waiting for locator('tr').filter({ hasText: 'Budi Santoso' }).getByRole('button', { name: 'Bayar Manual' })
+
+
+      483 |     // Pay 100k manually.
+      484 |     await openTab(page, 'Data Pembayaran')
+    > 485 |     await page.locator('tr', { hasText: TRAINER }).getByRole('button', { name: 'Bayar Manual' }).click()
+          |                                                                                                  ^
+      486 |     await field(page, 'Nominal Pembayaran').fill('100000')
+      487 |     await page.getByRole('button', { name: 'Simpan Pembayaran' }).click()
+      488 |     await dismissDialog(page)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:485:98
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--7-Ledger-partial-â†’--822c2-tores-history-lists-entries-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--7-Ledger-partial-â†’--822c2-tores-history-lists-entries-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--7-Ledger-partial-â†’--822c2-tores-history-lists-entries-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--7-Ledger-partial-â†’--822c2-tores-history-lists-entries-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--7-Ledger-partial-â†’--822c2-tores-history-lists-entries-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [default] › tests\e2e.spec.js:527:3 › #8 Basis › unpaid sessions move memo rows only, never Laba/Rugi 
+
+    Error: locator.fill: Error: Malformed value
+    Call log:
+      - waiting for locator('div:has(> label:text("Tanggal Kelas")) input, div:has(> label:text("Tanggal Kelas")) textarea, div:has(> label:text("Tanggal Kelas")) select').first()
+        - locator resolved to <input type="date" value="2026-09-03" class="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"/>
+        - fill("2026-09-00")
+      - attempting fill action
+        - waiting for element to be visible, enabled and editable
+
+
+      164 |   await openTab(page, 'Data Absensi')
+      165 |   await page.getByRole('button', { name: 'Input Absensi' }).click()
+    > 166 |   if (date) await field(page, 'Tanggal Kelas').fill(date)
+          |                                                ^
+      167 |   await field(page, 'Sekolah').selectOption({ label: schoolName })
+      168 |   await field(page, 'Trainer').selectOption({ label: trainerName })
+      169 |   await page.getByRole('button', { name: 'Simpan Absensi' }).click()
+        at recordSession (D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:166:48)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:536:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--8-Basis-unpaid-sessio-efc27-o-rows-only-never-Laba-Rugi-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--8-Basis-unpaid-sessio-efc27-o-rows-only-never-Laba-Rugi-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--8-Basis-unpaid-sessio-efc27-o-rows-only-never-Laba-Rugi-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--8-Basis-unpaid-sessio-efc27-o-rows-only-never-Laba-Rugi-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--8-Basis-unpaid-sessio-efc27-o-rows-only-never-Laba-Rugi-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) [default] › tests\e2e.spec.js:574:3 › #9 Delete-trainer safety › delete trainer after payments â†’ Keuangan totals unchanged 
+
+    Error: locator.click: Error: strict mode violation: locator('tr').filter({ hasText: 'Budi Santoso' }).getByRole('button', { name: 'Bayar Manual' }) resolved to 7 elements:
+        1) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(1)
+        2) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(2)
+        3) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(3)
+        4) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka getByRole('button', { name: 'Bayar Manual' }).nth(5)
+        5) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka locator('tr:nth-child(8) > td:nth-child(8) > .flex > .bg-blue-600')
+        6) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka locator('tr:nth-child(10) > td:nth-child(8) > .flex > .bg-blue-600')
+        7) <button class="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">Bayar Manual</button> aka locator('tr:nth-child(12) > td:nth-child(8) > .flex > .bg-blue-600')
+
+    Call log:
+      - waiting for locator('tr').filter({ hasText: 'Budi Santoso' }).getByRole('button', { name: 'Bayar Manual' })
+
+
+      586 |     // it) â€” dismiss it so later clicks are not blocked.
+      587 |     await openTab(page, 'Data Pembayaran')
+    > 588 |     await page.locator('tr', { hasText: TRAINER }).getByRole('button', { name: 'Bayar Manual' }).click()
+          |                                                                                                  ^
+      589 |     await field(page, 'Nominal Pembayaran').fill('50000')
+      590 |     await page.getByRole('button', { name: 'Simpan Pembayaran' }).click()
+      591 |     await dismissDialog(page)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:588:98
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--9-Delete-trainer-safe-9bf0b-’-Keuangan-totals-unchanged-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--9-Delete-trainer-safe-9bf0b-’-Keuangan-totals-unchanged-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--9-Delete-trainer-safe-9bf0b-’-Keuangan-totals-unchanged-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--9-Delete-trainer-safe-9bf0b-’-Keuangan-totals-unchanged-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--9-Delete-trainer-safe-9bf0b-’-Keuangan-totals-unchanged-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) [default] › tests\e2e.spec.js:629:3 › #10 Sparse maps › new siswa starts unpaid; ledger payment derives one paid period 
+
+    Error: expect(received).toHaveLength(expected)
+
+    Expected length: 1
+    Received length: 4
+    Received array:  [{"action": "create", "cabangId": "cbg-test-pusat", "foto": "", "id": "sw-PST-1788450579023-wecf2s7", "kelas": "5A", "nama": "Andi Pratama", "sekolahId": "skl-PST-1788450577041-ioiscgs", "sekolahNama": "SD Harapan Bangsa", "sppLunas": [], "status": "Aktif", "trialMulai": null, "version": 1, "wa": "6281234567890"}, {"action": "create", "cabangId": "cbg-test-pusat", "foto": "", "id": "sw-PST-1788450607156-zjth4zc", "kelas": "5A", "nama": "Andi Pratama", "sekolahId": "skl-PST-1788450577041-ioiscgs", "sekolahNama": "SD Harapan Bangsa", "sppLunas": [], "status": "Aktif", "trialMulai": null, "version": 1, "wa": "6281234567890"}, {"action": "create", "cabangId": "cbg-test-pusat", "foto": "", "id": "sw-PST-1788450633580-7pn3ci9", "kelas": "5A", "nama": "Andi Pratama", "sekolahId": "skl-PST-1788450577041-ioiscgs", "sekolahNama": "SD Harapan Bangsa", "sppLunas": [], "status": "Aktif", "trialMulai": null, "version": 1, "wa": "6281234567890"}, {"action": "create", "cabangId": "cbg-test-pusat", "foto": "", "id": "sw-PST-1788450670870-heiynwp", "kelas": "5A", "nama": "Andi Pratama", "sekolahId": "skl-PST-1788450577041-ioiscgs", "sekolahNama": "SD Harapan Bangsa", "sppLunas": [], "status": "Aktif", "trialMulai": null, "version": 1, "wa": "6281234567890"}]
+
+      639 |
+      640 |     let siswa = await getStoreJson(page, 'siswa')
+    > 641 |     expect(siswa).toHaveLength(1)
+          |                   ^
+      642 |     expect(Object.keys(siswa[0].sppLunas || {})).toHaveLength(0)
+      643 |
+      644 |     await page.locator('tr', { hasText: SISWA }).locator('button[title="Catat pembayaran SPP"]').click()
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:641:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--10-Sparse-maps-new-si-02f52-ent-derives-one-paid-period-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--10-Sparse-maps-new-si-02f52-ent-derives-one-paid-period-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--10-Sparse-maps-new-si-02f52-ent-derives-one-paid-period-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--10-Sparse-maps-new-si-02f52-ent-derives-one-paid-period-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--10-Sparse-maps-new-si-02f52-ent-derives-one-paid-period-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) [default] › tests\e2e.spec.js:662:3 › #11 Year boundary › 2027/2028 + Januari â†’ empty-but-correct; 2028-01-10 â†’ periode 2028-01 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('combobox').first()
+        - locator resolved to <select class="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">…</select>
+      - attempting select option action
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+        - waiting 20ms
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+          - waiting 100ms
+        100 × waiting for element to be visible and enabled
+            - did not find some options
+          - retrying select option action
+            - waiting 500ms
+
+
+      670 |
+      671 |     // Switch sidebar: Tahun Ajaran 2027/2028, Bulan Januari.
+    > 672 |     await page.getByRole('combobox').first().selectOption({ label: '2027/2028' })
+          |                                              ^
+      673 |     await page.getByRole('combobox').nth(1).selectOption({ label: 'Januari' })
+      674 |
+      675 |     // Engine check against the REAL module in the browser bundle: a date in
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:672:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--11-Year-boundary-2027-6a919-8-01-10-â†’-periode-2028-01-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--11-Year-boundary-2027-6a919-8-01-10-â†’-periode-2028-01-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--11-Year-boundary-2027-6a919-8-01-10-â†’-periode-2028-01-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--11-Year-boundary-2027-6a919-8-01-10-â†’-periode-2028-01-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--11-Year-boundary-2027-6a919-8-01-10-â†’-periode-2028-01-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) [default] › tests\e2e.spec.js:706:3 › #12 Backup roundtrip › export â†’ wipe â†’ restore â†’ identical; corrupt file refused 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: page.waitForEvent: Test timeout of 60000ms exceeded.
+    =========================== logs ===========================
+    waiting for event "download"
+    ============================================================
+
+      733 |
+      734 |     // Export the backup through the Settings modal â†’ real browser download.
+    > 735 |     const downloadPromise = page.waitForEvent('download')
+          |                                  ^
+      736 |     await page.getByRole('button', { name: 'Pengaturan' }).first().click()
+      737 |     await page.getByRole('button', { name: 'Unduh Backup' }).click()
+      738 |     const download = await downloadPromise
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:735:34
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Pengaturan' }).first()
+
+
+      734 |     // Export the backup through the Settings modal â†’ real browser download.
+      735 |     const downloadPromise = page.waitForEvent('download')
+    > 736 |     await page.getByRole('button', { name: 'Pengaturan' }).first().click()
+          |                                                                    ^
+      737 |     await page.getByRole('button', { name: 'Unduh Backup' }).click()
+      738 |     const download = await downloadPromise
+      739 |
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:736:68
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--12-Backup-roundtrip-e-30065-ntical-corrupt-file-refused-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--12-Backup-roundtrip-e-30065-ntical-corrupt-file-refused-default\error-context.md
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--12-Backup-roundtrip-e-30065-ntical-corrupt-file-refused-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--12-Backup-roundtrip-e-30065-ntical-corrupt-file-refused-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--12-Backup-roundtrip-e-30065-ntical-corrupt-file-refused-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) [default] › tests\e2e.spec.js:793:3 › #13 Tunggakan › filter matches spot-check; WA tagihan link prefilled 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('tr').filter({ hasText: 'Andi Pratama' })
+    Expected: 0
+    Received: 7
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 10000ms
+      - waiting for locator('tr').filter({ hasText: 'Andi Pratama' })
+        24 × locator resolved to 7 elements
+           - unexpected value "7"
+
+
+      839 |     // The filter toggle is sticky â€” it was ON before we opened the edit
+      840 |     // modal, so the filtered table should now be empty.
+    > 841 |     await expect(page.locator('tr', { hasText: SISWA })).toHaveCount(0)
+          |                                                          ^
+      842 |     await expect(page.getByText('Tidak ada siswa yang menunggak.')).toBeVisible()
+      843 |
+      844 |     expect(pageErrors).toHaveLength(0)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:841:58
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--13-Tunggakan-filter-m-a1fdb-k-WA-tagihan-link-prefilled-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--13-Tunggakan-filter-m-a1fdb-k-WA-tagihan-link-prefilled-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--13-Tunggakan-filter-m-a1fdb-k-WA-tagihan-link-prefilled-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--13-Tunggakan-filter-m-a1fdb-k-WA-tagihan-link-prefilled-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--13-Tunggakan-filter-m-a1fdb-k-WA-tagihan-link-prefilled-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) [default] › tests\e2e.spec.js:852:3 › #14 CSV › six exports open; filenames carry year+month keys; honor figures match UI 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('combobox').first()
+        - locator resolved to <select class="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">…</select>
+      - attempting select option action
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+        - waiting 20ms
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+          - waiting 100ms
+        98 × waiting for element to be visible and enabled
+           - did not find some options
+         - retrying select option action
+           - waiting 500ms
+
+
+      859 |
+      860 |     // Switch to a non-default period so the filename key is unmistakable.
+    > 861 |     await page.getByRole('combobox').first().selectOption({ label: '2026/2027' })
+          |                                              ^
+      862 |     await page.getByRole('combobox').nth(1).selectOption({ label: 'Agustus' })
+      863 |     const expected = /_\d{4}-\d{2}\.csv$/
+      864 |
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:861:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--14-CSV-six-exports-op-801f5-keys-honor-figures-match-UI-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--14-CSV-six-exports-op-801f5-keys-honor-figures-match-UI-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--14-CSV-six-exports-op-801f5-keys-honor-figures-match-UI-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--14-CSV-six-exports-op-801f5-keys-honor-figures-match-UI-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--14-CSV-six-exports-op-801f5-keys-honor-figures-match-UI-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) [default] › tests\e2e.spec.js:883:3 › #15 Persisted UI › refresh mid-tab â†’ same tab/period state 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('combobox').first()
+        - locator resolved to <select aria-label="Cabang" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">…</select>
+      - attempting select option action
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+        - waiting 20ms
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+          - waiting 100ms
+        128 × waiting for element to be visible and enabled
+            - did not find some options
+          - retrying select option action
+            - waiting 500ms
+
+
+      887 |
+      888 |     // Switch to a non-default tab, year and month.
+    > 889 |     await page.getByRole('combobox').first().selectOption({ label: '2026/2027' })
+          |                                              ^
+      890 |     await page.getByRole('combobox').nth(1).selectOption({ label: 'Januari' })
+      891 |     await openTab(page, 'Data Trainer')
+      892 |
+        at D:\Games and Apps\Coding\AdminDashboard\tests\e2e.spec.js:889:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e--15-Persisted-UI-refre-27223-b-â†’-same-tab-period-state-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e--15-Persisted-UI-refre-27223-b-â†’-same-tab-period-state-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e--15-Persisted-UI-refre-27223-b-â†’-same-tab-period-state-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\e2e--15-Persisted-UI-refre-27223-b-â†’-same-tab-period-state-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\e2e--15-Persisted-UI-refre-27223-b-â†’-same-tab-period-state-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) [default] › tests\m1-scope-shell-navigation.spec.js:75:3 › M1.3 — scope shell navigation (authenticated) › Superadmin can see all admin tabs including Data Cabang 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Data Cabang', exact: true })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('button', { name: 'Data Cabang', exact: true })
+
+
+      79 |     // Anchor the wait on the app's own nav by waiting for an
+      80 |     // always-present tab (Data Cabang is superadmin-only).
+    > 81 |     await expect(page.getByRole('button', { name: 'Data Cabang', exact: true })).toBeVisible()
+         |                                                                                  ^
+      82 |
+      83 |     const labels = await navButtons(page).allTextContents()
+      84 |     expect(labels).toContain('Data Cabang')
+        at D:\Games and Apps\Coding\AdminDashboard\tests\m1-scope-shell-navigation.spec.js:81:82
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m1-scope-shell-navigation--9a0b5--tabs-including-Data-Cabang-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m1-scope-shell-navigation--9a0b5--tabs-including-Data-Cabang-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m1-scope-shell-navigation--9a0b5--tabs-including-Data-Cabang-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m1-scope-shell-navigation--9a0b5--tabs-including-Data-Cabang-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m1-scope-shell-navigation--9a0b5--tabs-including-Data-Cabang-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) [default] › tests\m64-verify.spec.js:58:1 › M6.4.1 Jul 2026 compares Jun 2026 and Jul 2025 with deltas 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.click: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('navigation').getByRole('button', { name: 'Data Keuangan', exact: true })
+
+
+      64 |   await page.reload()
+      65 |   await loginAsAdmin(page)
+    > 66 |   await page.getByRole('navigation').getByRole('button', { name: 'Data Keuangan', exact: true }).click()
+         |                                                                                                  ^
+      67 |
+      68 |   const table = page.locator('table').filter({ has: page.getByRole('columnheader', { name: 'Pos', exact: true }) }).last()
+      69 |   await expect(table).toBeVisible()
+        at D:\Games and Apps\Coding\AdminDashboard\tests\m64-verify.spec.js:66:98
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m64-verify-M6-4-1-Jul-2026-c988c-26-and-Jul-2025-with-deltas-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m64-verify-M6-4-1-Jul-2026-c988c-26-and-Jul-2025-with-deltas-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m64-verify-M6-4-1-Jul-2026-c988c-26-and-Jul-2025-with-deltas-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m64-verify-M6-4-1-Jul-2026-c988c-26-and-Jul-2025-with-deltas-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m64-verify-M6-4-1-Jul-2026-c988c-26-and-Jul-2025-with-deltas-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  16) [default] › tests\m72-verify.spec.js:21:1 › M7.2.1: offline cache renders and pending sync resolves online 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: /Sinkronisasi \(1\)/ })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('button', { name: /Sinkronisasi \(1\)/ })
+
+
+      24 |   await page.goto(APP)
+      25 |   await page.waitForLoadState('domcontentloaded')
+    > 26 |   await expect(page.getByRole('button', { name: /Sinkronisasi \(1\)/ })).toBeVisible()
+         |                                                                          ^
+      27 |
+      28 |   await page.getByRole('button', { name: 'Data Sekolah', exact: true }).click()
+      29 |   await expect(page.getByText('Sekolah Cache', { exact: true })).toBeVisible()
+        at D:\Games and Apps\Coding\AdminDashboard\tests\m72-verify.spec.js:26:74
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m72-verify-M7-2-1-offline--a89a5-ending-sync-resolves-online-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m72-verify-M7-2-1-offline--a89a5-ending-sync-resolves-online-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m72-verify-M7-2-1-offline--a89a5-ending-sync-resolves-online-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m72-verify-M7-2-1-offline--a89a5-ending-sync-resolves-online-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m72-verify-M7-2-1-offline--a89a5-ending-sync-resolves-online-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  17) [default] › tests\m73-verify.spec.js:45:1 › M7.3.3: superadmin branch selection scopes every Overview-derived view 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByLabel('Cabang', { exact: true })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByLabel('Cabang', { exact: true })
+
+
+      49 |
+      50 |   const branchSelect = page.getByLabel('Cabang', { exact: true })
+    > 51 |   await expect(branchSelect).toBeVisible()
+         |                              ^
+      52 |   await expect(branchSelect).toHaveValue('')
+      53 |   await expect(page.getByText('Sekolah Pusat', { exact: true })).toBeVisible()
+      54 |   await expect(page.getByText('Sekolah Bandung', { exact: true })).toBeVisible()
+        at D:\Games and Apps\Coding\AdminDashboard\tests\m73-verify.spec.js:51:30
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\m73-verify-M7-3-3-superadm-d8e69-every-Overview-derived-view-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\m73-verify-M7-3-3-superadm-d8e69-every-Overview-derived-view-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\m73-verify-M7-3-3-superadm-d8e69-every-Overview-derived-view-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\m73-verify-M7-3-3-superadm-d8e69-every-Overview-derived-view-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\m73-verify-M7-3-3-superadm-d8e69-every-Overview-derived-view-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  18) [default] › tests\multi-account-crud-sync.spec.js:52:3 › MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync › CRUD writes feed back across sessions and branch isolation holds on re-read 
+
+    TypeError: Cannot read properties of undefined (reading 'trainer')
+
+      89 |         [schAId],
+      90 |       )
+    > 91 |       const trainerAId = trainerAResp.body.trainer.id
+         |                                            ^
+      92 |
+      93 |       // ---- Phase 3b (HY.1.1): inverse write landed.
+      94 |       // The sekolah's payload.trainerIds must include trainerAId after the
+        at D:\Games and Apps\Coding\AdminDashboard\tests\multi-account-crud-sync.spec.js:91:44
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\multi-account-crud-sync-MU-47782--isolation-holds-on-re-read-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\multi-account-crud-sync-MU-47782--isolation-holds-on-re-read-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\multi-account-crud-sync-MU-47782--isolation-holds-on-re-read-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\multi-account-crud-sync-MU-47782--isolation-holds-on-re-read-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\multi-account-crud-sync-MU-47782--isolation-holds-on-re-read-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  19) [default] › tests\phase567-exit-gate.spec.js:76:1 › Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: page.waitForFunction: Test timeout of 60000ms exceeded.
+
+      89 |   // Wait for the trainer Rekap Saya to finish hydrating sekolah/sekolahIds.
+      90 |   await expect(page.getByRole('button', { name: 'Rekap Saya', exact: true })).toBeVisible()
+    > 91 |   await page.waitForFunction(() => {
+         |              ^
+      92 |     const raw = localStorage.getItem('afterschola_v4_trainer')
+      93 |     if (!raw) return false
+      94 |     try { return JSON.parse(raw).length > 0 } catch { return false }
+        at D:\Games and Apps\Coding\AdminDashboard\tests\phase567-exit-gate.spec.js:91:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\phase567-exit-gate-Phase-5-630aa-and-branch-close-simulation-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  20) [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur ────
+
+    TypeError: Cannot read properties of undefined (reading 'wa')
+
+      109 |   // value in the form was normalized on blur, so the saved record is 62...
+      110 |   const siswa = await getStoreJson(page, 'siswa')
+    > 111 |   expect(siswa[0].wa).toBe('6281234567890')
+          |                   ^
+      112 | })
+      113 |
+      114 | // R3.2 — trainer WA blur normalizes (form shows 6281234567890)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:111:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-1-siswa-WA-normalizes-to-62-format-on-blur-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21) [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for locator('div:has(> label:text("Sekolah")) input, div:has(> label:text("Sekolah")) textarea, div:has(> label:text("Sekolah")) select').first()
+        - locator resolved to <select class="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">…</select>
+      - attempting select option action
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+        - waiting 20ms
+        2 × waiting for element to be visible and enabled
+          - did not find some options
+        - retrying select option action
+          - waiting 100ms
+        112 × waiting for element to be visible and enabled
+            - did not find some options
+          - retrying select option action
+            - waiting 500ms
+
+
+      198 |   await page.getByRole('button', { name: 'Tambah Siswa Baru' }).click()
+      199 |   await field(page, 'Nama Siswa').fill(SIM_SW_NAME)
+    > 200 |   await field(page, 'Sekolah').selectOption({ label: SIM_SCH_NAME })
+          |                                ^
+      201 |   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+      202 |
+      203 |   for (const day of [5, 9]) {
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:200:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-3-Kehadiran-c-da10b-si-after-two-Hadir-sessions-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  22) [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal 
+
+    Error: createSekolah(SD R3.4 Sim 355285) failed: 422 {"error":"cabangId tidak ditemukan"}
+
+       at fixtures.js:201
+
+      199 |   })
+      200 |   const body = await res.json()
+    > 201 |   if (!res.ok()) throw new Error(`createSekolah(${nama}) failed: ${res.status()} ${JSON.stringify(body)}`)
+          |                        ^
+      202 |   return { id, body }
+      203 | }
+      204 |
+        at createSekolahSuperadmin (D:\Games and Apps\Coding\AdminDashboard\tests\fixtures.js:201:24)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\r3-verify.spec.js:236:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\r3-verify-R3-4-SPP-ledger--00889-n-SPP-increments-by-nominal-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  23) [default] › tests\stress-simulation.spec.js:107:1 › full three-role stress simulation ────────
+
+    Test timeout of 480000ms exceeded.
+
+    Error: locator.click: Test timeout of 480000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Tambah Cabang' })
+        - locator resolved to <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Cabang</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">…</div> intercepts pointer events
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">…</div> intercepts pointer events
+        - retrying click action
+          - waiting 100ms
+        992 × waiting for element to be visible, enabled and stable
+            - element is visible, enabled and stable
+            - scrolling into view if needed
+            - done scrolling
+            - <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">…</div> intercepts pointer events
+          - retrying click action
+            - waiting 500ms
+
+
+      139 |
+      140 |   // duplicate kode guard
+    > 141 |   await page.getByRole('button', { name: 'Tambah Cabang' }).click()
+          |                                                             ^
+      142 |   await fieldInput(page, 'Nama Cabang').fill('Duplikat Sim')
+      143 |   await fieldInput(page, 'Kode Cabang').fill('BDS')
+      144 |   await page.getByRole('button', { name: 'Simpan' }).click()
+        at D:\Games and Apps\Coding\AdminDashboard\tests\stress-simulation.spec.js:141:61
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\stress-simulation-full-three-role-stress-simulation-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\stress-simulation-full-three-role-stress-simulation-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\stress-simulation-full-three-role-stress-simulation-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\stress-simulation-full-three-role-stress-simulation-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\stress-simulation-full-three-role-stress-simulation-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  24) [default] › tests\student-delete-absensi.spec.js:46:1 › M-AF1.3: siswa delete nullifies absensi siswaId, spares sppPayments, drops Rekap count 
+
+    Error: page.evaluate: TypeError: Cannot read properties of undefined (reading 'id')
+        at eval (eval at evaluate (:311:30), <anonymous>:24:26)
+        at UtilityScript.evaluate (<anonymous>:313:16)
+        at UtilityScript.<anonymous> (<anonymous>:1:44)
+        at eval (eval at evaluate (:311:30), <anonymous>:24:26)
+        at UtilityScript.evaluate (<anonymous>:313:16)
+        at UtilityScript.<anonymous> (<anonymous>:1:44)
+        at D:\Games and Apps\Coding\AdminDashboard\tests\student-delete-absensi.spec.js:74:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\student-delete-absensi-M-A-e1cc9-pPayments-drops-Rekap-count-default\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\student-delete-absensi-M-A-e1cc9-pPayments-drops-Rekap-count-default\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\student-delete-absensi-M-A-e1cc9-pPayments-drops-Rekap-count-default\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\student-delete-absensi-M-A-e1cc9-pPayments-drops-Rekap-count-default\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\student-delete-absensi-M-A-e1cc9-pPayments-drops-Rekap-count-default\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Slow test file: [default] › tests\stress-simulation.spec.js (8.8m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  24 failed
+    [default] › tests\audit-crud-styling.spec.js:155:1 › AUDIT: superadmin Data Keuangan — semester toggle + chart 
+    [default] › tests\e2e.spec.js:225:3 › #1 Boot › boot: page.goto + zero console errors + favicon-404 tolerance 
+    [default] › tests\e2e.spec.js:298:3 › #3 Inverse arrays › assign via trainer form, assert both detail cards, delete propagates 
+    [default] › tests\e2e.spec.js:433:3 › #6 Load-to-correct › resubmit corrected absensi â†’ one updated record, honor recomputed 
+    [default] › tests\e2e.spec.js:473:3 › #7 Ledger › partial â†’ Lunaskan â†’ delete entry â†’ Sisa restores; history lists entries 
+    [default] › tests\e2e.spec.js:527:3 › #8 Basis › unpaid sessions move memo rows only, never Laba/Rugi 
+    [default] › tests\e2e.spec.js:574:3 › #9 Delete-trainer safety › delete trainer after payments â†’ Keuangan totals unchanged 
+    [default] › tests\e2e.spec.js:629:3 › #10 Sparse maps › new siswa starts unpaid; ledger payment derives one paid period 
+    [default] › tests\e2e.spec.js:662:3 › #11 Year boundary › 2027/2028 + Januari â†’ empty-but-correct; 2028-01-10 â†’ periode 2028-01 
+    [default] › tests\e2e.spec.js:706:3 › #12 Backup roundtrip › export â†’ wipe â†’ restore â†’ identical; corrupt file refused 
+    [default] › tests\e2e.spec.js:793:3 › #13 Tunggakan › filter matches spot-check; WA tagihan link prefilled 
+    [default] › tests\e2e.spec.js:852:3 › #14 CSV › six exports open; filenames carry year+month keys; honor figures match UI 
+    [default] › tests\e2e.spec.js:883:3 › #15 Persisted UI › refresh mid-tab â†’ same tab/period state 
+    [default] › tests\m1-scope-shell-navigation.spec.js:75:3 › M1.3 — scope shell navigation (authenticated) › Superadmin can see all admin tabs including Data Cabang 
+    [default] › tests\m64-verify.spec.js:58:1 › M6.4.1 Jul 2026 compares Jun 2026 and Jul 2025 with deltas 
+    [default] › tests\m72-verify.spec.js:21:1 › M7.2.1: offline cache renders and pending sync resolves online 
+    [default] › tests\m73-verify.spec.js:45:1 › M7.3.3: superadmin branch selection scopes every Overview-derived view 
+    [default] › tests\multi-account-crud-sync.spec.js:52:3 › MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync › CRUD writes feed back across sessions and branch isolation holds on re-read 
+    [default] › tests\phase567-exit-gate.spec.js:76:1 › Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation 
+    [default] › tests\r3-verify.spec.js:97:1 › R3.1: siswa WA normalizes to 62 format on blur ──────
+    [default] › tests\r3-verify.spec.js:142:1 › R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions 
+    [default] › tests\r3-verify.spec.js:223:1 › R3.4: SPP ledger payment → Pemasukan SPP increments by nominal 
+    [default] › tests\stress-simulation.spec.js:107:1 › full three-role stress simulation ──────────
+    [default] › tests\student-delete-absensi.spec.js:46:1 › M-AF1.3: siswa delete nullifies absensi siswaId, spares sppPayments, drops Rekap count 
+  4 did not run
+  54 passed (24.8m)
