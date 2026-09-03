@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:deploy": "node scripts/build-deploy.cjs",
+    "db:reset": "node scripts/run-db-reset.cjs",
     "test": "vitest run src/lib/__tests__"
   },
   "dependencies": {

@@ -171,6 +171,26 @@ export async function deleteBranch(page, csrf, id) {
   }
 }
 
+/**
+ * Create a sekolah record through `/api/sekolah.php` as the superadmin.
+ *
+ * ID contract (HY.1.1): the helper mints `sch-{cabangIdWithoutCbg}-{suffix}`
+ * and returns `{ id, body }`. Callers MUST consume `resp.id` for any
+ * subsequent operation that needs to reference the sekolah — never hand-write
+ * the id. Hand-written ids were the root cause of the 2026-09-03 PM.1.3
+ * inverse-write orphan: the server's trainer/sekolah link logic uses the
+ * sekolah id as a key, so a caller-supplied id that did not match the
+ * minted one left `sekolah.payload.trainerIds` empty even when the trainer
+ * record's `sekolahIds` contained the right value.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} csrf
+ * @param {string} nama
+ * @param {number} spp
+ * @param {string} cabangId
+ * @param {string} suffix
+ * @returns {Promise<{ id: string, body: any }>}
+ */
 export async function createSekolahSuperadmin(page, csrf, nama, spp, cabangId, suffix) {
   const id = `sch-${cabangId.replace('cbg-', '')}-${suffix}`
   const res = await page.request.post('/api/sekolah.php', {
@@ -193,6 +213,31 @@ export async function deleteSekolah(page, csrf, id) {
   }
 }
 
+/**
+ * Create a trainer record (with login account) through `/api/users.php` as
+ * the superadmin. Note: per the privilege matrix (`src/features/trainers/
+ * TrainerList.jsx:37` + `docs/AUDIT_FINDINGS_2026-09-02.md:78-83`),
+ * superadmin cannot create trainers via the UI — they can only edit
+ * existing records. This helper bypasses the UI gate and posts directly
+ * to the API. Use the helper only for seed-data setup; UI-driven trainer
+ * creation must go through admin_cabang.
+ *
+ * ID contract (HY.1.1): `sekolahIds` MUST come from a prior
+ * `createSekolahSuperadmin` call's `resp.id` (or another trainer's id the
+ * server already knows about). Hand-written ids like `sch-test-...`
+ * here do not match the helper's minted ids, leaving the inverse write
+ * (`server/api/users.php:229-241`) unable to populate
+ * `sekolah.payload.trainerIds`.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} csrf
+ * @param {string} username
+ * @param {string} displayName
+ * @param {string} nama
+ * @param {string} cabangId
+ * @param {string[]} [sekolahIds]
+ * @returns {Promise<any>}
+ */
 export async function createTrainerSuperadmin(page, csrf, username, displayName, nama, cabangId, sekolahIds = []) {
   const res = await page.request.post('/api/users.php', {
     headers: { 'X-CSRF-Token': csrf },

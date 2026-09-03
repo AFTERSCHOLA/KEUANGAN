@@ -90,6 +90,16 @@ test.describe('MULTI_ACCOUNT_SYNC M-MAS4.1 — multi-role CRUD sync', () => {
       )
       const trainerAId = trainerAResp.body.trainer.id
 
+      // ---- Phase 3b (HY.1.1): inverse write landed.
+      // The sekolah's payload.trainerIds must include trainerAId after the
+      // createTrainerSuperadmin call. If this fails, the call site's
+      // sekolahIds did not match what the server minted — see the JSDoc on
+      // createTrainerSuperadmin in tests/fixtures.js.
+      const sekolahAfterInverse = await readEntity(page, 'sekolah', csrf)
+      const schAAfter = sekolahAfterInverse.find(s => s.id === schAId)
+      expect(schAAfter).toBeDefined()
+      expect(schAAfter.payload.trainerIds).toContain(trainerAId)
+
       // ---- Phase 4: trainer record is visible on the next read. ----
       const trainerAsRoot = await readEntity(page, 'trainer', csrf)
       expect(trainerAsRoot.find(t => t.id === trainerAId)).toBeDefined()
