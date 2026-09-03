@@ -69,8 +69,11 @@ test('AUDIT: superadmin Data Sekolah — CRUD buttons + form behavior', async ({
   console.log(`[AUDIT][superadmin] Sekolah form fields=${formFields}`)
   await page.screenshot({ path: 'audit-sekolah-form-superadmin.png', fullPage: true })
 
-  // Cancel/close without save
-  const closeBtn = page.getByRole('button', { name: /Batal|Tutup/i }).first()
+  // Cancel/close without save — prefer the "Batal" footer button
+  // (always visible) over the modal's "Tutup" header X-icon, which can
+  // scroll outside the viewport on tall modals (was the root cause of
+  // the audit-crud-deep timeout that cascaded into 9 "did not run" tests).
+  const closeBtn = page.getByRole('button', { name: 'Batal' }).first()
   if (await closeBtn.count()) await closeBtn.click()
 
   // Filter Cabang

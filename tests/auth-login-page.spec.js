@@ -120,8 +120,9 @@ test.describe('M-AUTH.6 — credential login page', () => {
 
     // Dashboard renders — Data Cabang is superadmin-only.
     await expect(page.getByRole('navigation').getByRole('button', { name: 'Data Cabang' })).toBeVisible()
-    // Sidebar now exposes "Keluar", not "Ganti Peran".
-    await expect(page.getByRole('button', { name: 'Keluar' })).toBeVisible()
+    // Sidebar now exposes "Keluar" as a menuitem (AccountMenu dropdown),
+    // not a button — see m51-verify.spec.js:36-37 for the canonical locator.
+    await expect(page.getByRole('menuitem', { name: 'Keluar' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Ganti Peran' })).toHaveCount(0)
     expect(pageErrors).toHaveLength(0)
   })
@@ -224,8 +225,8 @@ test.describe('M-AUTH.6 — credential login page', () => {
     // Click Keluar and wait for both the credential page AND the
     // server-side logout POST to settle. Without the networkidle
     // wait, the reload can race the logout request and re-bootstrap
-    // a still-valid session.
-    await page.getByRole('button', { name: 'Keluar' }).click()
+    // a still-valid session. Keluar is a menuitem (AccountMenu dropdown).
+    await page.getByRole('menuitem', { name: 'Keluar' }).click()
     await expect(page.getByLabel('Username')).toBeVisible()
     await page.waitForLoadState('networkidle')
 
