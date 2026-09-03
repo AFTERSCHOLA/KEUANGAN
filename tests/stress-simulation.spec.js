@@ -114,9 +114,9 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   // config under the user's temp directory. (The audit's value is
   // the "## FINDING:" output, not the durable DB state.)
   try {
-    const php = 'D:/Games and Apps/xampp/php/php.exe'
-    execFileSync(php, ['C:/Users/barak/AppData/Local/Temp/cleanup_phase.php'], { stdio: 'ignore' })
-    execFileSync(php, ['C:/Users/barak/AppData/Local/Temp/seed_phase567.php'], { stdio: 'ignore' })
+    const PHP = process.env.PHP_BIN || 'php'
+    execFileSync(PHP, ['C:/Users/barak/AppData/Local/Temp/cleanup_phase.php'], { stdio: 'ignore' })
+    execFileSync(PHP, ['C:/Users/barak/AppData/Local/Temp/seed_phase567.php'], { stdio: 'ignore' })
   } catch (err) {
     console.warn('## DB-RESET-FAILED:', err.message)
   }
