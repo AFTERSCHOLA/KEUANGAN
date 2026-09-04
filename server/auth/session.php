@@ -11,7 +11,20 @@ const SESSION_CSRF_KEY = 'afterschola_csrf';
 
 function serverConfig(): array {
     $configFile = __DIR__ . '/../config.php';
-    if (!is_file($configFile)) jsonResponse(['error' => 'Konfigurasi server belum tersedia'], 500);
+    if (!is_file($configFile)) {
+        if (php_sapi_name() === 'cli' || (getenv('APP_ENV') ?: 'production') !== 'production') {
+            $fallback = __DIR__ . '/../config.example.php';
+            if (is_file($fallback)) {
+                $config = require $fallback;
+                if (!is_array($config)) {
+                    fwrite(STDERR, "config.example.php tidak me-return array\n");
+                    jsonResponse(['error' => 'Konfigurasi server tidak valid'], 500);
+                }
+                return $config;
+            }
+        }
+        jsonResponse(['error' => 'Konfigurasi server belum tersedia'], 500);
+    }
     $config = require $configFile;
     if (!is_array($config)) jsonResponse(['error' => 'Konfigurasi server tidak valid'], 500);
     return $config;
