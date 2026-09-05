@@ -422,6 +422,166 @@ MICROTASK: Full suite green
   (e.g. it asserts a soft-login invariant the app no longer has), the
   bounded fix is to rewrite its assertions — not to delete the spec.
 
+## Gate PM.5 (audit-appended) — Manual-audit follow-ups (2026-09-04)
+
+Source: `docs/log-doc/audit-app-vs-tests_2026-09-04_2249Z.md`. These microtasks extend the styling chain. They are file-ready; verify the existing PM.5.1→PM.5.10 numbers (referenced in the Ownership block below) before filing to avoid duplicate IDs.
+
+### PM.5.11 Modal: createPortal + tune padding (F-03)
+
+```text
+MICROTASK: Modal: add createPortal(target=document.body) + tune padding
+  EDIT:    src/components/AppModal.jsx
+  FINDS:   F-03 (manual audit #001, #007)
+  RULES:   taste #34 (preserve existing escape/click-outside/body-scroll-lock behavior at AppModal.jsx:41-72); taste #11 (mirror the existing AppModal styling); taste #15 (wire the fix to a real visual guard, not a no-op change)
+  DEPENDS: none
+  OUTCOME: every modal opens via `createPortal(target=document.body)` so it escapes any ancestor stacking context; the modal's outer div uses `p-2 sm:p-4` instead of `p-4` to reduce the visual gap on small viewports
+  VERIFY:  Playwright `tests/modal-positioning.spec.js` (new) opens Sekolah form modal as superadmin in three viewports (375, 768, 1280), asserts the modal's panel top edge sits within 8px of the viewport top, and asserts the modal is not visually clipped by the header; existing modal-using specs (r3-verify, e2e, settings tests) remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.12 Trainer: use RupiahInput for Honor field (F-07)
+
+```text
+MICROTASK: Trainer: use RupiahInput for Honor field (single-line)
+  EDIT:    src/features/trainers/TrainerList.jsx (around line 427-430)
+  FINDS:   F-07 (manual audit #024)
+  RULES:   taste #11 (mirror existing RupiahInput contract at src/components/RupiahInput.jsx:28-42); per taste #15 wire the swap to the existing form-validation guard, not a no-op
+  DEPENDS: none
+  OUTCOME: the Trainer's Honor per Kedatangan field uses <RupiahInput> (not the plain <input type="number">); leading zeros are stripped; empty input normalizes to 0 on blur; the stored value is a plain number
+  VERIFY:  Playwright `tests/trainer-honor-input.spec.js` (new) opens Trainer form as Admin Cabang, types `01000000` in Honor, asserts the displayed value is `10.000` (after formatting) and the stored value is `1000000`; clears the field, blurs, asserts the displayed value is `0` and the stored value is `0`; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.13 Salin button: copy feedback (4 sites) (F-06)
+
+```text
+MICROTASK: Salin button: copy feedback across 4 sites
+  EDIT:    src/features/trainers/TrainerList.jsx (lines 371-374, 385-388), src/features/admin/BranchManager.jsx (lines 333, 347)
+  FINDS:   F-06 (manual audit #025)
+  RULES:   taste #11 (mirror the existing AlertDialog success-tone); taste #15 (wire to a real validation guard); use a small `useState` per button (e.g. `const [copied, setCopied] = useState(false)`) with a 1.5s `setTimeout` reset; add `aria-live="polite"` for screen readers
+  DEPENDS: none
+  OUTCOME: every Salin button changes its label to `Tersalin` for 1.5s after a successful `navigator.clipboard.writeText`; clipboard failure shows `Gagal menyalin` instead
+  VERIFY:  Playwright `tests/salin-feedback.spec.js` (new) opens the Trainer initial-password dialog as Admin Cabang, clicks Salin, asserts the button text changes to `Tersalin` within 100ms, then reverts to `Salin` after ~1.5s; same assertion for the BranchManager initial-password dialog
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.14 Antrean Verifikasi: rename toggle label (F-09)
+
+```text
+MICROTASK: Antrean Verifikasi: rename toggle label and persist state
+  EDIT:    src/features/attendance/RiwayatAbsensi.jsx (around line 58-65)
+  FINDS:   F-09 (manual audit #029, #030 discoverability)
+  RULES:   taste #11 (mirror existing button styling); per taste #16 (UI is convenience; persist via localStorage key so refresh keeps the state)
+  DEPENDS: none
+  OUTCOME: the toggle button reads `Tampilkan semua absensi` when `showAll=false` and `Hanya antrian verifikasi` when `showAll=true`; the toggle state is persisted in localStorage so it survives page refresh
+  VERIFY:  Playwright `tests/antrean-toggle-label.spec.js` (new) opens Riwayat Absensi as Admin Cabang, asserts the toggle label matches the chosen phase, clicks the toggle, asserts the label flips, refreshes the page, asserts the toggle state survived; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.15 Sidebar collapse: add overflow-hidden (F-14, single-line)
+
+```text
+MICROTASK: Sidebar collapse: add overflow-hidden (single-line fix)
+  EDIT:    src/components/SidebarLayout.jsx (around line 60)
+  FINDS:   F-14 (manual audit #013 sidebar collapse visual)
+  RULES:   taste #11 (mirror existing sidebar styling); per taste #15 wire the fix to a real visual guard
+  DEPENDS: none
+  OUTCOME: when the desktop sidebar is collapsed (w-20), the toggle button and logo stay visually inside the rail; no overflow into the main content area
+  VERIFY:  Playwright `tests/sidebar-collapse-overflow.spec.js` (new) opens the app as superadmin at 1280px viewport, clicks the collapse toggle, asserts the sidebar bounding box is exactly 80px wide and the toggle button's right edge is within the rail; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.16 Sidebar: make desktop sidebar sticky top-0 self-start (F-15)
+
+```text
+MICROTASK: Sidebar: make desktop sidebar sticky top-0 self-start
+  EDIT:    src/components/SidebarLayout.jsx (around line 60)
+  FINDS:   F-15 (manual audit #013 sidebar stretch)
+  RULES:   taste #11 (mirror existing sidebar styling); do not break the mobile drawer variant
+  DEPENDS: PM.5.15
+  OUTCOME: the desktop sidebar (variant=desktop) becomes sticky and does not stretch with the page content; the mobile drawer is unchanged
+  VERIFY:  Playwright `tests/sidebar-sticky.spec.js` (new) opens the app as superadmin, scrolls a long Overview page (e.g. via `page.evaluate(() => window.scrollTo(0, 2000))`), asserts the sidebar's top edge is at viewport y=0 (sticky), and asserts the mobile drawer (375px viewport) still opens as an overlay
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.17 Trainer scroll-freeze: instrument + memoize (F-08)
+
+```text
+MICROTASK: Trainer scroll-freeze: instrument + memoize
+  EDIT:    src/features/auth/TrainerDashboard.jsx (line 22, financialData call), src/features/attendance/TrainerHistory.jsx, src/features/attendance/RiwayatAbsensi.jsx; src/lib/finance.js (memoize financialData on its inputs)
+  FINDS:   F-08 (manual audit #026, #027, #028); user evidence: 22-second stall, no transform/filter ancestor, only 716ms scripting
+  RULES:   taste #56 (no fabrication — the diagnosis from the user's 22-second recording is `not a render loop, but a long idle/loop stall`); taste #15 (wire the memoization to a real perf guard)
+  DEPENDS: none
+  OUTCOME: the trainer can scroll the Siswa list to row 50 in <2s; the Riwayat Absensi toggle (showAll) re-renders in <500ms; the financialData() call is memoized on its inputs
+  VERIFY:  Playwright `tests/trainer-scroll-perf.spec.js` (new) logs in as trainer, opens Data Siswa, asserts `page.evaluate(() => performance.now())` before and after scrolling 50 rows is <2000ms; opens Riwayat Absensi, clicks the toggle, asserts the re-render is <500ms; existing r3-verify.spec.js and stress-simulation.spec.js remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.18 Scrollbar: add scrollbar-thin (F-12)
+
+```text
+MICROTASK: Scrollbar: add scrollbar-thin on the body
+  EDIT:    src/index.css (add `scrollbar-width: thin` to body), or tailwind.config.js (extend with a scrollbar-thin utility)
+  FINDS:   F-12 (manual audit #020 second occurrence)
+  RULES:   taste #11 (mirror frontend-style reference if it exists); taste #15 (wire the fix to a real visual guard)
+  DEPENDS: none
+  OUTCOME: the body scrollbar is visually thin (or hidden via Tailwind's scrollbar-thin utility); other scrollable elements (modals, table cards) inherit the styling
+  VERIFY:  Playwright `tests/scrollbar-thin.spec.js` (new) opens the app as superadmin, asserts `getComputedStyle(document.body).scrollbarWidth` is `thin` (or `none` if hidden); existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.19 Select chevron: add right margin (F-13)
+
+```text
+MICROTASK: Select chevron: add right margin
+  EDIT:    src/index.css (add a global selector for `select { background-position: right 0.75rem center; padding-right: 2.25rem; }`)
+  FINDS:   F-13 (manual audit #012)
+  RULES:   taste #11 (mirror frontend-style reference); do not change every <select> individually
+  DEPENDS: none
+  OUTCOME: every <select> in the app has consistent right margin between the chevron and the right edge
+  VERIFY:  visual check: open Data Sekolah and Data Cabang as superadmin, screenshot the dropdown chevron position; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.20 SPP per Sekolah font: text-xs to text-sm (F-16)
+
+```text
+MICROTASK: SPP per Sekolah font: text-xs to text-sm in FinanceReport + OverviewCards
+  EDIT:    src/features/reports/FinanceReport.jsx, src/features/overview/OverviewCards.jsx (find the SPP-per-Sekolah section)
+  FINDS:   F-16 (manual audit #021)
+  RULES:   taste #11 (mirror the existing text-sm in adjacent rows); do not change non-SPP rows
+  DEPENDS: none
+  OUTCOME: the Realisasi SPP per Sekolah section uses text-sm (or larger) for the SPP amounts; the heading remains text-xs (label); adjacent rows unchanged
+  VERIFY:  visual check: open FinanceReport as Admin Cabang, screenshot the section; assert the SPP amount font-size is >= 14px (text-sm) via `getComputedStyle(el).fontSize`; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.21 Trial-Siswa row button: reserve space (F-17)
+
+```text
+MICROTASK: Trial-Siswa row button: reserve space when hidden
+  EDIT:    src/features/students/StudentList.jsx (around line 235-262, the row's button group)
+  FINDS:   F-17 (manual audit #023)
+  RULES:   taste #11 (mirror the existing row layout); use Tailwind `invisible` instead of removing the button from the DOM
+  DEPENDS: none
+  OUTCOME: when a Trial siswa's `Kirim Tagihan` button is hidden (because the siswa is not tunggakan), the row's other buttons (Catat Pembayaran, Edit, Hapus) stay anchored to the right and do not drift to the center
+  VERIFY:  Playwright `tests/siswa-row-button-anchor.spec.js` (new) opens Data Siswa as Admin Cabang, locates a Trial siswa row, asserts the row's button group is right-aligned (button's `getBoundingClientRect().right` matches the row's right edge within 4px); existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### PM.5.22 Tables: add row numbering (F-21)
+
+```text
+MICROTASK: Tables: add row numbering as first <th>/<td>
+  EDIT:    src/features/students/StudentList.jsx (table thead around line 172, tbody around line 183-264), src/features/schools/SchoolList.jsx (cards — add a small number badge top-left if team prefers card layout over table), src/features/trainers/TrainerList.jsx (table if present)
+  FINDS:   F-21 (manual audit #010, #011)
+  RULES:   taste #11 (mirror existing <th> styling); do not change the existing column order; do not number empty rows
+  DEPENDS: none
+  OUTCOME: the siswa table renders a new first <th>`#`</th> column with 1-indexed row numbers; the column is <50px wide and the number is right-aligned
+  VERIFY:  Playwright `tests/siswa-row-numbering.spec.js` (new) opens Data Siswa as superadmin, asserts the first <th> text is `#`, asserts the first <td> in each body row contains a number 1..N matching the row index
+  DONE-IF: verify passes; only intended files changed
+```
+
 ## Ownership and final acceptance
 
 - Product integration owns `tests/` migration (PM.0.1 → PM.3.1).

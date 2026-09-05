@@ -204,6 +204,49 @@ Authentication is promoted into the production track and is no longer deferred. 
 
 ---
 
+## A2.5 — Manual-audit follow-ups (per D-10 = B, D-18 = B)
+
+Source: `docs/log-doc/audit-app-vs-tests_2026-09-04_2249Z.md`. These extend the existing attendance-photo chain (A2) with sekolah/logo file pickers and the new jadwal day-picker.
+
+### A2.5-SEKOLAH-FOTO Sekolah.foto: add file picker (F-10)
+
+```text
+MICROTASK: Sekolah.foto: add file picker
+  EDIT:    src/features/schools/SchoolList.jsx (the SekolahForm, around line 350-353); src/components/PhotoSlot.jsx (existing component, may be reused); src/lib/store.js (add `uploadPhoto` helper that writes to IndexedDB or queues a server upload)
+  FINDS:   F-10 (manual audit #004, #005); D-10 = B (extend SCOPE_EXPANSION)
+  RULES:   taste #11 (mirror the existing PhotoSlot attendance path); per PRODUCTION_PLAN.md:121-125, photos must NOT be stored in localStorage for production — use IndexedDB or server upload; per SCOPE_EXPANSION_PLAN.md:158, photos outside localStorage; taste #35 (idempotent upload)
+  DEPENDS: the A2 attendance-photo infra (M5.2.3) must be in place; if not, A2.5 inherits the dependency
+  OUTCOME: the Sekolah form's Foto field offers two options: (a) URL input (existing), (b) file picker that uploads to IndexedDB and surfaces a thumbnail; the form saves the URL or the IndexedDB reference, not the raw file
+  VERIFY:  Playwright `tests/sekolah-foto-picker.spec.js` (new) opens Tambah Sekolah as superadmin, asserts the Foto field has a file-picker option, uploads a small test image, asserts the thumbnail renders; refreshes the page, asserts the sekolah record re-hydrates with the same thumbnail; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### A2.5-LOGO Settings.logo: add file picker (F-19)
+
+```text
+MICROTASK: Settings.logo: add file picker
+  EDIT:    src/components/SettingsModal.jsx (the Logo URL field, around line 75-77); src/lib/store.js (extend the settings save to handle a logo file)
+  FINDS:   F-19 (manual audit #019); D-10 = B
+  RULES:   taste #11 (mirror A2.5-SEKOLAH-FOTO); per PRODUCTION_PLAN.md:121-125, photos outside localStorage; taste #15 wire the fix to a real upload guard
+  DEPENDS: A2.5-SEKOLAH-FOTO (shared upload helper)
+  OUTCOME: the Settings modal's Logo field offers URL input (existing) and file picker (new); the saved logo is referenced by URL or IndexedDB id, not the raw file; the app header's `SidebarLogo` (src/components/SidebarLayout.jsx:10-32) renders the saved logo
+  VERIFY:  Playwright `tests/settings-logo-picker.spec.js` (new) opens Settings as superadmin, uploads a small test image, asserts the header's logo updates to the uploaded thumbnail, refreshes, asserts the logo survives; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### A2.5-JADWAL-1 Sekolah.jadwal: day-picker + Add More (F-18)
+
+```text
+MICROTASK: Sekolah.jadwal: list of {dayOfWeek, time} entries with Add More
+  EDIT:    src/features/schools/SchoolList.jsx (the SekolahForm, around line 354-357); src/lib/constants.js (add `jadwalList` to `newSekolah()` factory, default `[]`); src/lib/format.js (if a formatter is needed for day/time)
+  FINDS:   F-18 (manual audit #003); D-18 = B (list of day-of-week + time entries)
+  RULES:   taste #11 (mirror existing form-row styling); taste #15 wire the fix to a real validation guard (each entry must have a valid dayOfWeek and time); taste #35 (idempotent migration of legacy `jadwal` string to `jadwalList[]` on first save)
+  DEPENDS: none
+  OUTCOME: the Sekolah form's Jadwal field is a list of (dayOfWeek, time) entries with an Add jadwal button; existing single-string `jadwal` is preserved as a derived display string (`Mon 14:00, Wed 15:00`) until the first save upgrades the record to the array form; the TrainerDashboard (src/features/auth/TrainerDashboard.jsx:8-10, scheduleIncludesToday) is updated to read `jadwalList[]` instead of the string
+  VERIFY:  Playwright `tests/sekolah-jadwal-list.spec.js` (new) opens Tambah Sekolah as superadmin, adds 2 jadwal entries (Mon 14:00, Wed 15:00), saves, refreshes, asserts the form re-hydrates with 2 entries; opens the Sekolah as a trainer, asserts the Rekap Saya page shows the school on the matching day; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
 ## Microtask Verification Standards
 
 Each microtask above must satisfy:

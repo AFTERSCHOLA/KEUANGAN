@@ -2,7 +2,9 @@
 
 **Status:** Implemented — env-driven, tracked, safe to commit.
 
-**Purpose:** One config file works on every machine (local dev, CI, cPanel) with zero per-device edits. The historical cause of the misleading 500 "Konfigurasi server belum tersedia" on a fresh clone was that `server/config.php` was a per-device, hand-edited file — gone now.
+**Purpose:** One tracked `config.php` works on every machine (local dev, CI, cPanel) with zero per-device edits. The historical cause of the misleading 500 "Konfigurasi server belum tersedia" on a fresh clone was that `server/config.php` was a per-device, hand-edited file — gone now.
+
+> **Important:** the *file* is shared, the *database* is not. Each teammate's `127.0.0.1` points at their own local MySQL. The default DSN (`afterschola_t3_test`) is a **per-machine** test database — `npm run db:reset` provisions it locally on whoever's running it. Two teammates running `npm run setup` end up with two physically separate databases that happen to share a name and a schema, not a shared database. If you need a shared dev DB, override `APP_DSN` to point at it.
 
 ---
 

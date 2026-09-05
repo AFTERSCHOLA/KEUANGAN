@@ -170,6 +170,105 @@ MICROTASK: Multi-role CRUD sync Playwright spec
   DONE-IF: verify passes; only intended files changed
 ```
 
+## Gate AF-A5 — Manual-app-audit follow-ups (2026-09-04)
+
+Source: `docs/log-doc/audit-app-vs-tests_2026-09-04_2249Z.md`. Each microtask closes one or more `F-###` findings from the audit.
+
+### M-AF5.1 Always confirm Sekolah delete
+
+```text
+MICROTASK: Always confirm Sekolah delete (no silent delete)
+  EDIT:    src/features/schools/SchoolList.jsx
+  FINDS:   F-01 (manual audit #008)
+  RULES:   RB; mirror the ConfirmDialog pattern at src/components/ConfirmDialog.jsx; do not delete ConfirmDialog usage from existing confirmed flows (Trainer, Student, Cabang, BackupRestore)
+  DEPENDS: none
+  OUTCOME: deleting a Sekolah (whether or not it has siswa) always opens a ConfirmDialog with `confirmLabel="Hapus"`; the existing re-assign flow at SchoolList.jsx:205-212 / 295-302 keeps its `confirmLabel="Reassign ke sekolah lain"` for the with-siswa case
+  VERIFY:  Playwright `tests/sekolah-delete-confirm.spec.js` (new) logs in as superadmin, creates a Sekolah with no siswa, clicks delete, asserts a `role="dialog"` with `Hapus` button is visible, clicks Batal — asserts the row remains, clicks delete again, clicks Hapus, asserts the row is gone; existing stress-simulation and student-delete-absensi specs remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
+DONE 2026-09-05 — SchoolList.jsx routes the no-siswa branch of `remove()` through a new `ConfirmDialog` (`simpleConfirmOpen`, `confirmLabel="Hapus"`, `danger={true}`) that calls `doDelete(pendingDeleteId)` on confirm. The with-siswa re-assign flow (`confirmOpen`, `confirmLabel="Reassign ke sekolah lain"`) and the existing Trainer/Student/Cabang/BackupRestore ConfirmDialog usages are unchanged. `tests/sekolah-delete-confirm.spec.js` (new) green. `tests/school-list-actions.spec.js` + `tests/school-form-validation.spec.js` remain green. `tests/stress-simulation.spec.js` + `tests/student-delete-absensi.spec.js` failures are pre-existing on the baseline (verified via `git stash`) — recorded as pre-existing carry-over, not a regression.
+
+```
+
+### M-AF5.2 SchoolList cabang dropdown subscribes to store + storage
+
+```text
+MICROTASK: SchoolList cabang dropdown subscribes to store + storage
+  EDIT:    src/features/schools/SchoolList.jsx
+  FINDS:   F-02 (manual audit #017, #018)
+  RULES:   mirror the `useBranch()` + `subscribeStore` pattern in src/lib/store.js:589-609; do not introduce a new state library; cross-tab BroadcastChannel is not required — the existing `afterschola_v4_changed` event is sufficient when paired with `window.addEventListener('storage', ...)`
+  DEPENDS: M-AF5.1
+  OUTCOME: when a Cabang is deleted (in the same tab or another tab) while the user is on Data Sekolah, the Sekolah form's Cabang dropdown refreshes within 1 second without a full page reload
+  VERIFY:  Playwright `tests/sekolah-cabang-cache.spec.js` (new) opens Data Sekolah as superadmin in two contexts (same-origin multi-tab via `browser.newContext()`), deletes a Cabang in tab A, asserts tab B's Sekolah form's Cabang `<select>` no longer lists it within 1s of the delete ack; existing r3-verify.spec.js remains green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF5.3 Remove siswa.foto from form (privacy, per D-20 = A)
+
+```text
+MICROTASK: Remove siswa.foto from form (privacy)
+  EDIT:    src/features/students/StudentList.jsx
+  FINDS:   F-20 (manual audit #020 second occurrence); D-20 = A
+  RULES:   taste #50 (privacy-as-removal); per taste #15 wire the field's removal as the validation guard (no value is collected, so the list-render fallback always shows the placeholder avatar); per taste #11 mirror the existing siswa list avatar pattern at StudentList.jsx:194-200
+  DEPENDS: none
+  OUTCOME: the SiswaForm no longer renders a Foto label + input; the siswa list still renders the placeholder avatar for every siswa regardless of legacy `foto` data
+  VERIFY:  Playwright `tests/siswa-foto-removed.spec.js` (new) opens Data Siswa as superadmin, clicks Tambah Siswa Baru, asserts there is no label or input named/related to Foto; the legacy data assertion (pre-migration) is deferred to M-AF5.4
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF5.4 One-time migration: siswa.foto → null
+
+```text
+MICROTASK: One-time migration: siswa.foto -> null
+  EDIT:    server/migrations/<timestamp>-siswa-foto-purge.sql (new), server/bootstrap.php (register migration); src/lib/store.js (add `migrateSiswaFoto()` idempotent helper that runs on hydrate)
+  FINDS:   F-20; D-20 = A
+  RULES:   taste #35 (idempotent, collision-safe, reference-preserving); per taste #50 the foto field is removed for privacy, but the rest of the siswa record is preserved
+  DEPENDS: M-AF5.3
+  OUTCOME: every existing siswa row has `foto = null` in its payload; running the migration twice is a no-op (idempotence); no siswa data is lost beyond the foto field
+  VERIFY:  SQL test: a temporary test DB seeded with 5 siswa rows (3 with foto, 2 without) is migrated twice; the second run is a no-op; the migrated rows have `JSON_EXTRACT(payload, '$.foto')` null for all 5; existing student-delete-absensi and r3-verify specs remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF5.5 Diagnose absensi outbox prune path (F-11)
+
+```text
+MICROTASK: Diagnose absensi outbox prune path (F-11)
+  EDIT:    src/lib/store.js (around line 264 `queueSync`, line 462 `syncPending`); a new test file
+  FINDS:   F-11 (manual audit #029, #030)
+  RULES:   taste #56 (no fabrication); taste #16 (verification spec persists as a named regression file)
+  DEPENDS: none
+  OUTCOME: 5 simulated trainer save→sync cycles (via Playwright with the trainer role) do not lose a single absensi record; the new spec asserts the outbox length returns to 0 after each successful sync, and that a 4xx server response keeps the entry in the queue with a `failed` marker
+  VERIFY:  Playwright `tests/absensi-outbox-prune.spec.js` (new) logs in as trainer, creates 5 absensi, runs sync 5 times, asserts all 5 records are visible in Riwayat Absensi under `Semua`; then forces a 422 server response and asserts the record remains in the queue and is visible after refresh; existing r3-verify.spec.js and stress-simulation.spec.js remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF5.6 Write docs/audit-sql-crud walkthrough (F-24)
+
+```text
+MICROTASK: Write docs/audit-sql-crud walkthrough
+  EDIT:    docs/audit-sql-crud_2026-09-04.md (new)
+  FINDS:   F-24 (team's `traverse by hand` ask)
+  RULES:   taste #30 (cross-reference findings against docs); per entity, list the create/update/delete SQL path frontend → store.js → server/api/*.php → MySQL, and flag any FK or cascade gap
+  DEPENDS: none
+  OUTCOME: a single markdown file with one section per entity (cabang, sekolah, trainer, siswa, absensi, sppPayments, honorPayments, invoices, users, settings, audit_log), each section listing the SQL chain and any drift from PRODUCTION_PLAN.md {sect}6 or SCOPE_EXPANSION_PRIVILEGES.md
+  VERIFY:  document inspection: every entity has a section, every section cites the file:line of each endpoint and the SQL it issues, every drift is flagged; the F-04 cascade gap (the one we already know about) is captured in the `users` section
+  DONE-IF: verify passes; only intended files changed
+```
+
+### M-AF5.7 Remediate cascade gaps surfaced by M-AF5.6
+
+```text
+MICROTASK: Remediate cascade gaps surfaced by M-AF5.6
+  EDIT:    server/api/*.php (any file M-AF5.6 identified)
+  FINDS:   F-24 follow-ups
+  RULES:   taste #35 (idempotent, reference-preserving); taste #30 (cross-ref docs); taste #50 (privacy)
+  DEPENDS: M-AF5.6
+  OUTCOME: any cascade gap M-AF5.6 surfaced (beyond F-04, which is in PRODUCTION_MILESTONES.md as D9.1) is remediated with a server-side fix that is idempotent, audit-trailed, and reference-preserving
+  VERIFY:  per gap, a Playwright or SQL test asserts the cascade behaves as expected; existing stress-simulation and r3-verify specs remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
 ## Deferred with owners (taste rule #53)
 
 | ID  | Finding | Owner / resolving milestone                    | Why deferred                                                            |

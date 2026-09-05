@@ -24,7 +24,8 @@ export default function SchoolList() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState(null)
   const [pendingSiswaCount, setPendingSiswaCount] = useState(0)
-    const [pickerOpen, setPickerOpen] = useState(false)
+  const [simpleConfirmOpen, setSimpleConfirmOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [invoiceModalSchool, setInvoiceModalSchool] = useState(null)
   const [printInvoice, setPrintInvoice] = useState(null)
 
@@ -130,7 +131,11 @@ async function save() {
       setConfirmOpen(true)
       return
     }
-    doDelete(id)
+    // M-AF5.1: no-siswa case must still confirm — open a simple
+    // Hapus ConfirmDialog instead of silent-deleting (F-01 manual
+    // audit #008). The reassign dialog (confirmOpen) is unchanged.
+    setPendingDeleteId(id)
+    setSimpleConfirmOpen(true)
   }
 
   function openReassign() {
@@ -209,6 +214,15 @@ async function save() {
           confirmLabel="Reassign ke sekolah lain"
           onCancel={() => { setConfirmOpen(false); setPendingDeleteId(null) }}
           onConfirm={openReassign}
+        />
+        <ConfirmDialog
+          open={simpleConfirmOpen}
+          title="Hapus Sekolah"
+          body="Sekolah ini akan dihapus permanen. Lanjutkan?"
+          confirmLabel="Hapus"
+          danger={true}
+          onCancel={() => { setSimpleConfirmOpen(false); setPendingDeleteId(null) }}
+          onConfirm={() => { setSimpleConfirmOpen(false); doDelete(pendingDeleteId) }}
         />
         <ReassignPicker
           open={pickerOpen}
@@ -299,6 +313,15 @@ async function save() {
         confirmLabel="Reassign ke sekolah lain"
         onCancel={() => { setConfirmOpen(false); setPendingDeleteId(null) }}
         onConfirm={openReassign}
+      />
+      <ConfirmDialog
+        open={simpleConfirmOpen}
+        title="Hapus Sekolah"
+        body="Sekolah ini akan dihapus permanen. Lanjutkan?"
+        confirmLabel="Hapus"
+        danger={true}
+        onCancel={() => { setSimpleConfirmOpen(false); setPendingDeleteId(null) }}
+        onConfirm={() => { setSimpleConfirmOpen(false); doDelete(pendingDeleteId) }}
       />
             <ReassignPicker
         open={pickerOpen}

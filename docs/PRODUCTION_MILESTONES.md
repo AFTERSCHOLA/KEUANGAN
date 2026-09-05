@@ -470,6 +470,35 @@ src/lib/constants.js now stamps `cabangId` on new trainer records, and
 Admin Cabang's own getRoleContext() instead of an arbitrary cabang[0].
 Verified by tests/ki1-trainer-cabangid.spec.js.
 
+## Gate D9 — Server cascade integrity (per D-04 = A)
+
+Source: `docs/log-doc/audit-app-vs-tests_2026-09-04_2249Z.md` F-04. Decision: `UPDATE users SET active = 0, FK = NULL` on delete.
+
+### D9.1 Server cascade: deactivate users on cabang/trainer delete
+
+```text
+MICROTASK: Server cascade: deactivate users on cabang/trainer delete
+  EDIT:    server/api/_master.php (around line 170-178, the isCabang branch); server/api/trainer.php (line 24, the trainer masterDelete call site)
+  RULES:   taste #35 (idempotent, reference-preserving); taste #43 (record completion back to source-of-truth); taste #50 (privacy); wrap the cascade update in a transaction with the existing DELETE; emit `auditEvent('user_cascade_deactivated', ...)` per the existing `users.php:347` `user_deactivated` event pattern; the `WHERE active = 1` clause ensures idempotence on re-run
+  DEPENDS: none
+  OUTCOME: deleting a `cabang` (server/api/cabang.php) cascades to `UPDATE users SET active = 0, cabang_id = NULL WHERE cabang_id = :id AND active = 1`; deleting a `trainer` (server/api/trainer.php:24) cascades to the same with `trainer_id`; the audit_log captures `user_cascade_deactivated` for each affected user; running the cascade twice is a no-op (idempotence)
+  VERIFY:  Playwright `tests/cascade-users-deactivated.spec.js` (new) logs in as superadmin, creates a branch with an admin account, deletes the branch, asserts the admin user can no longer log in (401 on POST /api/auth/login), asserts the audit_log contains `user_cascade_deactivated` for that user; same flow for a trainer with a login account; existing `tests/multi-account-crud-sync.spec.js` and `tests/endpoint.protection.php` remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
+### D9.2 One-time migration: clean up existing orphan users
+
+```text
+MICROTASK: One-time migration: clean up existing orphan users
+  EDIT:    server/migrations/<timestamp>-cascade-orphan-cleanup.sql (new), server/bootstrap.php (register migration)
+  FINDS:   F-04 (audit); this is the post-D9.1 cleanup of orphans the team's manual testing surfaced
+  RULES:   taste #35 (idempotent, reference-preserving); the migration is the dual of D9.1's cascade update — it neutralizes orphans that pre-existed before D9.1 landed
+  DEPENDS: D9.1
+  OUTCOME: every existing `active=1` user with a `cabang_id` not in the `cabang` table (or a `trainer_id` not in the `trainer` table) is set to `active=0, cabang_id=NULL, trainer_id=NULL`; running the migration twice is a no-op; an audit row is emitted per affected user
+  VERIFY:  SQL test: a temporary test DB seeded with 3 orphan users (cabang_id pointing to a deleted cabang) and 2 non-orphan users is migrated twice; the second run is a no-op; all 3 orphans are deactivated and FK-nulled; the 2 non-orphans are untouched; existing r3-verify.spec.js and multi-account-crud-sync.spec.js remain green
+  DONE-IF: verify passes; only intended files changed
+```
+
 ## Ownership and final acceptance
 
 - Platform/auth owns `server/bootstrap.php`, `server/auth/`, `server/api/auth/`, schema/migrations, `src/lib/auth.js`, and `src/lib/api.js`.
