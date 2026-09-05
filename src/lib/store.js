@@ -516,15 +516,47 @@ export async function syncPending() {
       method: 'POST',
       body: { entries: log },
     })
-    const failed = new Set((result.failed || []).map(item => item.id))
-    const remaining = log.filter(entry => failed.has(entry.id))
+    const failedIds = new Set((result.failed || []).map(item => item.id))
+    const failedDetail = new Map((result.failed || []).map(item => [item.id, item]))
+    // M-AF5.5 (F-11 diagnostic): every entry the server explicitly lists
+    // in `failed` stays in the queue, but now also carries a `failedAt`
+    // marker so callers / tests can tell it was inspected-and-rejected
+    // by the server (vs. a fresh entry that hasn't synced yet). 200-OK
+    // responses only ever contain entries we want off the queue.
+    const remaining = log
+      .filter(entry => failedIds.has(entry.id))
+      .map(entry => {
+        const detail = failedDetail.get(entry.id)
+        return {
+          ...entry,
+          failedAt: Date.now(),
+          failedStatus: detail?.status ?? null,
+          failedError: detail?.error ?? 'Server menolak entri',
+        }
+      })
     writeSyncLog(remaining)
     return { synced: log.length - remaining.length, pending: remaining.length }
-  } catch {
-    // Network failure, 401 (interceptor already reset auth state), or an
-    // unexpected error — leave the queue exactly as it was; nothing here
-    // was confirmed synced. A flaky connection degrades to "still
-    // pending", never silent data loss.
+  } catch (error) {
+    // M-AF5.5 (F-11 diagnostic): a 4xx server response used to leave
+    // the queue silently intact — the entry would survive but a test or
+    // a future reviewer couldn't distinguish "never tried" from
+    // "server rejected". Tag surviving entries with a marker so the
+    // failed-state is observable, then keep them in the queue so they
+    // get retried on the next sync. A 401 (interceptor already reset
+    // auth state) is still treated as a transient failure, not data loss.
+    if (error instanceof ApiError) {
+      const remaining = log.map(entry => ({
+        ...entry,
+        failedAt: Date.now(),
+        failedStatus: error.status ?? null,
+        failedError: error.message ?? 'Permintaan gagal',
+      }))
+      writeSyncLog(remaining)
+      return { synced: 0, pending: remaining.length }
+    }
+    // Network failure or an unexpected error — leave the queue exactly
+    // as it was; nothing here was confirmed synced. A flaky connection
+    // degrades to "still pending", never silent data loss.
     return { synced: 0, pending: log.length }
   }
 }
