@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { readCached, write, upsert, getRoleContext, writeRemote, deleteRemote } from '../../lib/store.js'
+import { useState, useEffect } from 'react'
+import { readCached, write, upsert, getRoleContext, writeRemote, deleteRemote, subscribeStore } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newSekolah, defaultCabang } from '../../lib/constants.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
@@ -28,6 +28,33 @@ export default function SchoolList() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [invoiceModalSchool, setInvoiceModalSchool] = useState(null)
   const [printInvoice, setPrintInvoice] = useState(null)
+
+  // M-AF5.2 — keep the Cabang list in step with the cache. The Sekolah
+  // form's Cabang <select> reads from this state (passed to SchoolForm
+  // as the `cabang` prop), so a delete on this tab or another tab must
+  // refresh within 1s without a full page reload.
+  //
+  // - Same tab: writeRemote('cabang', …) and deleteRemote('cabang', …)
+  //   call notifyStoreChanged() which dispatches `afterschola_v4_changed`
+  //   — subscribeStore() picks that up and runs refresh().
+  // - Cross tab: a localStorage write in tab A fires the native
+  //   `storage` event in tab B; the listener below calls refresh() too.
+  //
+  // Mirrors the useBranch() + subscribeStore() pattern at
+  // src/lib/store.js:589-609 (BranchProvider); no new state library is
+  // introduced (taste: mirror existing idiom).
+  useEffect(() => {
+    refresh()
+    const unsubscribe = subscribeStore(() => refresh())
+    const onStorage = (e) => {
+      if (!e.key || e.key.startsWith('afterschola_v4')) refresh()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
 
   const role = getRoleContext().role
   const visibleSekolah = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah

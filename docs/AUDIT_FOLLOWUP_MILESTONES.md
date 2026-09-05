@@ -204,6 +204,8 @@ MICROTASK: SchoolList cabang dropdown subscribes to store + storage
   DONE-IF: verify passes; only intended files changed
 ```
 
+DONE 2026-09-05 — SchoolList.jsx adds a `useEffect` that calls `refresh()` on mount, subscribes via `subscribeStore()` (covers same-tab via `afterschola_v4_changed`), and attaches a `window.addEventListener('storage', …)` listener (covers cross-tab via the native `storage` event). The pattern mirrors `BranchProvider` at `src/lib/store.js:589-609`; no new state library introduced. `tests/sekolah-cabang-cache.spec.js` (new) opens Data Sekolah in two tabs of one BrowserContext, seeds a `Cabang AF5.2 Sim *`, asserts it appears in tab B's `<select>`, deletes via `fetch('/api/cabang.php')` + re-reads via `fetch('/api/read.php?entity=cabang')` from inside tab A's document so the localStorage write fires the cross-tab `storage` event, then asserts the dropdown drops the deleted id within 1.5s. `tests/sekolah-delete-confirm.spec.js` (M-AF5.1) remains green. r3-verify R3.3/R3.4 are pre-existing failures on the baseline (verified via `git stash`); not a regression from this change. `npm run build` green.
+
 ### M-AF5.3 Remove siswa.foto from form (privacy, per D-20 = A)
 
 ```text
