@@ -191,13 +191,9 @@ export default function StudentList({ readOnly = false }) {
               {visibleSiswa.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50/50">
                   <td className="py-4 px-6 flex items-center gap-3">
-                    {s.foto ? (
-                      <img src={s.foto} alt="" className="w-10 h-10 rounded-full object-cover border" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-slate-200 border flex items-center justify-center text-slate-400 text-xs font-bold">
-                        {s.nama?.charAt(0).toUpperCase() || '?'}
-                      </div>
-                    )}
+                    <div className="w-10 h-10 rounded-full bg-slate-200 border flex items-center justify-center text-slate-400 text-xs font-bold">
+                      {s.nama?.charAt(0).toUpperCase() || '?'}
+                    </div>
                     <div>
                       <p className="font-bold text-slate-800 flex items-center gap-1.5">
                         {s.nama}
@@ -313,10 +309,6 @@ function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
           <option value="">-- Pilih Sekolah --</option>
           {sekolah.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
         </select>
-      </div>
-      <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
-        <input value={form.foto} onChange={e => setForm({ ...form, foto: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Status Siswa</label>
