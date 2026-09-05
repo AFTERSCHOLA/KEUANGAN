@@ -144,7 +144,7 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     auditEvent("{$entity}_updated", $user, $entity, $id, array_filter([
         'cabangId' => $isCabang ? null : $cabangId,
     ]));
-    jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion], 200);
+    jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion, 'cabangId' => $isCabang ? null : $cabangId], 200);
 }
 
 function masterDelete(string $entity, array $user, bool $isCabang = false): never {

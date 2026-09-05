@@ -219,6 +219,8 @@ MICROTASK: Remove siswa.foto from form (privacy)
   DONE-IF: verify passes; only intended files changed
 ```
 
+DONE 2026-09-05 — `src/features/students/StudentList.jsx` removes the SiswaForm "Foto (URL)" label + input (was SiswaForm's Sekolah block successor, ~line 313-317 pre-change) and replaces the list-row avatar `s.foto ? <img/> : <placeholder/>` branch with the unconditional placeholder div (`StudentList.jsx:194-196`), matching the existing siswa avatar pattern. Zero `foto`/`Foto` references remain in `src/features/students/StudentList.jsx`. `tests/siswa-foto-removed.spec.js` (new) green (`npx playwright test tests/siswa-foto-removed.spec.js --workers=1` → 1 passed, 6.2s, zero pageerror).
+
 ### M-AF5.4 One-time migration: siswa.foto → null
 
 ```text
@@ -231,6 +233,8 @@ MICROTASK: One-time migration: siswa.foto -> null
   VERIFY:  SQL test: a temporary test DB seeded with 5 siswa rows (3 with foto, 2 without) is migrated twice; the second run is a no-op; the migrated rows have `JSON_EXTRACT(payload, '$.foto')` null for all 5; existing student-delete-absensi and r3-verify specs remain green
   DONE-IF: verify passes; only intended files changed
 ```
+
+DONE 2026-09-05 — New file `server/migrations/2026-09-05-siswa-foto-purge.sql` ships the idempotent `UPDATE siswa SET payload = JSON_SET(payload, '$.foto', NULL) WHERE JSON_VALUE(payload, '$.foto') IS NOT NULL` (uses `JSON_VALUE` because MariaDB's `JSON_EXTRACT` returns the literal string `"null"` for JSON-null values, so `IS NOT NULL` would mis-fire on already-purged rows). `server/bootstrap.php` adds a `runMigrations(PDO)` helper invoked from `database()` that scans `server/migrations/*.sql` in lexical order, skips versions already recorded in the `migrations` table, applies pending files inside a transaction, and writes a `migrations(version, source_checksum, row_counts)` row on success. The runner is statically memoized so repeat `database()` calls are a no-op. New client-side companion `migrateSiswaFoto()` in `src/lib/store.js` runs from `hydrateServerData()` and drops the legacy `foto` key from any cached `afterschola_v4_siswa` records, gated by `getMigrationState().siswaFotoPurgedAt` so repeat calls are a no-op. New SQL verification test `server/tests/siswa-foto-purge.php` seeds 3 siswa with foto + 2 without under a throwaway `cbg-mfoto-*` branch, asserts the migration purges all 3 + leaves 2 untouched, asserts reference-preservation (nama/cabangId/sekolahId intact), asserts `JSON_VALUE(payload, '$.foto') IS NOT NULL` returns 0 rows, simulates a second migration pass (deletes the migrations row, re-runs the UPDATE) and asserts 0 rows touched (idempotent), then cleans up its seeded rows. `php server/tests/siswa-foto-purge.php` → 3/3 checks passed. `npm test` (54 vitest) remains green. `npm run build` green. `npm run build:deploy` green (parity post-check OK; `migrations/` is intentionally not mirrored to `deploy/` — production migrations are applied to the canonical DB by `db:reset` + a server-side invocation of the runner, not shipped as part of the static artifact). The M-AF5.3 spec (`tests/siswa-foto-removed.spec.js`) remains green. `tests/r3-verify.spec.js:97 (R3.1)`, `tests/sekolah-delete-confirm.spec.js`, and `tests/student-delete-absensi.spec.js` are pre-existing failures on the baseline (verified via `git stash`); not a regression from this change.
 
 ### M-AF5.5 Diagnose absensi outbox prune path (F-11)
 

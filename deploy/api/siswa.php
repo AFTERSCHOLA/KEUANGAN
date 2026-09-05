@@ -2,10 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/_master.php';
-
+ 
 $user = requireAuthenticatedUser();
 $method = $_SERVER['REQUEST_METHOD'];
-
+ 
 if ($method === 'POST' || $method === 'PUT') {
     $data = requestJson();
     $action = $data['action'] ?? 'create';
@@ -89,3 +89,4 @@ function nullifyAbsensiSiswaId(?string $siswaId, array $user): void {
         ]);
     }
 }
+ 

@@ -69,7 +69,7 @@ function createUser(array $data, array $user): never {
 
     // ---- 2. Branch scoping per role ----
     // Session is the authority for branch assignment, never the client.
-    // Mirrors deploy/api/trainer.php:27-33 — Branch Admin's session.cabangId
+    // Mirrors server/api/trainer.php:20-33 — Branch Admin's session.cabangId
     // IS the trainer's branch; any client-supplied cabangId is rejected
     // outright so DevTools tampering can't bypass branch scoping.
     // Super Admin has no session.cabangId, so they must supply one.

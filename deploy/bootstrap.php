@@ -44,7 +44,95 @@ function database(): PDO {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");   // <-- baris baru
+    runMigrations($pdo);
     return $pdo;
+}
+
+/**
+ * Apply any pending `server/migrations/*.sql` files in lexical order.
+ *
+ * Discovery: the migrations directory ships next to `schema.sql`; each file
+ * is a self-contained SQL script (idempotent per taste #35). Files whose
+ * basename (sans `.sql`) is already present in the `migrations` table are
+ * skipped — that table is the canonical record of what has been applied,
+ * seeded by `server/tests/db-reset.php` with `baseline-test-seed` so the
+ * fresh test database starts at "everything else is pending" and a single
+ * run brings it up to date.
+ *
+ * Each file is wrapped in a transaction; if the script throws, the version
+ * row is not written and a later retry will re-run the file. The
+ * `source_checksum` column lets future tooling flag a migration whose source
+ * has drifted from what was originally applied.
+ */
+function runMigrations(PDO $pdo): void {
+    static $applied = false;
+    if ($applied) return;
+    $dir = __DIR__ . '/migrations';
+    if (!is_dir($dir)) { $applied = true; return; }
+
+    $files = glob($dir . '/*.sql');
+    if ($files === false || count($files) === 0) { $applied = true; return; }
+    sort($files, SORT_STRING);
+
+    $appliedVersions = [];
+    try {
+        $appliedVersions = array_column($pdo->query('SELECT version FROM migrations')->fetchAll(), 'version');
+    } catch (PDOException $error) {
+        // migrations table not present yet (e.g. half-applied schema.sql).
+        // The schema.sql ships `migrations`, so this branch is unreachable on
+        // any properly bootstrapped DB; bail out silently rather than
+        // crashing every API call.
+        $applied = true;
+        return;
+    }
+
+    foreach ($files as $file) {
+        $version = basename($file, '.sql');
+        if (in_array($version, $appliedVersions, true)) continue;
+        $sql = file_get_contents($file);
+        if (!is_string($sql) || $sql === '') continue;
+
+        $pdo->beginTransaction();
+        try {
+            $rowCounts = [];
+            // Naive statement split: schema.sql and the migrations shipped
+            // here use ";\n" as a terminator and contain no string
+            // literals carrying one. If a future migration needs a literal
+            // semicolon it must either stay as a single statement or be
+            // restructured to use a delimiter override.
+            $statements = array_filter(array_map('trim', explode(";\n", $sql)));
+            foreach ($statements as $statement) {
+                if ($statement === '') continue;
+                $pdo->exec($statement);
+                // Capture the most-recently-touched table's row count for
+                // the migrations audit row — best-effort, not all migrations
+                // need it (audit_log inserts skip), but `siswa` UPDATEs leave
+                // a useful trace in the migrations table for M-AF5.4.
+                if (preg_match('/\b(UPDATE|INSERT INTO|DELETE FROM)\s+`?([A-Za-z_]+)`?/i', $statement, $m)) {
+                    $tbl = $m[2];
+                    try {
+                        $rowCounts[$tbl] = (int) $pdo->query("SELECT COUNT(*) FROM `{$tbl}`")->fetchColumn();
+                    } catch (PDOException $ignore) {
+                        // table may not exist for every migration; ignore.
+                    }
+                }
+            }
+            $checksum = substr(sha1($sql), 0, 40);
+            $pdo->prepare('INSERT INTO migrations (version, source_checksum, row_counts) VALUES (:version, :checksum, :row_counts)')
+                ->execute([
+                    ':version' => $version,
+                    ':checksum' => $checksum,
+                    ':row_counts' => $rowCounts ? json_encode($rowCounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                ]);
+            $pdo->commit();
+            $appliedVersions[] = $version;
+        } catch (Throwable $error) {
+            $pdo->rollBack();
+            // Don't cache `applied=true` on failure — next call retries.
+            return;
+        }
+    }
+    $applied = true;
 }
 
 function entityConfig(string $entity): array {

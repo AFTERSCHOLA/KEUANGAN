@@ -214,6 +214,55 @@ export function subscribeStore(listener) {
 
 export async function hydrateServerData() {
   await Promise.all([...READABLE_SERVER_KEYS].map(key => read(key)))
+  // M-AF5.4 client-side companion to the server migration: clear any
+  // legacy `foto` value that may have been cached into localStorage
+  // before the server-side purge ran for the current user. Safe to call
+  // every hydrate; the per-version gate makes it a no-op on repeat.
+  migrateSiswaFoto()
+}
+
+/**
+ * M-AF5.4 — drop the legacy `foto` field from any cached `siswa` record.
+ *
+ * Mirrors the server-side `UPDATE siswa SET payload = JSON_SET(payload,
+ * '$.foto', NULL) WHERE JSON_EXTRACT(payload, '$.foto') IS NOT NULL`
+ * migration (server/migrations/2026-09-05-siswa-foto-purge.sql) for the
+ * client localStorage cache. The server is authoritative, but cached
+ * records written before the server purge will still carry `foto` until
+ * `read('siswa')` overwrites them — and even then, a brief window between
+ * hydrate-read and read-back can render the placeholder avatar from
+ * stale data.
+ *
+ * Per taste #35 (idempotent, collision-safe, reference-preserving):
+ *   - per-version gate via getMigrationState() makes repeat calls a no-op
+ *   - only `record.foto` is touched; every other key is preserved as-is
+ *   - running twice on the same cache leaves the same cache state
+ *
+ * Per taste #50 (privacy-as-removal): the field is being deleted, not
+ * archived — once purged the key is gone forever (no "undo" button).
+ */
+export function migrateSiswaFoto() {
+  const state = getMigrationState()
+  if (state.siswaFotoPurgedAt) return
+  const records = readRaw('siswa')
+  if (!Array.isArray(records) || records.length === 0) {
+    // Mark done even when there were no siswa rows — the cache is empty
+    // either way and we don't want to keep paying the read cost on every
+    // hydrate. Idempotent: a future cache write won't re-trigger it.
+    setMigrationState({ ...state, siswaFotoPurgedAt: Date.now() })
+    return
+  }
+  const hadFoto = records.some(r => r && Object.prototype.hasOwnProperty.call(r, 'foto'))
+  if (hadFoto) {
+    const purged = records.map(r => {
+      if (!r || !Object.prototype.hasOwnProperty.call(r, 'foto')) return r
+      const { foto: _foto, ...rest } = r
+      return rest
+    })
+    writeRaw('siswa', purged)
+    notifyStoreChanged()
+  }
+  setMigrationState({ ...state, siswaFotoPurgedAt: Date.now() })
 }
 
 export function write(key, records) {
