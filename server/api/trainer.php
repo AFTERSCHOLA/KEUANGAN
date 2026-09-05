@@ -21,6 +21,7 @@ if ($method === 'POST' || $method === 'PUT') {
         if ($role !== 'admin_cabang') {
             jsonResponse(['error' => 'Superadmin tidak dapat menghapus trainer'], 403);
         }
+        cascadeStripTrainerFromSekolahReverseLinks($data['id'] ?? '', $user);
         masterDelete('trainer', $user);
         return;
     }
@@ -63,7 +64,50 @@ if ($method === 'POST' || $method === 'PUT') {
     if ($role !== 'admin_cabang') {
         jsonResponse(['error' => 'Superadmin tidak dapat menghapus trainer'], 403);
     }
+    $body = requestJson();
+    cascadeStripTrainerFromSekolahReverseLinks($body['id'] ?? ($_GET['id'] ?? ''), $user);
     masterDelete('trainer', $user);
 } else {
     jsonResponse(['error' => 'Method tidak diizinkan'], 405);
+}
+
+/**
+ * M-AF5.7 — strip a trainer id from every `sekolah.payload.trainerIds[]`
+ * reverse-link that still references it. Mirrors the
+ * `users.php:rollbackTrainerRecord` best-effort pattern (try/catch per
+ * row, swallow + log so the delete itself never fails on a malformed
+ * JSON payload). Idempotent: a second pass touches zero rows because the
+ * WHERE predicate already requires the id to still be present. Emits one
+ * `trainer_sekolah_unlinked` audit event with the touched count.
+ */
+function cascadeStripTrainerFromSekolahReverseLinks(string $trainerId, array $user): void {
+    if (trim($trainerId) === '') return;
+    $pdo = database();
+    $trainerIdEsc = $trainerId;
+    $touched = 0;
+    try {
+        $rows = $pdo->prepare('SELECT id, payload FROM sekolah WHERE JSON_SEARCH(payload, \'one\', :id, NULL, \'$.trainerIds\') IS NOT NULL');
+        $rows->execute([':id' => $trainerIdEsc]);
+        $upd = $pdo->prepare('UPDATE sekolah SET payload = :payload WHERE id = :id');
+        while ($row = $rows->fetch()) {
+            $payload = json_decode((string) $row['payload'], true);
+            if (!is_array($payload) || !isset($payload['trainerIds']) || !is_array($payload['trainerIds'])) continue;
+            $filtered = array_values(array_filter($payload['trainerIds'], static fn($v) => $v !== $trainerIdEsc));
+            if (count($filtered) === count($payload['trainerIds'])) continue;
+            $payload['trainerIds'] = $filtered;
+            $upd->execute([
+                ':payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ':id' => $row['id'],
+            ]);
+            $touched++;
+        }
+    } catch (Throwable $e) {
+        error_log('cascadeStripTrainerFromSekolahReverseLinks failed: ' . $e->getMessage());
+    }
+    if ($touched > 0) {
+        auditEvent('trainer_sekolah_unlinked', $user, 'sekolah', null, [
+            'trainerId' => $trainerIdEsc,
+            'recordsTouched' => $touched,
+        ]);
+    }
 }

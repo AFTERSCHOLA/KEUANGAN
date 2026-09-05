@@ -28,12 +28,121 @@ if ($action === 'delete') {
     }
     requireAuthorization('delete', 'sekolah', ['cabangId' => $existing['cabang_id']], $user);
 
-    // KNOWN GAP (same class as siswa delete): no check for trainer.sekolahIds,
-    // siswa.sekolahId, or invoices.sekolahId referencing this school before
-    // deleting. See PRODUCTION_MILESTONES.md known issues.
+    // M-AF5.7 — cascade cleanup. Surfaces referenced by the deleted sekolah
+    // become FK-nulls rather than SQL-broken references or invisible
+    // application-level orphans:
+    //   * trainer.sekolahIds[]  — strip the id (application-level array)
+    //   * siswa.sekolahId       — null inside the JSON payload (no SQL column)
+    //   * invoices.sekolahId    — null inside the JSON payload (no SQL column)
+    // All three UPDATEs are reference-preserving (only the FK field is
+    // touched) and idempotent (the WHERE predicate skips rows that already
+    // lost the reference). Per taste #35 we emit one audit event per
+    // touched table only when rows were actually modified — no spurious
+    // events on a second invocation.
+    cascadeNullifySekolahReferences($data['id'], $user);
+
     $pdo->prepare('DELETE FROM sekolah WHERE id = :id')->execute([':id' => $data['id']]);
     auditEvent('sekolah_deleted', $user, 'sekolah', $data['id'], ['cabangId' => $existing['cabang_id']]);
     jsonResponse(['ok' => true, 'id' => $data['id']], 200);
+}
+
+/**
+ * Walk the three tables whose payload stores a reference to this sekolah,
+ * nullify the reference, and emit one audit event per touched table. The
+ * helper is a no-op when the id is blank or none of the tables reference
+ * it — making it safe to call repeatedly on the same id.
+ */
+function cascadeNullifySekolahReferences(string $sekolahId, array $user): void {
+    if (trim($sekolahId) === '') return;
+    $pdo = database();
+    $sekolahIdEsc = $sekolahId;
+
+    // ---- trainer.sekolahIds[] (application-level array, no SQL column).
+    // JSON_SEARCH returns the JSON path of the matching element when one is
+    // present, NULL otherwise — so a second pass over already-cleaned rows
+    // short-circuits in the UPDATE itself (zero rows touched).
+    $trainerTouched = 0;
+    try {
+        $rows = $pdo->prepare('SELECT id, payload FROM trainer WHERE JSON_SEARCH(payload, \'one\', :id, NULL, \'$.sekolahIds\') IS NOT NULL');
+        $rows->execute([':id' => $sekolahIdEsc]);
+        $upd = $pdo->prepare('UPDATE trainer SET payload = :payload WHERE id = :id');
+        while ($row = $rows->fetch()) {
+            $payload = json_decode((string) $row['payload'], true);
+            if (!is_array($payload) || !isset($payload['sekolahIds']) || !is_array($payload['sekolahIds'])) continue;
+            $filtered = array_values(array_filter($payload['sekolahIds'], static fn($v) => $v !== $sekolahIdEsc));
+            if (count($filtered) === count($payload['sekolahIds'])) continue;
+            $payload['sekolahIds'] = $filtered;
+            $upd->execute([
+                ':payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ':id' => $row['id'],
+            ]);
+            $trainerTouched++;
+        }
+    } catch (Throwable $e) {
+        // best-effort, mirroring users.php:230-249 — don't fail the delete
+        error_log('cascadeNullifySekolahReferences(trainer) failed: ' . $e->getMessage());
+    }
+    if ($trainerTouched > 0) {
+        auditEvent('trainer_sekolah_nullified', $user, 'trainer', null, [
+            'sekolahId' => $sekolahIdEsc,
+            'recordsTouched' => $trainerTouched,
+        ]);
+    }
+
+    // ---- siswa.sekolahId (JSON payload field).
+    $siswaTouched = 0;
+    try {
+        $stmt = $pdo->prepare('SELECT id, payload FROM siswa WHERE JSON_UNQUOTE(JSON_EXTRACT(payload, \'$.sekolahId\')) = :id');
+        $stmt->execute([':id' => $sekolahIdEsc]);
+        $upd = $pdo->prepare('UPDATE siswa SET payload = :payload WHERE id = :id');
+        while ($row = $stmt->fetch()) {
+            $payload = json_decode((string) $row['payload'], true);
+            if (!is_array($payload)) continue;
+            $payload['sekolahId'] = null;
+            $upd->execute([
+                ':payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ':id' => $row['id'],
+            ]);
+            $siswaTouched++;
+        }
+    } catch (Throwable $e) {
+        error_log('cascadeNullifySekolahReferences(siswa) failed: ' . $e->getMessage());
+    }
+    if ($siswaTouched > 0) {
+        auditEvent('siswa_sekolah_nullified', $user, 'siswa', null, [
+            'sekolahId' => $sekolahIdEsc,
+            'recordsTouched' => $siswaTouched,
+        ]);
+    }
+
+    // ---- invoices.sekolahId (JSON payload field; ledger, append-only — we
+    // do NOT hard-delete invoice rows, just null the FK reference so the
+    // row's historical/audit value is preserved while the orphan FK is
+    // cleared. Mirrors the RD append-only contract (PRODUCTION_PLAN.md:107).
+    $invoiceTouched = 0;
+    try {
+        $stmt = $pdo->prepare('SELECT id, payload FROM invoices WHERE JSON_UNQUOTE(JSON_EXTRACT(payload, \'$.sekolahId\')) = :id');
+        $stmt->execute([':id' => $sekolahIdEsc]);
+        $upd = $pdo->prepare('UPDATE invoices SET payload = :payload WHERE id = :id');
+        while ($row = $stmt->fetch()) {
+            $payload = json_decode((string) $row['payload'], true);
+            if (!is_array($payload)) continue;
+            $payload['sekolahId'] = null;
+            $upd->execute([
+                ':payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ':id' => $row['id'],
+            ]);
+            $invoiceTouched++;
+        }
+    } catch (Throwable $e) {
+        error_log('cascadeNullifySekolahReferences(invoices) failed: ' . $e->getMessage());
+    }
+    if ($invoiceTouched > 0) {
+        auditEvent('invoices_sekolah_nullified', $user, 'invoices', null, [
+            'sekolahId' => $sekolahIdEsc,
+            'recordsTouched' => $invoiceTouched,
+        ]);
+    }
 }
 
 // --- cabangId authority depends on role ---------------------------------
