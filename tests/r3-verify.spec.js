@@ -1,4 +1,4 @@
-import { test, expect, loginViaApi, loginAndPrime, createBranch, createSekolahSuperadmin, createTrainerSuperadmin, readEntity, primeCsrf } from './fixtures.js'
+import { test, expect, loginViaApi, loginAndPrime, createSekolahSuperadmin, createTrainerSuperadmin } from './fixtures.js'
 
 const APP = 'http://localhost:5173'
 // Run-scoped unique names (PM.1.1 hygiene): the test database is shared
@@ -73,19 +73,28 @@ async function getStoreJson(page, key) {
   return page.evaluate((k) => JSON.parse(localStorage.getItem(`afterschola_v4_${k}`) || '[]'), key)
 }
 
-// PM.1.2 (fix, this session): StudentList's save() was migrated to an
-// async writeRemote() call — clicking "Simpan" no longer writes to
-// localStorage synchronously the way the old upsert() did. Reading
-// getStoreJson() immediately after .click() (Playwright resolves the
-// click once the event fires, not once the handler's internal awaits
-// finish) raced the network round-trip and read a stale/empty cache.
-// Polls for the specific record by name rather than just "array not
-// empty" — the test DB persists across runs, so an empty-length check
-// can pass on stale data alone without proving THIS run's write landed.
-async function waitForSiswaByName(page, nama) {
+async function waitForRecordByName(page, key, nama) {
   await expect.poll(
-    () => getStoreJson(page, 'siswa').then(arr => arr.some(s => s.nama === nama)),
-    { message: `menunggu siswa "${nama}" muncul di cache lokal setelah writeRemote()` }
+    () => getStoreJson(page, key).then(arr => arr.some(r => r.nama === nama)),
+    { message: `menunggu "${nama}" muncul di cache lokal (${key}) setelah writeRemote()`, timeout: 15000 }
+  ).toBe(true)
+}
+
+async function waitForSiswaByName(page, nama) {
+  await waitForRecordByName(page, 'siswa', nama)
+}
+
+// PM.1.2 fix (kelas bug yang sama dengan waitForSiswaByName di bawah):
+// SchoolList's save() juga sudah dimigrasi ke writeRemote() async. Tanpa
+// menunggu sekolah ini beneran landing di cache lokal, Trainer form's
+// "Sekolah Penugasan" checklist (yang baca dari cache yang sama) bisa
+// render SEBELUM sekolah ini ada, dan .check() di bawah nunggu checkbox
+// yang belum muncul sampai timeout — intermiten tergantung kecepatan
+// round-trip server.
+async function waitForSekolahByName(page, nama) {
+  await expect.poll(
+    () => getStoreJson(page, 'sekolah').then(arr => arr.some(s => s.nama === nama)),
+    { message: `menunggu sekolah "${nama}" muncul di cache lokal setelah writeRemote()` }
   ).toBe(true)
 }
 
@@ -96,14 +105,13 @@ async function seed(page) {
   await field(page, 'SPP Bulanan').fill(String(SPP))
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
 
+  await waitForSekolahByName(page, SCH)
+
   await openTab(page, 'Data Trainer')
   await page.getByRole('button', { name: 'Tambah Trainer Baru' }).click()
   await field(page, 'Nama Trainer').fill(TRAINER)
   await field(page, 'Honor per Kedatangan').fill('50000')
   await page.locator('label', { hasText: SCH }).first().getByRole('checkbox').check()
-  // The trainer form has a "Buat akun login untuk trainer ini" toggle that
-  // defaults to ON. The R3.* assertions don't care about login credentials,
-  // so uncheck it to avoid the "Username wajib diisi" validation alert.
   const loginToggle = page.getByRole('checkbox', { name: /Buat akun login untuk trainer/ })
   if (await loginToggle.isChecked()) await loginToggle.uncheck()
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
@@ -174,7 +182,6 @@ test('R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions', async ({ pa
   const SIM_SCH_NAME = `SD R3.3 Sim ${SUFFIX}`
   const SIM_TR_NAME = `Trainer R3.3 Sim ${SUFFIX}`
   const SIM_SW_NAME = `Siswa R3.3 Sim ${SUFFIX}`
-  const SIM_SCH_ID = `sch-r33-sim-${SUFFIX}`
   const SIM_TR_USERNAME = `trr33sim${SUFFIX}`
 
   // The seeded admin.cabang@test.local is bound to branch `cbg-test-pusat`
@@ -254,7 +261,6 @@ test('R3.4: SPP ledger payment → Pemasukan SPP increments by nominal', async (
   const SIM_SCH_NAME = `SD R3.4 Sim ${SUFFIX}`
   const SIM_TR_NAME = `Trainer R3.4 Sim ${SUFFIX}`
   const SIM_SW_NAME = `Siswa R3.4 Sim ${SUFFIX}`
-  const SIM_SCH_ID = `sch-r34-sim-${SUFFIX}`
   const SIM_TR_USERNAME = `trr34sim${SUFFIX}`
 
   const ADMIN_BRANCH_ID = 'cbg-test-pusat'

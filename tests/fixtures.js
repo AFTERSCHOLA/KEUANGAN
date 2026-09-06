@@ -120,6 +120,8 @@ export async function loginViaApi(page, role, options = {}) {
 const APP = 'http://localhost:5173'
 
 export async function primeCsrf(page) {
+  const cookies = await page.context().cookies()
+  console.log('[primeCsrf] cookies present:', cookies.map(c => c.name))
   const res = await page.request.get('/api/auth/csrf.php')
   if (!res.ok()) throw new Error(`csrf prime failed: ${res.status()}`)
   const body = await res.json()
