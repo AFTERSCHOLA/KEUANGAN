@@ -295,7 +295,9 @@ function PerSchoolBars({ data }) {
             </text>
             <rect x={labelW} y={y} width={targetW} height="16" fill="#f1f5f9" rx="4" />
             <rect x={labelW} y={y} width={realisasiW} height="16" fill="#2563eb" rx="4" />
-            <text x={labelW + barAreaW + 8} y={y + 12} fontSize="9" fontWeight="700" fill="#475569">
+            <text x={labelW + barAreaW + 8} y={y + 12} fontSize="11" fontWeight="700" fill="#475569">
+              {/* PM.5.20: bump from 9 to 11 — was the smallest text in the
+               per-school SPP section, hard to read at a glance */}
               {Math.round(maxVal > 0 ? (s.realisasiSpp / (s.targetSpp || 1)) * 100 : 0)}%
             </text>
           </g>

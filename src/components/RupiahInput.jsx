@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react'
  * pass `className` to match the surrounding form's existing input style
  * (R5: don't invent a new visual pattern, reuse what's already on the form).
  */
-export default function RupiahInput({ value, onChange, className = '', min = 0, placeholder = '', id }) {
+export default function RupiahInput({ value, onChange, className = '', min = 0, placeholder = '', id, disabled = false }) {
   const [display, setDisplay] = useState(formatGrouped(value))
 
   // Keep display in sync if `value` changes from outside (e.g. form reset).
@@ -53,8 +53,9 @@ export default function RupiahInput({ value, onChange, className = '', min = 0, 
         value={display}
         onChange={handleChange}
         onBlur={handleBlur}
+        disabled={disabled}
         placeholder={placeholder}
-        className={className || 'w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'}
+        className={className || 'w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60'}
       />
     </div>
   )

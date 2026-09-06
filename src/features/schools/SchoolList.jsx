@@ -278,10 +278,13 @@ async function save() {
         </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {visibleSekolah.map(sch => (
+        {visibleSekolah.map((sch, idx) => (
           <div key={sch.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100 flex flex-col hover:shadow-md transition">
             <div className="h-44 relative bg-slate-200">
               <SchoolThumbnail sch={sch} />
+              <span className="absolute top-2 left-2 bg-white/90 text-slate-700 text-xs font-extrabold w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
+                {idx + 1}
+              </span>
 
               <div className="absolute top-2 right-2 flex gap-1">
                 <button onClick={() => setInvoiceModalSchool(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm" title="Kelola Invoice"><svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>

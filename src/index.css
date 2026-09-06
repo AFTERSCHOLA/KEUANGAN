@@ -35,3 +35,35 @@
 }
 .animate-fadeIn  { animation: fadeIn 0.22s ease-out both; }
 .animate-scaleIn { animation: scaleIn 0.18s ease-out both; }
+
+/* ----------------------------------------------------------------------
+ * PM.5.18 — thin scrollbar site-wide (F-12).
+ * `scrollbar-width` covers Firefox; the `::-webkit-scrollbar-*` rules
+ * cover Chrome/Safari/Edge, which don't support the standard property.
+ * Applied on body so it inherits into naturally-scrolling descendants
+ * (modals, table cards) without needing a class on each one.
+ * -------------------------------------------------------------------- */
+body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-400) var(--color-canvas);
+}
+body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+body::-webkit-scrollbar-track {
+  background: var(--color-canvas);
+}
+body::-webkit-scrollbar-thumb {
+  background-color: var(--color-ink-400);
+  border-radius: 9999px;
+}
+
+/* ----------------------------------------------------------------------
+ * PM.5.19 — consistent right margin between <select> chevron and edge (F-13).
+ * Global selector so every <select> in the app gets it without per-file edits.
+ * -------------------------------------------------------------------- */
+select {
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+}

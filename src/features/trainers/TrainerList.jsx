@@ -4,6 +4,7 @@ import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
+import RupiahInput from '../../components/RupiahInput.jsx'
 import { readCached, getRoleContext, writeRemote, deleteRemote, pullRemote } from '../../lib/store.js'
 
 export default function TrainerList() {
@@ -28,6 +29,10 @@ export default function TrainerList() {
   const [initialPasswordDialog, setInitialPasswordDialog] = useState(null) // { username, password } | null
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
 
+  // PM.5.13: per-button copy feedback state. 'idle' | 'copied' | 'error'.
+  const [copiedUsername, setCopiedUsername] = useState('idle')
+  const [copiedPassword, setCopiedPassword] = useState('idle')
+
   // Privilege matrix (PRODUCTION_PLAN.md section 5): Trainer role is
   // "Read own record" only. Hiding these controls is a UX courtesy, not
   // the security boundary — authorize.php on the server is what actually
@@ -43,6 +48,18 @@ export default function TrainerList() {
   function showError(message) {
     setAlertMsg(message)
     setAlertOpen(true)
+  }
+
+  // PM.5.13: shared copy-to-clipboard helper with success/failure feedback.
+  // Resets to 'idle' after 1.5s regardless of outcome.
+  async function copyToClipboard(text, setStatus) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setStatus('copied')
+    } catch {
+      setStatus('error')
+    }
+    setTimeout(() => setStatus('idle'), 1500)
   }
 
   function openAdd() {
@@ -369,9 +386,10 @@ if (serverTrainer && initialPassword) {
                     className="flex-1 rounded-lg border bg-slate-50 p-2.5 text-sm font-mono"
                   />
                   <button
-                    onClick={() => navigator.clipboard?.writeText(initialPasswordDialog.username)}
+                    onClick={() => copyToClipboard(initialPasswordDialog.username, setCopiedUsername)}
+                    aria-live="polite"
                     className="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold"
-                  >Salin</button>
+                  >{copiedUsername === 'copied' ? 'Tersalin' : copiedUsername === 'error' ? 'Gagal menyalin' : 'Salin'}</button>
                 </div>
               </div>
               <div>
@@ -383,9 +401,10 @@ if (serverTrainer && initialPassword) {
                     className="flex-1 rounded-lg border bg-slate-50 p-2.5 text-sm font-mono"
                   />
                   <button
-                    onClick={() => navigator.clipboard?.writeText(initialPasswordDialog.password)}
+                    onClick={() => copyToClipboard(initialPasswordDialog.password, setCopiedPassword)}
+                    aria-live="polite"
                     className="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold"
-                  >Salin</button>
+                  >{copiedPassword === 'copied' ? 'Tersalin' : copiedPassword === 'error' ? 'Gagal menyalin' : 'Salin'}</button>
                 </div>
               </div>
             </div>
@@ -426,7 +445,7 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Honor per Kedatangan</label>
-        <input type="number" min="0" value={form.honor} onChange={e => setForm({ ...form, honor: Number(e.target.value) })} disabled={saving} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60" />
+        <RupiahInput value={form.honor} onChange={n => setForm({ ...form, honor: n })} min={0} disabled={saving} className="w-full mt-1 pl-9 pr-3 py-2.5 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60" />
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Sekolah Penugasan</label>

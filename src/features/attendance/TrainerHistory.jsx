@@ -33,9 +33,12 @@ export default function TrainerHistory({ trainerId }) {
       key: `${r.id}-${entry.slot || index}`,
       entry,
     })))
+    const t0 = performance.now()
+    console.log(`[PERF TrainerHistory] loading ${entries.length} photos...`)
     Promise.all(entries.map(async ({ key, entry }) => [key, await loadPhotoDataUrl(entry)]))
       .then(results => {
         if (!cancelled) setPhotoUrls(Object.fromEntries(results))
+          console.log(`[PERF TrainerHistory] done in ${(performance.now() - t0).toFixed(0)}ms`)
       })
     return () => { cancelled = true }
   }, [myRecords])

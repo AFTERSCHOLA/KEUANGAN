@@ -22,7 +22,10 @@ export default function TrainerDashboard({ trainerId }) {
   const absensi = readCached('absensi')
   const honorPayments = readCached('honorPayments')
   const sppPayments = readCached('sppPayments')
-  const finance = financialData({ sekolah, siswa, trainer: trainers, absensi, honorPayments, sppPayments, periode })
+  const finance = useMemo(
+    () => financialData({ sekolah, siswa, trainer: trainers, absensi, honorPayments, sppPayments, periode }),
+    [sekolah, siswa, trainers, absensi, honorPayments, sppPayments, periode]
+  )
   const trainerFinance = finance.trainerFinance.find(t => t.id === trainerId) || {
     hadirSesi: 0,
     tarif: trainer?.honor || 0,
