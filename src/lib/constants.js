@@ -38,7 +38,9 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
     nama: '',
     alamat: '',
     foto: '',
+    fotoEntry: null, // A2.5-SEKOLAH-FOTO: { type: 'idb', key, size } | null — IndexedDB reference, never the raw file/dataURL
     jadwal: '',
+    jadwalList: [], // A2.5-JADWAL-1: [{ dayOfWeek: 'Senin', time: '14:00' }, ...]
     spp: 0,
     trainerIds: [],
     cabangId: branchId,

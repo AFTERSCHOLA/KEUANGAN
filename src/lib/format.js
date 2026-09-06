@@ -24,3 +24,8 @@ export function waNormalize(wa) {
 
   return digits;
 }
+
+export function formatJadwalList(jadwalList) {
+  if (!Array.isArray(jadwalList) || jadwalList.length === 0) return ''
+  return jadwalList.map(entry => `${entry.dayOfWeek} ${entry.time}`).join(', ')
+}

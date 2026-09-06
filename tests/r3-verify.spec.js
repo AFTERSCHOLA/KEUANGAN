@@ -73,6 +73,22 @@ async function getStoreJson(page, key) {
   return page.evaluate((k) => JSON.parse(localStorage.getItem(`afterschola_v4_${k}`) || '[]'), key)
 }
 
+// PM.1.2 (fix, this session): StudentList's save() was migrated to an
+// async writeRemote() call — clicking "Simpan" no longer writes to
+// localStorage synchronously the way the old upsert() did. Reading
+// getStoreJson() immediately after .click() (Playwright resolves the
+// click once the event fires, not once the handler's internal awaits
+// finish) raced the network round-trip and read a stale/empty cache.
+// Polls for the specific record by name rather than just "array not
+// empty" — the test DB persists across runs, so an empty-length check
+// can pass on stale data alone without proving THIS run's write landed.
+async function waitForSiswaByName(page, nama) {
+  await expect.poll(
+    () => getStoreJson(page, 'siswa').then(arr => arr.some(s => s.nama === nama)),
+    { message: `menunggu siswa "${nama}" muncul di cache lokal setelah writeRemote()` }
+  ).toBe(true)
+}
+
 async function seed(page) {
   await openTab(page, 'Data Sekolah')
   await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
@@ -106,9 +122,13 @@ test('R3.1: siswa WA normalizes to 62 format on blur', async ({ page }) => {
   await field(page, 'WhatsApp').fill('0812 3456 7890')
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
 
+  // PM.1.2 fix: wait for the async writeRemote() write to actually land
+  // in the local cache before reading it — see waitForSiswaByName().
+  await waitForSiswaByName(page, SISWA)
+
   // value in the form was normalized on blur, so the saved record is 62...
   const siswa = await getStoreJson(page, 'siswa')
-  expect(siswa[0].wa).toBe('6281234567890')
+  expect(siswa.find(s => s.nama === SISWA).wa).toBe('6281234567890')
 })
 
 // R3.2 — trainer WA blur normalizes (form shows 6281234567890)
@@ -200,6 +220,12 @@ test('R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions', async ({ pa
   await field(page, 'Sekolah').selectOption({ label: SIM_SCH_NAME })
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
 
+  // PM.1.2 fix: same async-write race as R3.1 — wait for the siswa to
+  // actually land in the local cache before switching tabs, otherwise the
+  // attendance form's student checklist (reading from the same cache)
+  // won't have this student yet and getByText(SIM_SW_NAME) below times out.
+  await waitForSiswaByName(page, SIM_SW_NAME)
+
   for (const day of [5, 9]) {
     await openTab(page, 'Data Absensi')
     await page.getByRole('button', { name: 'Input Absensi' }).click()
@@ -250,6 +276,12 @@ test('R3.4: SPP ledger payment → Pemasukan SPP increments by nominal', async (
   await field(page, 'Nama Siswa').fill(SIM_SW_NAME)
   await field(page, 'Sekolah').selectOption({ label: SIM_SCH_NAME })
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+
+  // PM.1.2 fix: same async-write race as R3.1/R3.3 — this test happened to
+  // pass before only because the SPP-payment button click below gave the
+  // write just enough incidental time to land; made explicit here so it
+  // doesn't regress into the same flakiness under different timing.
+  await waitForSiswaByName(page, SIM_SW_NAME)
 
   await page.locator('tr', { hasText: SIM_SW_NAME }).locator('button[title="Catat pembayaran SPP"]').click()
   await field(page, 'Nominal').fill('100000')

@@ -351,7 +351,15 @@ export function prepareWritePayload(key, record, ctx) {
       return copy
 
     case 'trainer':
-      if (role === 'admin_cabang') delete copy.cabangId
+      // trainer.php forbids cabangId in the body for EVERY role, not just
+      // admin_cabang — for admin_cabang because it's always forced from
+      // their own session, and for superadmin because moving a trainer
+      // between branches isn't allowed through this endpoint at all (the
+      // existing branch is preserved server-side on update; WA thread
+      // 1/9/2026 policy decision). This is the opposite of sekolah.php,
+      // where superadmin MUST supply cabangId explicitly — the two
+      // endpoints genuinely differ per role here, not a shared rule.
+      delete copy.cabangId
       return copy
 
     case 'siswa':

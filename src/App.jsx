@@ -192,6 +192,7 @@ if (currentUser?.mustChangePassword) {
         variant="desktop"
         title={settings.title || 'Afterschola'}
         logoUrl={settings.logoUrl}
+        logoEntry={settings.logoEntry}
         tabs={visibleTabs}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -213,6 +214,7 @@ if (currentUser?.mustChangePassword) {
             variant="drawer"
             title={settings.title || 'Afterschola'}
             logoUrl={settings.logoUrl}
+            logoEntry={settings.logoEntry}
             tabs={visibleTabs}
             activeTab={activeTab}
             onSelectTab={setActiveTab}

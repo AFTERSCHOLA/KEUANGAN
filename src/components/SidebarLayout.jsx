@@ -1,3 +1,6 @@
+import { useState, useEffect } from 'react'
+import { loadPhotoDataUrl } from '../lib/photoStorage.js'
+
 /**
  * Single sidebar shell, reused for the desktop sidebar AND the mobile drawer.
  * `variant="desktop"` is a persistent left rail with collapse toggle.
@@ -7,11 +10,27 @@
  * page header (<PeriodFilter/>), system actions live in the account
  * menu (<AccountMenu/>) in the top-right.
  */
-function SidebarLogo({ logoUrl, size = 'w-10 h-10', iconSize = 'w-6 h-6' }) {
-  if (logoUrl) {
+export function SidebarLogo({ logoUrl, logoEntry, size = 'w-10 h-10', iconSize = 'w-6 h-6' }) {
+  const [idbUrl, setIdbUrl] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (logoEntry) {
+      loadPhotoDataUrl(logoEntry).then(url => {
+        if (!cancelled) setIdbUrl(url)
+      })
+    } else {
+      setIdbUrl(null)
+    }
+    return () => { cancelled = true }
+  }, [logoEntry])
+
+  const src = idbUrl || logoUrl
+
+  if (src) {
     return (
       <img
-        src={logoUrl}
+        src={src}
         alt="Logo"
         className={`${size} rounded-full object-cover border-2 border-yellow-400 bg-white shadow-md shrink-0`}
         onError={(e) => { e.currentTarget.style.display = 'none' }}
@@ -35,6 +54,7 @@ export default function SidebarLayout({
   variant = 'desktop',          // 'desktop' | 'drawer'
   title = 'Afterschola',
   logoUrl = '',
+  logoEntry, // tambahkan ini
 
   tabs,                          // [{ id, label, icon, comingSoon }]
   activeTab,
@@ -68,11 +88,11 @@ export default function SidebarLayout({
       >
         {(!collapsed || isDrawer) && (
           <div className="flex items-center gap-2 min-w-0">
-            <SidebarLogo logoUrl={logoUrl} />
+            <SidebarLogo logoUrl={logoUrl} logoEntry={logoEntry} />
             <h1 className="text-xl font-bold tracking-tight text-yellow-300 truncate">{title}</h1>
           </div>
         )}
-        {collapsed && !isDrawer && <SidebarLogo logoUrl={logoUrl} />}
+        {collapsed && !isDrawer && <SidebarLogo logoUrl={logoUrl} logoEntry={logoEntry} />}
         {isDrawer ? (
           <button
             type="button"

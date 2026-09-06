@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { readCached, write, upsert, getRoleContext, writeRemote, deleteRemote, subscribeStore } from '../../lib/store.js'
-import { formatRupiah } from '../../lib/format.js'
+import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 import { newSekolah, defaultCabang } from '../../lib/constants.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
@@ -8,6 +7,9 @@ import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import InvoiceModal from '../reports/InvoiceModal.jsx'
 import InvoiceTemplate from '../reports/InvoiceTemplate.jsx'
+import PhotoSlot from '../../components/PhotoSlot.jsx'
+import { readCached, write, upsert, getRoleContext, writeRemote, deleteRemote, subscribeStore } from '../../lib/store.js'
+import { loadPhotoDataUrl } from '../../lib/photoStorage.js'
 
 
 export default function SchoolList() {
@@ -72,9 +74,9 @@ export default function SchoolList() {
   }
 
   function openEdit(sch) {
-    setForm({ ...sch })
-    setModalOpen(true)
-  }
+  setForm({ jadwalList: [], ...sch })
+  setModalOpen(true)
+}
 
 async function save() {
   if (!form.nama.trim()) {
@@ -279,15 +281,9 @@ async function save() {
         {visibleSekolah.map(sch => (
           <div key={sch.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100 flex flex-col hover:shadow-md transition">
             <div className="h-44 relative bg-slate-200">
-              <img
-                src={sch.foto}
-                alt={sch.nama}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.src = 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=400&auto=format&fit=crop&q=80'
-                }}
-              />
-                            <div className="absolute top-2 right-2 flex gap-1">
+              <SchoolThumbnail sch={sch} />
+
+              <div className="absolute top-2 right-2 flex gap-1">
                 <button onClick={() => setInvoiceModalSchool(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm" title="Kelola Invoice"><svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>
                 <button onClick={() => openEdit(sch)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm" title="Edit" aria-label="Edit sekolah"><svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
                 <button onClick={() => remove(sch.id)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow-sm"><svg className="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2"/></svg></button>
@@ -315,9 +311,11 @@ async function save() {
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase">Jadwal Kelas</p>
-                  <p className="text-xs text-slate-600 bg-slate-100 py-1 px-2.5 rounded-md inline-block mt-1">{sch.jadwal || 'Belum diatur'}</p>
-                </div>
+  <p className="text-[10px] text-slate-400 font-bold uppercase">Jadwal Kelas</p>
+  <p className="text-xs text-slate-600 bg-slate-100 py-1 px-2.5 rounded-md inline-block mt-1">
+    {formatJadwalList(sch.jadwalList) || sch.jadwal || 'Belum diatur'}
+  </p>
+</div>
               </div>
 
               <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
@@ -398,13 +396,66 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
         <textarea value={form.alamat} onChange={e => setForm({ ...form, alamat: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" rows="2" />
       </div>
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
-        <input value={form.foto} onChange={e => setForm({ ...form, foto: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
-      </div>
+  <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
+  <input value={form.foto}
+        onChange={e => setForm({ ...form, foto: e.target.value })}
+        className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+  <p className="text-[11px] text-slate-400 mt-1">Atau unggah foto langsung di bawah ini — jika ada, foto unggahan akan lebih diprioritaskan tampil.</p>
+</div>
+<PhotoSlot
+  label="Foto Sekolah (Unggah)"
+  entry={form.fotoEntry}
+  onChange={(entry) => setForm({ ...form, fotoEntry: entry })}
+/>
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">Jadwal</label>
-        <input value={form.jadwal} onChange={e => setForm({ ...form, jadwal: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
+  <label className="text-xs font-bold text-slate-400 uppercase">Jadwal Kelas</label>
+  <div className="space-y-2 mt-1">
+    {(form.jadwalList || []).map((entry, idx) => (
+      <div key={idx} className="flex gap-2 items-center">
+        <select
+          value={entry.dayOfWeek}
+          onChange={e => {
+            const next = [...form.jadwalList]
+            next[idx] = { ...next[idx], dayOfWeek: e.target.value }
+            setForm({ ...form, jadwalList: next })
+          }}
+          className="flex-1 rounded-lg border p-2 text-sm bg-white"
+        >
+          {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].map(d => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+        <input
+          type="time"
+          value={entry.time}
+          onChange={e => {
+            const next = [...form.jadwalList]
+            next[idx] = { ...next[idx], time: e.target.value }
+            setForm({ ...form, jadwalList: next })
+          }}
+          className="w-32 rounded-lg border p-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => setForm({ ...form, jadwalList: form.jadwalList.filter((_, i) => i !== idx) })}
+          className="text-rose-500 hover:text-rose-700 p-1"
+          title="Hapus jadwal ini"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
+    ))}
+    <button
+      type="button"
+      onClick={() => setForm({ ...form, jadwalList: [...(form.jadwalList || []), { dayOfWeek: 'Senin', time: '14:00' }] })}
+      className="text-xs font-semibold text-blue-600 hover:underline"
+    >
+      + Tambah Jadwal
+    </button>
+  </div>
+</div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">SPP Bulanan</label>
         <RupiahInput
@@ -418,6 +469,34 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
         <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
       </div>
     </>
+  )
+}
+
+function SchoolThumbnail({ sch }) {
+  const [idbUrl, setIdbUrl] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (sch.fotoEntry) {
+      loadPhotoDataUrl(sch.fotoEntry).then(url => {
+        if (!cancelled) setIdbUrl(url)
+      })
+    } else {
+      setIdbUrl(null)
+    }
+    return () => { cancelled = true }
+  }, [sch.fotoEntry])
+
+  const fallback = 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=400&auto=format&fit=crop&q=80'
+  const src = idbUrl || sch.foto || fallback
+
+  return (
+    <img
+      src={src}
+      alt={sch.nama}
+      className="w-full h-full object-cover"
+      onError={(e) => { e.target.src = fallback }}
+    />
   )
 }
 

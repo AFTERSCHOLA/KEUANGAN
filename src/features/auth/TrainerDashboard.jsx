@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
 import { readCached, usePeriod } from '../../lib/store.js'
 import { financialData } from '../../lib/finance.js'
-import { formatRupiah } from '../../lib/format.js'
+import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
-function scheduleIncludesToday(schedule, dayName) {
-  return String(schedule || '').toLocaleLowerCase('id-ID').includes(dayName.toLocaleLowerCase('id-ID'))
+function scheduleIncludesToday(sekolah, dayName) {
+  if (Array.isArray(sekolah.jadwalList) && sekolah.jadwalList.length > 0) {
+    return sekolah.jadwalList.some(entry => entry.dayOfWeek === dayName)
+  }
+  return String(sekolah.jadwal || '').toLocaleLowerCase('id-ID').includes(dayName.toLocaleLowerCase('id-ID'))
 }
 
 export default function TrainerDashboard({ trainerId }) {
@@ -31,7 +34,7 @@ export default function TrainerDashboard({ trainerId }) {
   const assignedSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
     return sekolah
-      .filter(s => schoolIds.has(s.id) && scheduleIncludesToday(s.jadwal, todayName))
+      .filter(s => schoolIds.has(s.id) && scheduleIncludesToday(s, todayName))
       .map(s => ({
         ...s,
         done: absensi.some(a => a.tanggal === today && a.sekolahId === s.id && a.trainerId === trainerId),
@@ -63,7 +66,7 @@ export default function TrainerDashboard({ trainerId }) {
               <div key={s.id} className="flex items-center justify-between gap-4 p-5">
                 <div>
                   <p className="font-bold text-slate-800">{s.nama}</p>
-                  <p className="text-xs text-slate-500">{s.jadwal}</p>
+                  <p className="text-xs text-slate-500">{formatJadwalList(s.jadwalList) || s.jadwal}</p>
                 </div>
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${s.done ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
                   {s.done ? 'Selesai' : 'Belum Diisi'}

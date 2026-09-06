@@ -3,6 +3,7 @@ import Modal from './Modal.jsx'
 import BackupRestorePanel from './BackupRestorePanel.jsx'
 import { getSettings, setSettings, getRoleContext } from '../lib/store'
 import { inputClass } from '../lib/ui.js'
+import PhotoSlot from './PhotoSlot.jsx'
 
 // In-panel label style — kept local so the muted uppercase caption
 // look on the Settings modal doesn't drift into the LoginPage (which
@@ -13,6 +14,7 @@ const fieldClass = `${inputClass} mt-1`
 export default function SettingsModal({ open, onClose, onSaved }) {
   const initial = getSettings()
   const [logoUrl, setLogoUrl] = useState(initial.logoUrl || '')
+  const [logoEntry, setLogoEntry] = useState(initial.logoEntry || null)
   const [title, setTitle] = useState(initial.title || '')
   const [alamatUsaha, setAlamatUsaha] = useState(initial.alamatUsaha || '')
   const [rekeningBank, setRekeningBank] = useState(initial.rekeningBank || '')
@@ -34,10 +36,10 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   const canEditSettings = ctx.role === 'superadmin'
 
   function handleSaveIdentitas() {
-    if (!canEditSettings) return
-    setSettings({ logoUrl: logoUrl.trim(), title: title.trim() })
-    onSaved?.()
-    onClose()
+  if (!canEditSettings) return
+  setSettings({ logoUrl: logoUrl.trim(), logoEntry, title: title.trim() })
+  onSaved?.()
+  onClose()
   }
 
   function handleSaveInvoiceInfo() {
@@ -72,9 +74,15 @@ export default function SettingsModal({ open, onClose, onSaved }) {
         <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-4">
           <h4 className="text-sm font-bold text-slate-800">Identitas Aplikasi</h4>
           <div>
-            <label className={labelClass}>Logo URL</label>
-            <input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://contoh.com/logo.png" className={fieldClass} />
-          </div>
+  <label className={labelClass}>Logo URL</label>
+  <input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://contoh.com/logo.png" className={fieldClass} />
+  <p className="text-[11px] text-slate-400 mt-1">Atau unggah logo langsung di bawah ini — jika ada, logo unggahan akan lebih diprioritaskan tampil.</p>
+</div>
+<PhotoSlot
+  label="Logo (Unggah)"
+  entry={logoEntry}
+  onChange={setLogoEntry}
+/>
           <div>
             <label className={labelClass}>Judul Dashboard</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Afterschola" className={fieldClass} />
