@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Single modal shell used by every dialog in the app.
@@ -72,16 +73,16 @@ export default function AppModal({
   }
 }, [isOpen])   // <-- cuma isOpen
 
-  if (!isOpen) return null
+    if (!isOpen) return null
 
   function handleBackdrop(e) {
     if (disableBackdropClose) return
     if (e.target === e.currentTarget) onClose?.()
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={handleBackdrop}
     >
       <div
@@ -111,6 +112,7 @@ export default function AppModal({
         )}
         <div className="p-6 space-y-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

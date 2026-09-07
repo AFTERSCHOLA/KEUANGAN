@@ -3,25 +3,53 @@ import { readCached, upsert, usePeriod } from '../../lib/store'
 import { buildReviewQueue } from '../../lib/attendance'
 import { getRole, canVerify } from '../../lib/role'
 
+const SHOW_ALL_STORAGE_KEY = 'afterschola_v4_riwayat_show_all'
+
 export default function RiwayatAbsensi({ onLoadForCorrection }) {
   const { periodeKey } = usePeriod()
   const [tick, setTick] = useState(0)
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
   const absensi = useMemo(() => readCached('absensi'), [tick])
   const [filterSekolahId, setFilterSekolahId] = useState('')
-  const [showAll, setShowAll] = useState(false)
+  
+  const [showAll, setShowAll] = useState(() => {
+    try {
+      return localStorage.getItem(SHOW_ALL_STORAGE_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  function toggleShowAll() {
+    setShowAll(v => {
+      const next = !v
+      try {
+        localStorage.setItem(SHOW_ALL_STORAGE_KEY, String(next))
+      } catch {
+        // localStorage unavailable (private mode dsb) — toggle tetap jalan in-memory
+      }
+      return next
+    })
+  }
 
   const role = getRole()
   const periode = periodeKey()
 
   const queue = useMemo(() => buildReviewQueue(absensi), [absensi])
-  const filteredQueue = queue
-    .filter(q => q.record.periode === periode)
-    .filter(q => !filterSekolahId || q.record.sekolahId === filterSekolahId)
+  
+  const filteredQueue = useMemo(
+    () => queue
+      .filter(q => q.record.periode === periode)
+      .filter(q => !filterSekolahId || q.record.sekolahId === filterSekolahId),
+    [queue, periode, filterSekolahId]
+  )
 
-  const allRecords = absensi
-    .filter(a => !filterSekolahId || a.sekolahId === filterSekolahId)
-    .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
+  const allRecords = useMemo(
+    () => absensi
+      .filter(a => !filterSekolahId || a.sekolahId === filterSekolahId)
+      .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1)),
+    [absensi, filterSekolahId]
+  )
 
   function schoolName(id) {
     return sekolah.find(s => s.id === id)?.nama || 'Sekolah tidak ditemukan'
@@ -35,7 +63,10 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
     setTick(t => t + 1)
   }
 
-  const rows = showAll ? allRecords.map(r => ({ record: r, reasons: [] })) : filteredQueue
+  const rows = useMemo(
+    () => showAll ? allRecords.map(r => ({ record: r, reasons: [] })) : filteredQueue,
+    [showAll, allRecords, filteredQueue]
+  )
 
   return (
     <div className="space-y-4">
@@ -56,12 +87,12 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
             {sekolah.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
           </select>
           <button
-            onClick={() => setShowAll(v => !v)}
+            onClick={toggleShowAll}
             className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${
               showAll ? 'bg-yellow-400 text-slate-900 shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
             }`}
           >
-            Semua
+             {showAll ? 'Hanya antrian verifikasi' : 'Tampilkan semua absensi'}
           </button>
         </div>
       </div>

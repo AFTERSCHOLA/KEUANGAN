@@ -44,6 +44,9 @@ export default function BranchManager() {
   const [saving, setSaving] = useState(false)
   const [initialPasswordDialog, setInitialPasswordDialog] = useState(null)
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
+  // PM.5.13: per-button copy feedback state. 'idle' | 'copied' | 'error'.
+  const [copiedUsername, setCopiedUsername] = useState('idle')
+  const [copiedPassword, setCopiedPassword] = useState('idle')
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertMsg, setAlertMsg] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -58,6 +61,17 @@ export default function BranchManager() {
   function showError(message) {
     setAlertMsg(message)
     setAlertOpen(true)
+  }
+
+  // PM.5.13: shared copy-to-clipboard helper with success/failure feedback.
+  async function copyToClipboard(text, setStatus) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setStatus('copied')
+    } catch {
+      setStatus('error')
+    }
+    setTimeout(() => setStatus('idle'), 1500)
   }
 
   function openAdd() {
@@ -330,9 +344,10 @@ export default function BranchManager() {
                     className="flex-1 rounded-lg border bg-slate-50 p-2.5 text-sm font-mono"
                   />
                   <button
-                    onClick={() => navigator.clipboard?.writeText(initialPasswordDialog.username)}
+                    onClick={() => copyToClipboard(initialPasswordDialog.username, setCopiedUsername)}
+                    aria-live="polite"
                     className="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold"
-                  >Salin</button>
+                  >{copiedUsername === 'copied' ? 'Tersalin' : copiedUsername === 'error' ? 'Gagal menyalin' : 'Salin'}</button>
                 </div>
               </div>
               <div>
@@ -344,9 +359,10 @@ export default function BranchManager() {
                     className="flex-1 rounded-lg border bg-slate-50 p-2.5 text-sm font-mono"
                   />
                   <button
-                    onClick={() => navigator.clipboard?.writeText(initialPasswordDialog.password)}
+                    onClick={() => copyToClipboard(initialPasswordDialog.password, setCopiedPassword)}
+                    aria-live="polite"
                     className="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold"
-                  >Salin</button>
+                  >{copiedPassword === 'copied' ? 'Tersalin' : copiedPassword === 'error' ? 'Gagal menyalin' : 'Salin'}</button>
                 </div>
               </div>
             </div>

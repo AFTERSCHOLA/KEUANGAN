@@ -77,7 +77,7 @@ export default function SidebarLayout({
       className={
         isDrawer
           ? 'relative w-64 bg-blue-900 border-r-2 border-yellow-400 flex flex-col animate-fadeIn'
-          : `hidden md:flex flex-col bg-blue-900 border-r-2 border-yellow-400 shrink-0 transition-all ${collapsed ? 'w-20' : 'w-64'}`
+          : `hidden md:flex flex-col bg-blue-900 border-r-2 border-yellow-400 shrink-0 transition-all overflow-hidden sticky top-0 self-start h-screen ${collapsed ? 'w-20' : 'w-64'}`
       }
     >
       {/* Header */}

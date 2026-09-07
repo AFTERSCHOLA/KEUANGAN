@@ -115,6 +115,11 @@ async function seed(page) {
   const loginToggle = page.getByRole('checkbox', { name: /Buat akun login untuk trainer/ })
   if (await loginToggle.isChecked()) await loginToggle.uncheck()
   await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+
+  await waitForRecordByName(page, 'trainer', TRAINER)
+  // Pastikan modal trainer benar-benar tertutup sebelum tab lain dibuka —
+  // mencegah backdrop/overlay sisa menutupi form berikutnya.
+  await expect(page.getByRole('button', { name: 'Simpan', exact: true })).toHaveCount(0)
 }
 
 // R3.1 — siswa WA blur normalizes (0812 3456 7890 → 6281234567890)
@@ -285,7 +290,8 @@ test('R3.4: SPP ledger payment → Pemasukan SPP increments by nominal', async (
 
   // PM.1.2 fix: same async-write race as R3.1/R3.3 — this test happened to
   // pass before only because the SPP-payment button click below gave the
-  // write just enough incidental time to land; made explicit here so it
+  // write just enough incidental time to land;
+  //  made explicit here so it
   // doesn't regress into the same flakiness under different timing.
   await waitForSiswaByName(page, SIM_SW_NAME)
 

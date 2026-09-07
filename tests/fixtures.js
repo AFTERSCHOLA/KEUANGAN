@@ -74,6 +74,8 @@ export async function loginViaApi(page, role, options = {}) {
   }
   const { user } = await loginResponse.json()
 
+  console.log('[loginViaApi] logged in as:', user.username, user.role)
+
   // Defensive copy: explicitly install the session cookie into the browser
   // context. Playwright's `page.request` shares its cookie jar with the
   // browser context, but that sharing is sensitive to the request having
