@@ -204,11 +204,28 @@ Authentication is promoted into the production track and is no longer deferred. 
 
 ---
 
-## A2.5 — Manual-audit follow-ups (per D-10 = B, D-18 = B)
+## A2.5 — Manual-audit follow-ups (per D-10 = B, D-18 = B) — **GATE CLOSED 2026-09-07**
 
 Source: `docs/log-doc/audit-app-vs-tests_2026-09-04_2249Z.md`. These extend the existing attendance-photo chain (A2) with sekolah/logo file pickers and the new jadwal day-picker.
 
-### A2.5-SEKOLAH-FOTO Sekolah.foto: add file picker (F-10)
+**Closure evidence (working tree @ HEAD = 42c5a1b):**
+- `A2.5-SEKOLAH-FOTO` — `SchoolList.jsx:10` imports `PhotoSlot`, used in the Sekolah form around line 408 (reuses the existing attendance path; taste #11).
+- `A2.5-LOGO` — `SettingsModal.jsx:6,81-85` mounts `<PhotoSlot label="Logo (Unggah)" entry={logoEntry} onChange={setLogoEntry} />`; saved via `setSettings({ logoUrl, logoEntry, title })` at line 40.
+- `A2.5-JADWAL-1` — `constants.js:43` adds `jadwalList: []` to `newSekolah()`; `SchoolList.jsx:77,416-457` is the day-picker + Add/Remove UI; `TrainerDashboard.jsx:8-13` reads `jadwalList` first with a `jadwal` string fallback (idempotent migration per taste #35).
+- Status line on the Sekolah card (`SchoolList.jsx:319`) renders `formatJadwalList(sch.jadwalList) || sch.jadwal || 'Belum diatur'`.
+
+**Closure verification (2026-09-07/08, PHP 8000 + XAMPP MySQL + Vite 5173 up, DB reset to canonical seed):**
+- All three pinned specs exist and pass — `Verified: npx playwright test tests/sekolah-foto-picker.spec.js tests/settings-logo-picker.spec.js tests/sekolah-jadwal-list.spec.js --project=default --workers=1 -> 3 passed (25.2s)`; also green inside the full suite run (84/85/86 ok).
+- `r3-verify.spec.js remains green` clause now true — `Verified: npx playwright test tests/r3-verify.spec.js --project=default --workers=1 -> 4 passed`. Required one in-scope test-side fix: PM.5.22's new `#` row-numbering column (`StudentList.jsx:232`) shifted the Data Siswa td indices; R3.3's `td.nth(3/4)` were updated to `nth(4/5)` (`r3-verify.spec.js:254-257`) — pre-existing drift from the PM.5.22 commit's own VERIFY clause, not an A2.5 regression.
+- Unit suite: `Verified: npm test -> 54 passed (13 files)` — required one in-scope test-side fix: the stale `M-MAS1.1` expectation ("keeps cabangId for superadmin") was aligned to the server-authoritative contract (`trainer.php:51-53` forbids body `cabangId` for every role; store.js aligned in `e5bb162`; taste #61).
+- Production build: `Verified: npm run build -> ✓ built in 4.16s, PWA precache 6 entries (435.53 KiB)`.
+- Seed-fixture fix carried in the working tree: `server/tests/db-reset.php` — the canonical `cbg-test-pusat` seed payload now includes `id` inside the payload (read.php returns payloads verbatim; every client consumer keys off `record.id`; without it, superadmin sekolah creation 422s with "Cabang tidak valid").
+- Suite-hygiene fix carried in the working tree: `playwright.config.js` default project now also ignores `phase567-exit-gate.spec.js` + `stress-simulation.spec.js` (destructive-project-only, matching the existing `auth-login-page` exclusion idiom). Their `cleanup_phase.php` `DELETE FROM cabang` was the "specific test that wipes the seeded branch" HY.5 root-cause #5 asked to isolate — it poisoned every later full-suite test needing `cbg-test-pusat`.
+
+**Remaining (pre-existing, outside A2.5 scope — documented cohorts, not regressions):**
+- Full-suite state (2026-09-07/08, 103 tests = 90 default + 13 destructive): 77 passed / 24 failed / 2 did-not-run. All 24 match the documented HYGIENE_MILESTONES 2026-09-03 classes: 12 `e2e.spec.js` selector drifts (class 2); 6 app-level/feature-gap specs incl. `multi-account-crud-sync` helper-shape mismatch (class 3); `student-delete-absensi` count assertion (class 4); the intermittent login/session flake family from commit `859ea75` — loginViaApi returns 200 but the app lands on the login page (6 default-project tests: audit2-trainer leg, flow-simulation trainer, m63.3, m64, m72, m73 — root cause NOT yet found per that commit; it also hit one A2.5-SEKOLAH-FOTO acceptance re-run outside the suite, which passed 5/6 attempts). Destructive project: `auth-login-page` cases 6/10 (HY.5.1b's known `Akun`-dropdown omission), `phase567-exit-gate` (`trn-test-1` trainer row never seeded), `stress-simulation` (pre-existing Tambah-Cabang overlay hang, re-tripping PM.5.9's new validation alert). The 2 `console.log` in `TrainerHistory.jsx:37,41` (859ea75 debug logging) are the pre-existing PM.5.17 hygiene item, untouched here.
+
+### A2.5-SEKOLAH-FOTO Sekolah.foto: add file picker (F-10) — **DONE 2026-09-08**
 
 ```text
 MICROTASK: Sekolah.foto: add file picker
@@ -221,7 +238,9 @@ MICROTASK: Sekolah.foto: add file picker
   DONE-IF: verify passes; only intended files changed
 ```
 
-### A2.5-LOGO Settings.logo: add file picker (F-19)
+**DONE record (2026-09-08):** Spec exists (`tests/sekolah-foto-picker.spec.js`); asserts URL input + PhotoSlot picker, runtime-minted JPEG upload → thumbnail, `fotoEntry {type:'idb'}` storage contract (no raw bytes on record/localStorage), post-refresh re-hydration, and cleanup. `Verified: npx playwright test tests/sekolah-foto-picker.spec.js --project=default -> passed` (also green inside the full suite). A2 dependency satisfied: A2 photo infra (`PhotoSlot.jsx`, `photoStorage.js`) in place since M5.2.3.
+
+### A2.5-LOGO Settings.logo: add file picker (F-19) — **DONE 2026-09-08**
 
 ```text
 MICROTASK: Settings.logo: add file picker
@@ -234,7 +253,9 @@ MICROTASK: Settings.logo: add file picker
   DONE-IF: verify passes; only intended files changed
 ```
 
-### A2.5-JADWAL-1 Sekolah.jadwal: day-picker + Add More (F-18)
+**DONE record (2026-09-08):** Spec exists (`tests/settings-logo-picker.spec.js`); asserts URL input + PhotoSlot picker, upload → header `img[alt="Logo"]` src delta, `logoEntry {type:'idb'}` storage contract, post-refresh survival, and post-test restore via "Hapus foto". `Verified: npx playwright test tests/settings-logo-picker.spec.js --project=default -> passed` (also green inside the full suite).
+
+### A2.5-JADWAL-1 Sekolah.jadwal: day-picker + Add More (F-18) — **DONE 2026-09-08**
 
 ```text
 MICROTASK: Sekolah.jadwal: list of {dayOfWeek, time} entries with Add More
@@ -246,6 +267,8 @@ MICROTASK: Sekolah.jadwal: list of {dayOfWeek, time} entries with Add More
   VERIFY:  Playwright `tests/sekolah-jadwal-list.spec.js` (new) opens Tambah Sekolah as superadmin, adds 2 jadwal entries (Mon 14:00, Wed 15:00), saves, refreshes, asserts the form re-hydrates with 2 entries; opens the Sekolah as a trainer, asserts the Rekap Saya page shows the school on the matching day; existing r3-verify.spec.js remains green
   DONE-IF: verify passes; only intended files changed
 ```
+
+**DONE record (2026-09-08):** Spec exists (`tests/sekolah-jadwal-list.spec.js`); asserts 2 pinned entries (Senin 14:00, Rabu 15:00) + a runtime-derived today entry (date-aware per testing taste), saved `jadwalList[]` shape, Edit-form re-hydration, then the trainer leg: API-created trainer (server policy username, one-time `initialPassword`), must-change-password gate completion, and Rekap Saya showing the school scheduled today with the formatted jadwal line. `Verified: npx playwright test tests/sekolah-jadwal-list.spec.js --project=default -> passed` (also green inside the full suite).
 
 ## Microtask Verification Standards
 

@@ -54,10 +54,16 @@ describe('M-MAS1.1 prepareWritePayload', () => {
     expect(prepareWritePayload('sekolah', payload, ctx.adminCabang)).not.toHaveProperty('cabangId')
   })
 
-  it('strips cabangId from trainer payloads for admin_cabang, keeps it for superadmin', () => {
+  it('strips cabangId from trainer payloads for every role (server forbids body cabangId)', () => {
+    // trainer.php:51-53 rejects a body-supplied cabangId for EVERY role
+    // (admin_cabang: forced from own session; superadmin: branch moves are
+    // not allowed through this endpoint — WA thread 1/9/2026 policy). The
+    // stale pre-A2.5 expectation ("keeps it for superadmin") was aligned
+    // to the authoritative server contract in e5bb162 (taste #61).
     const payload = { id: 'trn-1', nama: 'Budi', cabangId: 'cbg-other' }
-    expect(prepareWritePayload('trainer', payload, ctx.superadmin)).toEqual(payload)
+    expect(prepareWritePayload('trainer', payload, ctx.superadmin)).not.toHaveProperty('cabangId')
     expect(prepareWritePayload('trainer', payload, ctx.adminCabang)).not.toHaveProperty('cabangId')
+    expect(prepareWritePayload('trainer', payload, ctx.trainer)).not.toHaveProperty('cabangId')
   })
 
   it('always strips cabangId from siswa payloads regardless of role', () => {

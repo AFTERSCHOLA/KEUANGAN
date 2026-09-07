@@ -251,8 +251,11 @@ test('R3.3: Kehadiran column shows 2 Sesi after two Hadir sessions', async ({ pa
 
   await openTab(page, 'Data Siswa')
   const row = page.locator('tr', { hasText: SIM_SW_NAME }).first()
-  await expect(row.locator('td').nth(3)).toHaveText('2 Sesi')
+  // PM.5.22 added the row-numbering "#" first column, shifting every td
+  // index by one: Kehadiran (Bulan Ini) is td[4] and Kehadiran (Total)
+  // is td[5] (was 3/4 before StudentList.jsx:232).
   await expect(row.locator('td').nth(4)).toHaveText('2 Sesi')
+  await expect(row.locator('td').nth(5)).toHaveText('2 Sesi')
 
   expect(pageErrors).toHaveLength(0)
 })
