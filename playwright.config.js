@@ -42,7 +42,26 @@ export default defineConfig({
       // test #5 deliberately locks the trainer account for 15 minutes;
       // running it in the default project cascades into flow-simulation,
       // honor-delete-403, and phase567-exit-gate failing with 401.
-      testIgnore: ['**/auth-login-page.spec.js'],
+      //
+      // phase567-exit-gate.spec.js and stress-simulation.spec.js are
+      // also destructive-project-only: their beforeAll/globalSetup
+      // fixtures WIPE the shared test DB (cleanup_phase.php DELETEs
+      // every cabang row — including the canonical `cbg-test-pusat`
+      // seed that later default-project tests need for sekolah/trainer
+      // seeding and cabang-cache hydration). HY.5 root-cause #5
+      // ("isolate the specific test that wipes the seeded branch")
+      // resolved 2026-09-07: these two specs running in the default
+      // project were the poisoners — every subsequent
+      // "cabangId tidak ditemukan" 422 / cabang-cache timeout in a
+      // full-suite run traces back to them. HY.2.1's OUTCOME ("the
+      // destructive specs no longer poison the default project")
+      // requires all three to be excluded here, not just
+      // auth-login-page.
+      testIgnore: [
+        '**/auth-login-page.spec.js',
+        '**/phase567-exit-gate.spec.js',
+        '**/stress-simulation.spec.js',
+      ],
     },
     {
       name: 'destructive',

@@ -176,6 +176,14 @@ foreach ($seedUsers as $u) {
 }
 
 $branchPayload = json_encode([
+    // 'id' must be inside the payload too, not just the SQL column —
+    // /api/read.php returns the payload verbatim and every client
+    // consumer keys off record.id (SchoolList cabang select,
+    // BranchManager, isWithinScope). API-created rows always carry
+    // id in the payload (masterWrite encodes the full record), so
+    // the seed must match that contract or superadmin sekolah
+    // creation 422s with "Cabang tidak valid".
+    'id' => SEED_BRANCH_ID,
     'kode' => SEED_BRANCH_KODE,
     'nama' => SEED_BRANCH_NAMA,
     'active' => true,
