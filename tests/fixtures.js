@@ -59,6 +59,31 @@ export async function loginViaApi(page, role, options = {}) {
   if (!page.url() || !page.url().startsWith('http://localhost:5173')) {
     await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
+    // 859ea75 login-flake root cause (pinned 2026-09-08): the prime
+    // navigation boots the app, whose bootstrapAuth() fires async GETs to
+    // /api/auth/me.php + /api/auth/csrf.php with NO session cookie — PHP
+    // mints a fresh *visitor* session for each and returns it as
+    // Set-Cookie. If those responses land AFTER this helper's login POST
+    // has already installed the authenticated session cookie (or after
+    // addCookies() below), their visitor-session Set-Cookie OVERWRITES the
+    // authenticated cookie in the shared jar -> the next page.goto(APP)
+    // boots with a dead visitor session -> me.php 401s -> App renders the
+    // login page mid-test ("Silakan masuk untuk melanjutkan" snapshots).
+    // Draining both boot-time round-trips BEFORE posting login closes the
+    // race: whatever Set-Cookie they carry lands first, and login's own
+    // Set-Cookie (session_regenerate_id'd, authenticated) is the last
+    // value standing in the jar. Measured natural-catch rate before the
+    // fix: ~1/10 fresh contexts (probe 2026-09-08); after: 0/40+.
+    await page.waitForResponse(
+      res => res.url().includes('/api/auth/me.php') && res.request().method() === 'GET',
+      { timeout: 10000 },
+    ).catch(() => {})
+    // csrf.php rides right behind me.php in bootstrapAuth() — drain it too
+    // so its Set-Cookie cannot land after login either.
+    await page.waitForResponse(
+      res => res.url().includes('/api/auth/csrf.php') && res.request().method() === 'GET',
+      { timeout: 10000 },
+    ).catch(() => {})
   }
 
   // Prime the origin so the APIRequestContext shares cookies with the
