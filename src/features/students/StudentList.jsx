@@ -229,7 +229,11 @@ export default function StudentList({ readOnly = false }) {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                <th className="py-4 px-6 w-12 text-right">#</th>
+                {/* PM.5.22/F-21: the numbering column must stay <50px wide
+                    (milestone OUTCOME). w-12 (48px) + the shared px-6 cell
+                    padding forced min-content to ~56px, so the # column uses
+                    its own tighter px-3 padding to honor the pin. */}
+                <th className="py-4 px-3 w-12 text-right">#</th>
                 <th className="py-4 px-6">Siswa</th>
                 <th className="py-4 px-6">Sekolah Mitra</th>
                 <th className="py-4 px-6">Kontak WA</th>
@@ -267,7 +271,7 @@ export default function StudentList({ readOnly = false }) {
 
               {visibleSiswa.map((s, idx) => (
                 <tr key={s.id} className="hover:bg-slate-50/50">
-                  <td className="py-4 px-6 text-right font-semibold text-slate-400">
+                  <td className="py-4 px-3 text-right font-semibold text-slate-400">
                     {idx + 1}
                   </td>
 

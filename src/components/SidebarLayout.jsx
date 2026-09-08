@@ -82,8 +82,14 @@ export default function SidebarLayout({
     >
       {/* Header */}
       <div
-        className={`flex items-center gap-2 px-4 py-4 border-b border-blue-800 ${
-          isDrawer || collapsed ? 'justify-between' : 'justify-between'
+        className={`flex items-center gap-2 py-4 border-b border-blue-800 ${
+          isDrawer || collapsed
+            ? // PM.5.15/F-14: in the collapsed rail (w-20 = 80px) px-4 +
+              // justify-between pushed the 28px toggle past the rail edge
+              // (clipped by overflow-hidden). Center the header contents
+              // with px-2 so the toggle + logo stay inside the rail.
+              'justify-center px-2'
+            : 'justify-between px-4'
         }`}
       >
         {(!collapsed || isDrawer) && (

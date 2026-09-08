@@ -582,6 +582,37 @@ MICROTASK: Tables: add row numbering as first <th>/<td>
   DONE-IF: verify passes; only intended files changed
 ```
 
+## Gate PM.5 (audit-appended) — closure evidence (2026-09-08)
+
+**Status: VERIFIED / GATE CLOSED 2026-09-08** (implementation from commit 4850fca; verification gap closed in this session at HEAD f0fb18a).
+
+Per-item verification (XAMPP MySQL + PHP 127.0.0.1:8000 + Vite 5173 up, DB reset to the canonical `afterschola_t3_test` seed via `npm run db:reset` first):
+
+- **PM.5.11 (F-03)** — `tests/modal-positioning.spec.js` (new) → 3 passed (viewports 375/768/1280): the portaled backdrop is a direct child of `<body>`, carries `p-2 sm:p-4`, and covers the viewport exactly (0,0,vw,vh) both at rest and while scrolled; the panel is unclipped. NOTE: the plan's "panel top edge within 8px of viewport top" expectation contradicted the pinned OUTCOME — AppModal centers the panel vertically (`items-center`), so the falsifiable F-03 guard is the viewport-exact `fixed inset-0` backdrop (the pre-fix defect was the overlay trapped in a transformed ancestor's containing block); treated as a plan-side expectation fix (testing-taste #14), recorded here, app code unchanged.
+- **PM.5.12 (F-07)** — `tests/trainer-honor-input.spec.js` (new) → 1 passed: Honor field is RupiahInput (type=text + inputmode=numeric + Rp adornment); `01000000` displays `1.000.000` and re-render proves plain-number storage; empty blur normalizes to `0`. The plan's pinned pair ("display `10.000` / stored `1000000`" for input `01000000`) is internally inconsistent (testing-taste #14); the display/storage split is what the spec falsifies.
+- **PM.5.13 (F-06)** — `tests/salin-feedback.spec.js` (new) → 2 passed (Trainer + BranchManager initial-password dialogs): Salin → `Tersalin` → reverts to `Salin` after the 1.5s window. Headless clipboard friction is removed in-harness (permissions + writeText resolve stub — testing-taste #3/#32); buttons pinned by `aria-live` attribute because a name-based locator re-resolves to the sibling button when the label flips.
+- **PM.5.14 (F-09)** — `tests/antrean-toggle-label.spec.js` (new) → 1 passed: label `Tampilkan semua absensi` ⇄ `Hanya antrian verifikasi`, heading `Antrian Verifikasi` ⇄ `Semua Absensi`, state persists via `afterschola_v4_riwayat_show_all` across reload; storage key left clean.
+- **PM.5.15 (F-14)** — `tests/sidebar-collapse-overflow.spec.js` (new) → 1 passed: rail is exactly 80px collapsed / 256px expanded (aside, border-box), toggle right edge inside the rail, `overflow-hidden` present. **In-scope app fix carried:** 4850fca's `overflow-hidden` alone still left the toggle clipped (measured right edge 92 > 80) because the header kept `px-4 justify-between`; `SidebarLayout.jsx` collapsed/drawer header now uses `justify-center px-2` (taste #15 — wired to the visual guard, not a cosmetic no-op).
+- **PM.5.16 (F-15)** — `tests/sidebar-sticky.spec.js` (new) → 1 passed: `<aside>` carries `sticky top-0 self-start`, top edge stays y≤1 after `window.scrollTo(0, 2000)`, height is viewport (h-screen) not document, mobile drawer still opens/closes at 375px.
+- **PM.5.17 (F-08)** — `tests/trainer-scroll-perf.spec.js` (new) → 1 passed: fresh trainer account (API-created, password change completed in-flow) scrolls Data Siswa staying interactive (scroll+probe < 2000ms, post-scroll probe < 500ms) and the Riwayat Absensi showAll toggle re-render is < 500ms (driven as adminCabang — the toggle lives in RiwayatAbsensi, the admin view; the trainer's variant is TrainerHistory which has no toggle). Seeded `trainer@test.local` has no trainer row (payload NULL after db:reset), so the spec mints its own assigned trainer. **Hygiene purge carried:** the two `[PERF TrainerHistory]` `console.log` calls (TrainerHistory.jsx:37,41 — 859ea75 instrumentation, the pre-existing PM.5.17 hygiene item) are removed; `src/` is now grep-clean of `console.log/debug`.
+- **PM.5.18 (F-12)** — `tests/scrollbar-thin.spec.js` (new) → 1 passed: `scrollbar-width: thin` on Firefox-standard; on Chromium (reports `auto`) the served `body::-webkit-scrollbar` companion rule (index.css:50-60) is asserted present.
+- **PM.5.19 (F-13)** — `tests/select-chevron-margin.spec.js` (new) → 1 passed: live `<select>` paddingRight ≥ 36px (Data Sekolah BranchFilter), the global `select {}` CSS rule exists, screenshots captured (`test-results/pm519-select-*.png`). Data Cabang's current design renders no `<select>` (AssignSchoolPicker uses buttons), so its leg is the populated-tab screenshot + the global rule.
+- **PM.5.20 (F-16)** — `tests/spp-font-size.spec.js` (new) → 1 passed: every Rincian Finansial Sekolah Mitra amount cell renders ≥ 14px (`text-sm`), screenshot captured. 4850fca implemented the bump as the per-school SPP chart percentage 9 → 11 (OverviewCards.jsx:298-302) plus the FinanceReport table's `text-sm`.
+- **PM.5.21 (F-17)** — `tests/siswa-row-button-anchor.spec.js` (new) → 1 passed: Trial row's WA anchor is `visibility: hidden` (not unmounted), and its button group's right offset equals an Aktif row's offset within 2px (no center drift). The plan's absolute "within 4px of the row edge" pin missed the Aksi cell's intentional `px-6` (24px) padding; the falsifiable form compares Trial vs Aktif offsets (testing-taste #14), recorded here.
+- **PM.5.22 (F-21)** — `tests/siswa-row-numbering.spec.js` (new) → 1 passed: first `<th>` is `#`, right-aligned, body `td`s are contiguous 1..N, Sekolah card badge numbering 1..N. **In-scope app fix carried:** 4850fca's `w-12 px-6` header measured ~56px, violating the pinned "<50px wide" OUTCOME; the `#` th/td pair now uses `px-3` (StudentList.jsx:232,274) → 48px.
+
+Regression clauses:
+
+- `npx playwright test tests/r3-verify.spec.js tests/audit2-crud-deep.spec.js --project=default --workers=1` → 10 passed, 0 page errors (the gate's PM.5 acceptance cross-check + every microtask's "r3-verify remains green" clause).
+- Modal/school-affected specs: `npx playwright test tests/sekolah-foto-picker.spec.js tests/settings-logo-picker.spec.js tests/sekolah-jadwal-list.spec.js tests/school-list-actions.spec.js tests/school-form-validation.spec.js tests/sekolah-cabang-cache.spec.js tests/sekolah-delete-confirm.spec.js --project=default --workers=1` → 7 passed (A2.5 acceptance batch + PM.5.11-affected modal surfaces).
+- Full gate batch: the 12 new specs (15 tests incl. PM.5.11's three viewports) → 15 passed after `npm run db:reset`.
+- `npm test` → 54 passed (13 files). `npm run build` → ✓ built in 5.32s, PWA precache 6 entries.
+- Source hygiene: grep `console.(log|debug)` in `src/` → 0 matches; `git status` clean of build artifacts (`test-results/` is gitignored).
+
+Changed: `src/components/SidebarLayout.jsx` (PM.5.15 collapsed-header fit fix), `src/features/students/StudentList.jsx` (PM.5.22 `#` column <50px fix), `src/features/attendance/TrainerHistory.jsx` (PM.5.17 console.log purge), 12 new `tests/pm5-*.spec.js` gate specs, this closure record.
+
+Remaining: full-suite state still carries the documented HYGIENE_MILESTONES 2026-09-03 cohorts (12 `e2e.spec.js` selector drifts, 6 class-3 app-level specs, class-4 `student-delete-absensi` count assertion) and the destructive-project items (`auth-login-page` cases 6/10, `phase567-exit-gate` `trn-test-1` seed, `stress-simulation` Tambah-Cabang overlay hang) — all pre-existing and outside this gate's scope, unchanged here.
+
 ## Ownership and final acceptance
 
 - Product integration owns `tests/` migration (PM.0.1 → PM.3.1).
