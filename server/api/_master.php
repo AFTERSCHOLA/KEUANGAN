@@ -177,8 +177,52 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
         }
     }
 
-    $stmt = $pdo->prepare("DELETE FROM {$config['table']} WHERE id = :id");
-    $stmt->execute([':id' => $id]);
+    // D9.1 — users cascade. Deleting a cabang deactivates every active
+    // user bound to it (users.cabang_id); deleting a trainer does the
+    // same via users.trainer_id (this covers the trainer.php masterDelete
+    // call sites — the UPDATE must share a transaction with the DELETE
+    // below and run AFTER the authorize()/dependency checks above, so it
+    // lives here rather than at the call site). Reference-preserving
+    // (taste #35): only `active` and the dangling FK are touched — the
+    // user row survives as a soft-deactivated account, mirroring
+    // users.php deleteUser. Idempotent: `WHERE active = 1` means a re-run
+    // matches zero rows. Privacy (taste #50): audit metadata carries ids
+    // only, no username/display_name. Audit events fire AFTER the commit
+    // so a rolled-back delete never leaves misleading audit rows
+    // (users.php "audit only after the transaction commits" pattern);
+    // one `user_cascade_deactivated` event per affected user, shaped
+    // exactly like the existing `user_deactivated` event (users.php:347).
+    $cascadeUsers = [];
+    $cascadeColumn = $isCabang ? 'cabang_id' : ($entity === 'trainer' ? 'trainer_id' : null);
+
+    try {
+        $pdo->beginTransaction();
+        if ($cascadeColumn !== null) {
+            // FOR UPDATE closes the select-then-update race against a
+            // concurrent users.php update re-activating a bound account
+            // between the two statements.
+            $sel = $pdo->prepare("SELECT id, cabang_id, trainer_id FROM users WHERE {$cascadeColumn} = :id AND active = 1 FOR UPDATE");
+            $sel->execute([':id' => $id]);
+            $cascadeUsers = $sel->fetchAll();
+            if ($cascadeUsers !== []) {
+                $pdo->prepare("UPDATE users SET active = 0, {$cascadeColumn} = NULL WHERE {$cascadeColumn} = :id AND active = 1")
+                    ->execute([':id' => $id]);
+            }
+        }
+        $pdo->prepare("DELETE FROM {$config['table']} WHERE id = :id")->execute([':id' => $id]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log("masterDelete({$entity}) failed: " . $e->getMessage());
+        jsonResponse(['error' => 'Gagal menghapus record'], 500);
+    }
+
+    foreach ($cascadeUsers as $cascadeUser) {
+        auditEvent('user_cascade_deactivated', $user, 'user', (string) $cascadeUser['id'], array_filter([
+            'cabangId' => $cascadeUser['cabang_id'],
+            'trainerId' => $cascadeUser['trainer_id'],
+        ]));
+    }
 
     // FIX: was completely missing.
     auditEvent("{$entity}_deleted", $user, $entity, $id, array_filter([
