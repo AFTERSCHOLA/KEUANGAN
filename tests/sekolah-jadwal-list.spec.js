@@ -43,6 +43,23 @@ async function waitForServerCabang(page) {
     .toBe(true)
 }
 
+// Boot-sync race guard for the trainer leg: hydrateServerData() may not
+// have finished pulling `sekolah` into localStorage yet even after the
+// "Rekap Saya" heading is visible. Poll the cache directly instead of
+// asserting on the DOM immediately.
+async function waitForSekolahInCache(page, nama) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (n) => JSON.parse(localStorage.getItem('afterschola_v4_sekolah') || '[]').some((s) => s.nama === n),
+          nama,
+        ),
+      { message: `menunggu sekolah "${nama}" muncul di cache trainer setelah hydrateServerData()`, timeout: 15000 },
+    )
+    .toBe(true)
+}
+
 test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rekap Saya', async ({ page, pageErrors }) => {
   const run = String(Date.now()).slice(-6)
   const todayName = DAY_NAMES[new Date().getDay()]
@@ -138,7 +155,21 @@ test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rek
   // matrix). The create response returns the one-time initialPassword,
   // used below to log in as this trainer. Username follows the
   // server policy (3-64 chars, letters/digits/_/./- only — no @).
-  const cabangId = 'cbg-test-pusat'
+  //
+  // Use the sekolah's ACTUAL cabangId, not a hardcoded value — the UI
+  // form's default/first cabang option is not guaranteed to be
+  // cbg-test-pusat. Root-caused 2026-09-08: a hardcoded cbg-test-pusat
+  // here silently broke the server's reverse-link (server/api/users.php
+  // does SELECT ... WHERE id = :id AND cabang_id = :cab, which never
+  // matches on a wrong cabangId and just `continue`s with no error),
+  // leaving sekolah.trainerIds permanently empty and the trainer never
+  // seeing this school — not a hydration timing issue as first suspected.
+  const cabangId = await page.evaluate((nama) => {
+    const rows = JSON.parse(localStorage.getItem('afterschola_v4_sekolah') || '[]')
+    return rows.find((s) => s.nama === nama)?.cabangId
+  }, sekolahNama)
+  expect(cabangId).toBeTruthy()
+
   const username = `trainer.a25.sim.${run}`
   const created = await createTrainerSuperadmin(page, csrf, username, trainerNama, trainerNama, cabangId, [sekolahId])
   const initialPassword = created.initialPassword
@@ -197,8 +228,14 @@ test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rek
 
   // Trainer lands on Rekap Saya. The school must appear as scheduled
   // today (jadwalList includes today's day name).
+  //
+  // Boot-sync race: right after login, hydrateServerData() may not have
+  // finished pulling `sekolah` into localStorage yet even though the
+  // "Rekap Saya" heading is already visible. Wait for the sekolah cache
+  // itself before asserting on its rendered name.
   const main = page.locator('main').first()
   await expect(main.getByText('Rekap Saya')).toBeVisible({ timeout: 15000 })
+  await waitForSekolahInCache(page, sekolahNama)
   await expect(main.getByText(sekolahNama)).toBeVisible({ timeout: 15000 })
   await expect(main.getByText('Belum Diisi').or(main.getByText('Selesai')).first()).toBeVisible()
 
