@@ -167,7 +167,7 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
         jsonResponse(['error' => 'Akses tidak diizinkan'], 403);
     }
 
-    if ($isCabang) {
+        if ($isCabang) {
         foreach (['sekolah', 'trainer', 'siswa', 'absensi', 'spp_payments', 'honor_payments', 'invoices'] as $table) {
             $stmt = $pdo->prepare("SELECT 1 FROM {$table} WHERE cabang_id = :cabang_id LIMIT 1");
             $stmt->execute([':cabang_id' => $id]);
@@ -175,6 +175,16 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
                 jsonResponse(['error' => 'Cabang masih memiliki data terkait'], 422);
             }
         }
+    }
+
+    // D9.1 — deactivate any login account tied to this record BEFORE the
+    // record itself is deleted, so no session can survive it. Placed
+    // after the existing "still has related data" guard (cabang), so
+    // this only fires when the delete is actually about to succeed.
+    if ($isCabang) {
+        cascadeDeactivateUsers('cabang_id', $id, $user);
+    } elseif ($entity === 'trainer') {
+        cascadeDeactivateUsers('trainer_id', $id, $user);
     }
 
     $stmt = $pdo->prepare("DELETE FROM {$config['table']} WHERE id = :id");
@@ -185,4 +195,29 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
         'cabangId' => $isCabang ? null : $existing['cabangId'],
     ]));
     jsonResponse(['ok' => true, 'id' => $id]);
+}
+
+// D9.1 — cascade deactivate any login accounts tied to a cabang/trainer
+// right before it's deleted, so a session can never outlive the record
+// it's scoped to. Mirrors cascadeStripTrainerFromSekolahReverseLinks()'s
+// best-effort, idempotent, audit-trailed pattern (trainer.php). The
+// "AND active = 1" clause makes this a no-op on re-run — nothing left
+// to deactivate the second time.
+function cascadeDeactivateUsers(string $column, string $id, array $actor): void {
+    if ($id === '') return;
+    $pdo = database();
+
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE {$column} = :id AND active = 1");
+    $stmt->execute([':id' => $id]);
+    $affected = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (empty($affected)) return;
+
+    $update = $pdo->prepare(
+        "UPDATE users SET active = 0, {$column} = NULL WHERE {$column} = :id AND active = 1"
+    );
+    $update->execute([':id' => $id]);
+
+    foreach ($affected as $userId) {
+        auditEvent('user_cascade_deactivated', $actor, 'user', $userId, [$column => $id]);
+    }
 }
