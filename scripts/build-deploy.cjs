@@ -83,6 +83,8 @@ bootstrap.php
 config.example.php
 schema.sql
 .htaccess
+config.php
+.env
 `;
 
 function log(msg) {
