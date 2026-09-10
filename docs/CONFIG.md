@@ -60,17 +60,23 @@ $env:APP_DB_PASS = 'dev'
 
 Same `server/config.php`, no file edit. Re-run `scripts\start-php-server.bat`.
 
-### Production (cPanel / CI)
+### Production (cPanel)
+
+```bash
+cp .env.example .env
+```
+
+Then paste the real values into `.env`. The tracked `.env.example` at the repo root (mirrored to `deploy/.env.example` by `npm run build:deploy`) is the paste-ready template — fill exactly these keys:
 
 ```text
 APP_ENV=production
-APP_DSN=mysql:host=127.0.0.1;dbname=afterschola_prod;charset=utf8mb4
-APP_DB_USER=<cpanel_db_user>
-APP_DB_PASS=<cpanel_db_password>
+APP_DSN=mysql:host=localhost;dbname=NAMA_DATABASE_CPANEL;charset=utf8mb4
+APP_DB_USER=USER_DATABASE_CPANEL
+APP_DB_PASS=PASSWORD_BARU_SETELAH_ROTASI
 APP_SESSION_SECURE=true
 ```
 
-Set these in the host's environment manager (cPanel "MultiPHP INI Editor" / "Environment Variables", GitHub Actions `env:`, etc.). **Do not write them into a tracked file** — per taste #41, no credentials land in git.
+Precedence stays real environment > `.env` file > built-in defaults: `server/bootstrap.php` parses the first existing `.env` beside `bootstrap.php` (in `deploy/`, the document root) or one directory above it (the safest spot on cPanel), and a key already present in the real environment is never overridden. A host environment manager (cPanel "MultiPHP INI Editor" / "Environment Variables", GitHub Actions `env:`, etc.) can therefore still override without touching any file. **Do not write credentials into a tracked file** — per taste #41, no credentials land in git. `.env` is gitignored and the generated `deploy/.htaccess` blocks `*.env` over HTTP. Never edit a PHP file on the server.
 
 ---
 
