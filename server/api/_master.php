@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 // Helper bersama untuk 4 entity master-data yang BISA diedit (sekolah,
 // trainer, siswa, cabang) — beda dari insertLedger() di bootstrap.php yang
@@ -17,7 +18,8 @@ declare(strict_types=1);
 // sebelumnya ({entity}_created/_updated/_deleted) supaya test lama tetap
 // bisa memverifikasi audit trail-nya tanpa perlu ganti nama event.
 
-function masterFetch(PDO $pdo, string $table, string $id): ?array {
+function masterFetch(PDO $pdo, string $table, string $id): ?array
+{
     $branchColumn = $table === 'cabang' ? 'NULL AS cabang_id' : 'cabang_id';
     $stmt = $pdo->prepare("SELECT id, {$branchColumn}, version, payload FROM {$table} WHERE id = :id");
     $stmt->execute([':id' => $id]);
@@ -32,7 +34,8 @@ function masterFetch(PDO $pdo, string $table, string $id): ?array {
     ];
 }
 
-function masterWrite(string $entity, array $user, bool $isCabang = false, ?array $record = null, array $overrides = [], string $action = 'create'): never {
+function masterWrite(string $entity, array $user, bool $isCabang = false, ?array $record = null, array $overrides = [], string $action = 'create'): never
+{
     // FIX: was completely missing. Every other state-changing endpoint in
     // this codebase calls this before touching the DB — this one didn't.
     requireCsrf();
@@ -147,7 +150,8 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion, 'cabangId' => $isCabang ? null : $cabangId], 200);
 }
 
-function masterDelete(string $entity, array $user, bool $isCabang = false): never {
+function masterDelete(string $entity, array $user, bool $isCabang = false): never
+{
     // FIX: was completely missing.
     requireCsrf();
 
@@ -175,6 +179,16 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
                 jsonResponse(['error' => 'Cabang masih memiliki data terkait'], 422);
             }
         }
+    }
+
+    // D9.1 — deactivate any login account tied to this record BEFORE the
+    // record itself is deleted, so no session can survive it. Placed
+    // after the existing "still has related data" guard (cabang), so
+    // this only fires when the delete is actually about to succeed.
+    if ($isCabang) {
+        cascadeDeactivateUsers('cabang_id', $id, $user);
+    } elseif ($entity === 'trainer') {
+        cascadeDeactivateUsers('trainer_id', $id, $user);
     }
 
     // D9.1 — users cascade. Deleting a cabang deactivates every active
@@ -229,4 +243,30 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
         'cabangId' => $isCabang ? null : $existing['cabangId'],
     ]));
     jsonResponse(['ok' => true, 'id' => $id]);
+}
+
+// D9.1 — cascade deactivate any login accounts tied to a cabang/trainer
+// right before it's deleted, so a session can never outlive the record
+// it's scoped to. Mirrors cascadeStripTrainerFromSekolahReverseLinks()'s
+// best-effort, idempotent, audit-trailed pattern (trainer.php). The
+// "AND active = 1" clause makes this a no-op on re-run — nothing left
+// to deactivate the second time.
+function cascadeDeactivateUsers(string $column, string $id, array $actor): void
+{
+    if ($id === '') return;
+    $pdo = database();
+
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE {$column} = :id AND active = 1");
+    $stmt->execute([':id' => $id]);
+    $affected = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (empty($affected)) return;
+
+    $update = $pdo->prepare(
+        "UPDATE users SET active = 0, {$column} = NULL WHERE {$column} = :id AND active = 1"
+    );
+    $update->execute([':id' => $id]);
+
+    foreach ($affected as $userId) {
+        auditEvent('user_cascade_deactivated', $actor, 'user', $userId, [$column => $id]);
+    }
 }
