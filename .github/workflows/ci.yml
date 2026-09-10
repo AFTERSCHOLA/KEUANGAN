@@ -1,0 +1,55 @@
+# .github/workflows/ci.yml — RH.G.2 fast lane (F-RH8, M6.3, D-RH11).
+#
+# Node-only fast lane: every push gets a green/red check from
+#   npm ci -> npm test -> npm run build -> node scripts/secret-scan.cjs
+#   -> tracked-file guard (git ls-files deploy/ has no mirror artifacts).
+#
+# Concrete picks (plan admits options; this file pins one):
+#   - Runner: ubuntu-latest, using its preinstalled node directly.
+#   - No third-party *setup* actions (no actions/setup-node, no setup-php):
+#     the only `uses:` step is actions/checkout to fetch the tree, which is
+#     not a setup action. No runner PHP capability is assumed or guessed.
+#   - The heavier PHP battery (server/tests/*.php, focused Playwright gates,
+#     build:deploy parity) stays a local/staging gate via `npm run rc:verify`
+#     (RH.G.1, scripts/rc-verify.cjs) — it is NOT in this workflow per D-RH11
+#     (the full Playwright suite's 16 pre-existing failures are owned by
+#     RELEASE_HYGIENE_PLAN section 13, not by this lane).
+#
+# First-run evidence slot: the first real Actions result (run URL + green/red)
+# is recorded in the RH.G.2 DONE record when the user pushes (push is
+# user-owned per taste #21 — this change never pushes itself).
+
+name: ci-fast-lane
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  fast-lane:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fast lane — install
+        run: npm ci
+
+      - name: Fast lane — unit tests
+        run: npm test
+
+      - name: Fast lane — production build
+        run: npm run build
+
+      - name: Fast lane — secret scan
+        run: node scripts/secret-scan.cjs
+
+      - name: Fast lane — tracked-file guard (no deploy/ mirror artifacts)
+        run: |
+          bad=$(git ls-files deploy/ | grep -E '^(deploy/(api|auth|bin|lib)/|deploy/(bootstrap\.php|config\.example\.php|schema\.sql|\.htaccess|config\.php))' || true)
+          if [ -n "$bad" ]; then
+            echo "TRACKED-FILE GUARD FAIL: deploy/ mirror artifacts are tracked:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "TRACKED-FILE GUARD OK: no deploy/ mirror artifacts tracked."
