@@ -1,6 +1,57 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Minimal dotenv loader (RH.A.2, no new dependency).
+ *
+ * Precedence: real environment variables > `.env` file > built-in defaults
+ * in `server/config.php`. A key already present in the real environment
+ * (getenv/$_ENV/$_SERVER) is never overridden by the file.
+ *
+ * Format: `KEY=VALUE` lines, `#` full-line comments, optional surrounding
+ * single/double quotes stripped from the value. Unreadable/missing files
+ * parse as empty (no crash); malformed lines are skipped.
+ */
+function parseEnvFile(string $path): array {
+    $lines = @file($path, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) return [];
+    $out = [];
+    foreach ($lines as $line) {
+        $trimmed = ltrim(trim($line), "\xEF\xBB\xBF");
+        if ($trimmed === '' || $trimmed[0] === '#') continue;
+        $eq = strpos($trimmed, '=');
+        if ($eq === false) continue;
+        $key = trim(substr($trimmed, 0, $eq));
+        $value = trim(substr($trimmed, $eq + 1));
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key)) continue;
+        $len = strlen($value);
+        if ($len >= 2 && (($value[0] === '"' && $value[$len - 1] === '"') || ($value[0] === "'" && $value[$len - 1] === "'"))) {
+            $value = substr($value, 1, -1);
+        } else {
+            $hashPos = strpos($value, ' #');
+            if ($hashPos !== false) $value = trim(substr($value, 0, $hashPos));
+        }
+        $out[$key] = $value;
+    }
+    return $out;
+}
+
+function loadEnvFile(): void {
+    $candidates = [__DIR__ . '/.env', dirname(__DIR__) . '/.env'];
+    foreach ($candidates as $candidate) {
+        if (!is_file($candidate) || !is_readable($candidate)) continue;
+        foreach (parseEnvFile($candidate) as $key => $value) {
+            if (getenv($key) !== false || isset($_ENV[$key]) || isset($_SERVER[$key])) continue;
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+        return;
+    }
+}
+
+loadEnvFile();
+
 require_once __DIR__ . '/auth/session.php';
 require_once __DIR__ . '/auth/authorize.php';
 
