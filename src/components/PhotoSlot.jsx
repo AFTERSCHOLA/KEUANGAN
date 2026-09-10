@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { compressImage, storePhoto, loadPhotoDataUrl, deletePhotoEntry } from '../lib/photoStorage.js'
+import { compressImage, storePhoto, loadPhotoDataUrl, deletePhotoEntry, uploadPhotoToServer } from '../lib/photoStorage.js'
+import { getSafeIdentityContext } from '../lib/auth.js'
 
 export default function PhotoSlot({ label, entry, onChange, disabled }) {
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -27,6 +28,27 @@ export default function PhotoSlot({ label, entry, onChange, disabled }) {
     try {
       const compressed = await compressImage(file)
       const stored = await storePhoto(compressed, label.toLowerCase().replace(/\s+/g, '-'))
+      // RH.D.5 — server tier when authed (taste #11: same save path, no new
+      // pattern). Non-superadmin sessions carry their branch server-side so
+      // the upload needs no cabangId; superadmin has no PhotoSlot branch
+      // context (no API change) and anonymous/offline has no session — both
+      // stay idb-only. Any upload failure falls back to the idb entry
+      // silently (photo outbox deferred, RELEASE_HYGIENE_PLAN §13).
+      const user = getSafeIdentityContext()
+      if (user && user.role !== 'superadmin') {
+        try {
+          const serverEntry = await uploadPhotoToServer(compressed)
+          try {
+            await deletePhotoEntry(stored)
+          } catch {
+            // Best-effort dedupe: the server cache already holds the bytes.
+          }
+          onChange(serverEntry)
+          return
+        } catch {
+          // Offline/denied/validation — keep the idb-only entry below.
+        }
+      }
       onChange(stored)
     } catch (err) {
       setError(err.message || 'Gagal memproses foto')
