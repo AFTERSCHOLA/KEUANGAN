@@ -99,8 +99,13 @@ function runMigrations(PDO $pdo): void {
             // here use ";\n" as a terminator and contain no string
             // literals carrying one. If a future migration needs a literal
             // semicolon it must either stay as a single statement or be
-            // restructured to use a delimiter override.
-            $statements = array_filter(array_map('trim', explode(";\n", $sql)));
+            // restructured to use a delimiter override. CRLF is normalized
+            // to LF first so the split (and the per-statement SQL) stays
+            // byte-identical regardless of the checkout's autocrlf state —
+            // a CRLF file would otherwise leave a trailing "\r" glued to
+            // the next statement (D9.2's migration is the first
+            // multi-statement file to depend on this).
+            $statements = array_filter(array_map('trim', explode(";\n", str_replace("\r\n", "\n", $sql))));
             foreach ($statements as $statement) {
                 if ($statement === '') continue;
                 $pdo->exec($statement);
