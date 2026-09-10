@@ -1,0 +1,281 @@
+{
+  "valid": {
+    "version": 2,
+    "exportedAt": "2026-09-10T00:00:00.000Z",
+    "data": {
+      "cabang": [
+        { "id": "cbg-v4t-1", "kode": "V4T", "nama": "Cabang V4 Test" }
+      ],
+      "sekolah": [
+        {
+          "id": "skl-v4t-1",
+          "nama": "Sekolah V4 Test",
+          "alamat": "Jl V4 No 1",
+          "cabangId": "cbg-v4t-1",
+          "spp": 150000,
+          "trainerIds": ["trn-v4t-1"],
+          "jadwalList": []
+        }
+      ],
+      "trainer": [
+        {
+          "id": "trn-v4t-1",
+          "nama": "Trainer V4",
+          "wa": "628000000001",
+          "jadwal": "Senin",
+          "sekolahIds": ["skl-v4t-1"],
+          "honor": 50000,
+          "cabangId": "cbg-v4t-1"
+        }
+      ],
+      "siswa": [
+        {
+          "id": "sw-v4t-1",
+          "nama": "Siswa V4",
+          "wa": "628000000002",
+          "kelas": "A",
+          "sekolahId": "skl-v4t-1",
+          "sekolahNama": "Sekolah V4 Test",
+          "status": "Aktif",
+          "sppLunas": {}
+        }
+      ],
+      "absensi": [
+        {
+          "id": "abs-v4t-1",
+          "tanggal": "2026-09-01",
+          "periode": "2026-09",
+          "sekolahId": "skl-v4t-1",
+          "trainerId": "trn-v4t-1",
+          "trainerNama": "Trainer V4",
+          "trainerStatus": "Hadir",
+          "siswaList": [{ "siswaId": "sw-v4t-1", "status": "Hadir" }],
+          "sesiKe": 1
+        }
+      ],
+      "honorPayments": [
+        {
+          "id": "pay-v4t-1",
+          "trainerId": "trn-v4t-1",
+          "periode": "2026-09",
+          "nominal": 50000,
+          "tanggalBayar": "2026-09-03"
+        }
+      ],
+      "sppPayments": [
+        {
+          "id": "spp-v4t-1",
+          "siswaId": "sw-v4t-1",
+          "periode": "2026-09",
+          "nominal": 150000,
+          "tanggalBayar": "2026-09-02",
+          "metode": "Tunai",
+          "diterimaOleh": "Admin"
+        }
+      ],
+      "invoices": [
+        {
+          "id": "inv-v4t-1",
+          "sekolahId": "skl-v4t-1",
+          "mode": "bulanan",
+          "periodeList": ["2026-09"],
+          "jumlahSiswa": 1,
+          "hargaSatuan": 150000,
+          "jumlahPertemuan": 4,
+          "total": 150000,
+          "tanggalTerbit": "2026-09-01",
+          "status": "Draft"
+        }
+      ],
+      "settings": { "title": "V4 Test", "logoUrl": "" }
+    }
+  },
+  "brokenReferences": {
+    "version": 2,
+    "exportedAt": "2026-09-10T00:00:00.000Z",
+    "data": {
+      "cabang": [
+        { "id": "cbg-v4t-1", "kode": "V4T", "nama": "Cabang V4 Test" }
+      ],
+      "sekolah": [
+        {
+          "id": "skl-v4t-1",
+          "nama": "Sekolah V4 Test",
+          "alamat": "Jl V4 No 1",
+          "cabangId": "cbg-v4t-1",
+          "spp": 150000,
+          "trainerIds": ["trn-v4t-1"],
+          "jadwalList": []
+        }
+      ],
+      "trainer": [
+        {
+          "id": "trn-v4t-1",
+          "nama": "Trainer V4",
+          "wa": "628000000001",
+          "jadwal": "Senin",
+          "sekolahIds": ["skl-tidak-ada"],
+          "honor": 50000,
+          "cabangId": "cbg-v4t-1"
+        }
+      ],
+      "siswa": [
+        {
+          "id": "sw-v4t-1",
+          "nama": "Siswa V4",
+          "wa": "628000000002",
+          "kelas": "A",
+          "sekolahId": "skl-tidak-ada",
+          "sekolahNama": "Sekolah V4 Test",
+          "status": "Aktif",
+          "sppLunas": {}
+        }
+      ],
+      "absensi": [
+        {
+          "id": "abs-v4t-1",
+          "tanggal": "2026-09-01",
+          "periode": "2026-09",
+          "sekolahId": "skl-v4t-1",
+          "trainerId": "trn-v4t-1",
+          "trainerNama": "Trainer V4",
+          "trainerStatus": "Hadir",
+          "siswaList": [{ "siswaId": "sw-tidak-ada", "status": "Hadir" }],
+          "sesiKe": 1
+        }
+      ],
+      "honorPayments": [
+        {
+          "id": "pay-v4t-1",
+          "trainerId": "trn-v4t-1",
+          "periode": "2026-09",
+          "nominal": 50000,
+          "tanggalBayar": "2026-09-03"
+        }
+      ],
+      "sppPayments": [
+        {
+          "id": "spp-v4t-1",
+          "siswaId": "sw-v4t-1",
+          "periode": "2026-09",
+          "nominal": 150000,
+          "tanggalBayar": "2026-09-02",
+          "metode": "Tunai",
+          "diterimaOleh": "Admin"
+        }
+      ],
+      "invoices": [
+        {
+          "id": "inv-v4t-1",
+          "sekolahId": "skl-v4t-1",
+          "mode": "bulanan",
+          "periodeList": ["2026-09"],
+          "jumlahSiswa": 1,
+          "hargaSatuan": 150000,
+          "jumlahPertemuan": 4,
+          "total": 150000,
+          "tanggalTerbit": "2026-09-01",
+          "status": "Draft"
+        }
+      ],
+      "settings": { "title": "V4 Test", "logoUrl": "" }
+    }
+  },
+  "duplicateIds": {
+    "version": 2,
+    "exportedAt": "2026-09-10T00:00:00.000Z",
+    "data": {
+      "cabang": [
+        { "id": "cbg-v4t-dup", "kode": "V4D", "nama": "Cabang V4 Duplikat" }
+      ],
+      "sekolah": [
+        {
+          "id": "skl-v4t-dup",
+          "nama": "Sekolah V4 Duplikat",
+          "alamat": "Jl V4 No 2",
+          "cabangId": "cbg-v4t-dup",
+          "spp": 150000,
+          "trainerIds": ["trn-v4t-dup"],
+          "jadwalList": []
+        }
+      ],
+      "trainer": [
+        {
+          "id": "trn-v4t-dup",
+          "nama": "Trainer V4 Duplikat",
+          "wa": "628000000009",
+          "jadwal": "Senin",
+          "sekolahIds": ["skl-v4t-dup"],
+          "honor": 50000,
+          "cabangId": "cbg-v4t-dup"
+        }
+      ],
+      "siswa": [
+        {
+          "id": "sw-v4t-dup",
+          "nama": "Siswa V4 Duplikat Satu",
+          "sekolahId": "skl-v4t-dup",
+          "sekolahNama": "Sekolah V4 Duplikat",
+          "status": "Aktif",
+          "sppLunas": {}
+        },
+        {
+          "id": "sw-v4t-dup",
+          "nama": "Siswa V4 Duplikat Dua",
+          "sekolahId": "skl-v4t-dup",
+          "sekolahNama": "Sekolah V4 Duplikat",
+          "status": "Aktif",
+          "sppLunas": {}
+        }
+      ],
+      "absensi": [
+        {
+          "id": "abs-v4t-dup",
+          "tanggal": "2026-09-01",
+          "periode": "2026-09",
+          "sekolahId": "skl-v4t-dup",
+          "trainerId": "trn-v4t-dup",
+          "trainerNama": "Trainer V4 Duplikat",
+          "trainerStatus": "Hadir",
+          "siswaList": [{ "siswaId": "sw-v4t-dup", "status": "Hadir" }],
+          "sesiKe": 1
+        }
+      ],
+      "honorPayments": [
+        {
+          "id": "pay-v4t-dup",
+          "trainerId": "trn-v4t-dup",
+          "periode": "2026-09",
+          "nominal": 50000,
+          "tanggalBayar": "2026-09-03"
+        }
+      ],
+      "sppPayments": [
+        {
+          "id": "spp-v4t-dup",
+          "siswaId": "sw-v4t-dup",
+          "periode": "2026-09",
+          "nominal": 150000,
+          "tanggalBayar": "2026-09-02",
+          "metode": "Tunai",
+          "diterimaOleh": "Admin"
+        }
+      ],
+      "invoices": [
+        {
+          "id": "inv-v4t-dup",
+          "sekolahId": "skl-v4t-dup",
+          "mode": "bulanan",
+          "periodeList": ["2026-09"],
+          "jumlahSiswa": 1,
+          "hargaSatuan": 150000,
+          "jumlahPertemuan": 4,
+          "total": 150000,
+          "tanggalTerbit": "2026-09-01",
+          "status": "Draft"
+        }
+      ],
+      "settings": { "title": "V4 Duplikat", "logoUrl": "" }
+    }
+  }
+}
