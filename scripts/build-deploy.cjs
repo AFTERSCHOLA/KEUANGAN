@@ -229,6 +229,26 @@ async function main() {
   phpFileCount += await countFiles(path.join(DEPLOY, 'lib'));
 
   // --- 6. Copy Vite output on top of deploy/ ---
+  // Vite outputs content-hashed filenames. A plain overlay leaves stale
+  // generations accumulating in deploy/assets/ (the 2026-09-11 Tailwind
+  // auto-scan recursion fed dead classes from old generations back into
+  // CSS builds — fixed in src/index.css with source(none), but stale
+  // assets also bloat the upload and confuse the tracked-file set).
+  // Purge the Vite-managed outputs first so deploy/ holds exactly one
+  // current generation, mirroring what a fresh dist/ build produces.
+  log('[build-deploy] wiping stale Vite outputs in deploy/ …');
+  for (const stale of ['assets', 'pwa']) {
+    const staleDir = path.join(DEPLOY, stale);
+    if (await exists(staleDir)) await fs.rm(staleDir, { recursive: true, force: true });
+  }
+  for (const stale of ['index.html', 'manifest.webmanifest', 'registerSW.js', 'sw.js']) {
+    const staleFile = path.join(DEPLOY, stale);
+    if (await exists(staleFile)) await fs.rm(staleFile, { force: true });
+  }
+  // workbox-*.js is content-hashed too — purge any generation, not just today's name.
+  for (const entry of await fs.readdir(DEPLOY)) {
+    if (/^workbox-.*\.js$/.test(entry)) await fs.rm(path.join(DEPLOY, entry), { force: true });
+  }
   log('[build-deploy] copying dist/ → deploy/ …');
   await copyDir(DIST, DEPLOY);
 
@@ -250,7 +270,7 @@ async function main() {
   log('');
   log(`[build-deploy] Build OK: ${phpFileCount} PHP files mirrored, ${viteAssetCount} Vite assets copied, .htaccess written.`);
   log(`[build-deploy] Deploy: upload everything under ${path.relative(ROOT, DEPLOY)}/ to the cPanel document root.`);
-  log(`[build-deploy] Then on cPanel: create config.php from config.example.php, import schema.sql, run bin/create-superadmin.php.`);
+  log(`[build-deploy] Then on cPanel: cp .env.example .env and paste credentials (see docs/OPERATIONS.md §1), import schema.sql, run bin/create-superadmin.php.`);
 }
 
 /** Compute the parity diff between server/ (sources) and deploy/ (output). Returns null if clean, or a human-readable string otherwise. */

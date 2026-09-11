@@ -161,6 +161,18 @@ test('RH.D.5: admin_cabang PhotoSlot upload becomes a server entry that renders 
       )
       .toMatchObject({ type: 'server', id: savedPhotoId })
 
+    // The card thumbnail resolves through the download endpoint (idb
+    // starts empty on this context — the bytes can only come from the
+    // server tier). Register the response waiter BEFORE opening the tab:
+    // SchoolThumbnail's effect fires the fetch at mount, so a waiter
+    // attached after openTab()/toBeVisible() misses the (already 200)
+    // response and times out — the same register-too-late race class as
+    // the 881ae5c loginViaApi fix. The img.src poll stays as the render
+    // proof; the waiter only proves the request went to the server.
+    const thumbnailResponse = page2.waitForResponse(
+      (res) => res.url().includes(`/api/photo-download.php?id=${encodeURIComponent(savedPhotoId)}`),
+      { timeout: 20000 },
+    )
     await openTab(page2, 'Data Sekolah')
     const card = page2
       .locator('div')
@@ -168,20 +180,11 @@ test('RH.D.5: admin_cabang PhotoSlot upload becomes a server entry that renders 
       .filter({ has: page2.getByRole('button', { name: 'Edit sekolah' }) })
       .last()
     await expect(card).toBeVisible({ timeout: 15000 })
-
-    // The card thumbnail resolves through the download endpoint (idb
-    // starts empty on this context — the bytes can only come from the
-    // server tier) and the download request itself returns 200.
-    const [thumbnailRes] = await Promise.all([
-      page2.waitForResponse(
-        (res) => res.url().includes(`/api/photo-download.php?id=${encodeURIComponent(savedPhotoId)}`),
-        { timeout: 20000 },
-      ),
-      expect
-        .poll(async () => (await card.locator('img').first().getAttribute('src')) || '', { timeout: 20000 })
-        .toMatch(/^data:image\/(jpeg|png|webp);base64,/),
-    ])
+    const thumbnailRes = await thumbnailResponse
     expect(thumbnailRes.status()).toBe(200)
+    await expect
+      .poll(async () => (await card.locator('img').first().getAttribute('src')) || '', { timeout: 20000 })
+      .toMatch(/^data:image\/(jpeg|png|webp);base64,/)
     expect(page2Errors).toHaveLength(0)
   } finally {
     await ctx2.close()

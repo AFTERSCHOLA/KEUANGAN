@@ -1,4 +1,16 @@
-@import "tailwindcss";
+/* Tailwind v4 auto content-detection scans every non-gitignored file in
+ * the project — including previously built artifacts under deploy/assets/
+ * (tracked Vite outputs). A stale bundle generation then fed dead classes
+ * (e.g. .mx-4) back into the next CSS build, so the output hash depended
+ * on what happened to sit in deploy/ at build time (non-deterministic
+ * bundles; observed 2026-09-11 when two builds of identical src/ produced
+ * different hashes and .mx-4 vanished once the old generation was
+ * deleted). source(none) + an explicit allowlist pins the input set:
+ * classes come only from src/ and index.html, never from build outputs,
+ * tests, or docs. New class sources must be added here explicitly. */
+@import "tailwindcss" source(none);
+@source ".";
+@source "../index.html";
 
 /* ----------------------------------------------------------------------
  * Brand tokens (M4 will migrate high-traffic surfaces to these).
