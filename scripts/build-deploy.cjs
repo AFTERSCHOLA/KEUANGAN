@@ -89,6 +89,7 @@ schema.sql
 .htaccess
 config.php
 .env
+.env.example
 `;
 
 function log(msg) {

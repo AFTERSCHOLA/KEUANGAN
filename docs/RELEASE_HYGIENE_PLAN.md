@@ -1,6 +1,6 @@
 # Release Hygiene Plan — clearing the deployment blockers
 
-**Status:** DRAFT — awaiting implementation via `RELEASE_HYGIENE_MILESTONES.md`.
+**Status:** IMPLEMENTED 2026-09-11 — all gates RH.A–RH.H closed; `npm run rc:verify` -> ALL 7 STEPS OK (lint 59 files; PHP battery 17 scripts; vitest 65/65; Playwright 39 passed + 2 flaky-passed-on-retry; build zero sourcemaps; deploy parity clean; secret-scan OK). Completion recorded back on `PRODUCTION_MILESTONES.md` (M5.1/M5.2/M5.4/M6.1/M6.2/M6.3 + D9.1 re-verification) and `PRODUCTION_GATE_CONFIRMATION_MILESTONES.md` (T5/T6 rows, findings #4/#6/#8/#10 + T0 claim resolutions). The project re-enters PRODUCTION Gate D7.1 (staging inspection) with the cPanel password rotation as the only human prerequisite.
 **Trigger:** 2026-09-10 milestone-order verification (AUDIT_FOLLOWUP M-AF5.1–5.7 ✅, SCOPE_EXPANSION A2.5 ✅, PLAYWRIGHT PM.5.11–5.22 ✅, PRODUCTION D9.1–D9.2 ✅ re-verified at HEAD) surfaced the remaining deployment blockers listed in §3.
 **Position:** This is a temporary, gate-by-gate fixing plan for release readiness (taste #40). It does **not** replace `PRODUCTION_PLAN.md` / `PRODUCTION_MILESTONES.md`; when Gate RH-H closes, the status tables there are updated and this document is folded or retired per the same convention as `PRODUCTION_GATE_CONFIRMATION_MILESTONES.md`.
 

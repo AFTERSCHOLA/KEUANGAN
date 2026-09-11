@@ -214,6 +214,15 @@ This table cross-references every MICROTASK in `PRODUCTION_MILESTONES.md` agains
 13. **KI-1 fully resolved** as of commit `2f4b60e`; status block already records this. `tests/ki1-trainer-cabangid.spec.js` green.
 14. **Claim-vs-evidence correction.** This document's "Final reconciliation" table (lines 119–127 above) marks T4/M4 as PARTIAL, T5/M5 as PARTIAL, T6/M6 as UNVERIFIED, T7/T8 as BLOCKED. The per-microtask table above updates T4 → mostly solved (only M4.3 still needs a fresh Playwright matrix run) and T5 → mixed (M5.3 ✅, M5.1/M5.2 partial, M5.4 missing). The "Final reconciliation" rows are reconciled below in the "Updated gate-level reconciliation" table.
 
+### Resolutions (2026-09-11, RH.H.1 — taste #42 stale-claim corrections)
+
+- **#4 AppModal "orphan" — RETRACTED (F-RH9).** `src/components/ConfirmDialog.jsx:1` and `src/components/AlertDialog.jsx:1` both import `AppModal`; it is a live component. Do not "clean it up".
+- **#6 `deploy/config.php` committed — RESOLVED.** Untracked in `ae11c3c` (mirror `git rm --cached`; root `.gitignore` gains `/deploy/config.php`; generated `deploy/.gitignore` gains `config.php` + `.env` + `.env.example`, and `deploy/.env.example` untracked in RH.H.1); `node scripts/secret-scan.cjs` -> exit 0 guards the regression; `git ls-files deploy/` lists only Vite outputs + `invoice/` + `pwa/`. The old credential stays in history by locked decision D-RH1 — **rotation on cPanel remains the one human prerequisite** (runbook: `docs/OPERATIONS.md` §2).
+- **#8 `photo_uploads` table unwritten — RESOLVED.** `server/api/photo-upload.php` + `server/api/photo-download.php` ship (content-sniffed, scope-checked per D-RH9); `php server/tests/photo.endpoint.php` -> 30 checks / 0 failed (2026-09-11).
+- **#10 stale TODO headings in `src/lib/store.js:8-17` — RESOLVED.** The block now carries plain descriptive comments; no `M7.1.1`/`M3.3` headings remain (verified 2026-09-11).
+- **#1/#2 stale-import / stale-selector cohort — SUPERSEDED.** The suite has since been migrated to `loginViaApi()` + post-M4.2 selectors, so the "Recommended next microtask" below is done: `ki1-trainer-cabangid`, `m51/m512/m513-verify`, `r3-verify` and the PM.5/A2.5 batches all pass inside `rc:verify` step 4 (2026-09-11: 39 passed + 2 flaky-passed-on-retry).
+- **T0 claim correction (taste #42).** The T0 row in "Final reconciliation" says the ignored `server/config.php` was "created for the disposable test database". That is stale: `server/config.php` is now **tracked and env-driven** (`docs/CONFIG.md`, RH.A.2) with safe XAMPP defaults; production overrides via `APP_DSN` / `APP_DB_USER` / `APP_DB_PASS` (`.env`, never committed). No per-device hand edit exists anymore.
+
 ### Recommended next microtask (per taste #64 — smallest bounded next action)
 
 The smallest bounded follow-up that unblocks several other gates is **fix the stale Playwright suite**: rewrite the listed specs to use `loginViaApi()` + post-M4.2 selectors so the existing role/product gates can actually rerun. This is needed before M4.3, M5.1, M5.2, M5.3 can be honestly re-VERIFIED (their VERIFY cites Playwright runs that depend on these tests loading cleanly).
@@ -228,6 +237,8 @@ This row replaces the matching row in the "Final reconciliation" table above whe
 | T5 / M5 operations | PARTIAL | MIXED | M5.1 🟡 (server headers ✅, HSTS missing, `build.sourcemap=false` not set in Vite), M5.2 🟡 (client storage ✅, no upload endpoint, no backup coverage), M5.3 ✅, M5.4 ❌ |
 | T6 / M6 migration | UNVERIFIED | UNVERIFIED (confirmed) | M6.1 ❌ (no v4 importer), M6.2 ❌ (no reconciliation), M6.3 🟡 (no RC orchestration script) |
 | T7 / D7 staging | BLOCKED | BLOCKED + D7.2 ✅ | D7.1 🚫 env, D7.2 ✅ (build script + deploy mirror complete), D7.3 🚫 env |
+| T5 / M5 operations | MIXED | VERIFIED (local) | M5.1 DONE (RH.C.1: gated HSTS + `build.sourcemap:false`, no root `.htaccess` per D-RH7), M5.2 DONE (RH.D: photo endpoints + 30/30 + roundtrip E2E), M5.3 ✅ (unchanged), M5.4 DONE (RH.E.1: `docs/OPERATIONS.md` six topics + live backup→restore cycle). Verified: `npm run rc:verify` -> ALL 7 STEPS OK (2026-09-11) |
+| T6 / M6 migration | UNVERIFIED (confirmed) | VERIFIED (local) | M6.1 DONE (RH.F.1+F.3: importer 33/33 + UI E2E 2/2), M6.2 DONE (RH.F.2: reconcile 18/18, MATCH + named DRIFTs, signed reports under `private/`), M6.3 DONE (RH.G: `rc:verify` green + CI fast-lane file; first Actions run pending user push). Staging/production legs stay BLOCKED on D7.1 with password rotation as the only human prerequisite |
 
 ## Reporting format
 

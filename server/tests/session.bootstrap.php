@@ -43,6 +43,7 @@ function startBuiltinServer(string $docroot, int $port): array {
     );
     check(is_resource($process), 'Could not start PHP built-in server');
     foreach ($pipes as $pipe) stream_set_blocking($pipe, false);
+    $childPid = proc_get_status($process)['pid'] ?? 0;
 
     $deadline = microtime(true) + 5.0;
     $up = false;
@@ -52,15 +53,22 @@ function startBuiltinServer(string $docroot, int $port): array {
         usleep(100000);
     }
     check($up, 'PHP built-in server did not become ready in time');
-    return [$process, $pipes];
+    return [$process, $pipes, $childPid];
 }
 
 function stopBuiltinServer(array $handle): void {
     [$process, $pipes] = $handle;
+    $childPid = $handle[2] ?? 0;
     foreach ($pipes as $pipe) if (is_resource($pipe)) fclose($pipe);
     if (is_resource($process)) {
-        proc_terminate($process);
-        proc_close($process);
+        // Windows-safe reaping: kill the whole process tree so no
+        // orphan php.exe survives (proc_terminate alone can leave
+        // the child behind on Win32).
+        if (PHP_OS_FAMILY === 'Windows' && (int) $childPid > 0) {
+            @exec('taskkill /PID ' . (int) $childPid . ' /T /F 2>NUL');
+        }
+        @proc_terminate($process);
+        @proc_close($process);
     }
 }
 

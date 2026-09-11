@@ -71,16 +71,49 @@ seedUser($pdo, 'usr-test-admB', 'test_admin_b', 'admin_cabang', $branchB);
 seedUser($pdo, 'usr-test-super', 'test_super', 'superadmin', null);
 
 // --- spawn dev server --------------------------------------------------
+// Uses PHP_BINARY (the running interpreter) so no PATH discovery is needed,
+// a free port so a leftover server from a killed run can never squat it,
+// and a shutdown-function reaper with taskkill /T so no orphan php.exe
+// survives on Windows (proc_terminate alone leaves the child behind).
+function findFreePortU1(): int {
+    $socket = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+    if ($socket === false) {
+        fwrite(STDERR, "Could not allocate a free port: {$errstr}\n");
+        exit(1);
+    }
+    $name = stream_socket_get_name($socket, false);
+    fclose($socket);
+    $parts = explode(':', (string) $name);
+    return (int) end($parts);
+}
+
 $docroot = realpath(__DIR__ . '/../..');
-$port = 8201;
+$port = findFreePortU1();
 $base = "http://127.0.0.1:$port";
 $serverStdout = tempnam(sys_get_temp_dir(), 'u1_stdout_');
 $serverStderr = tempnam(sys_get_temp_dir(), 'u1_stderr_');
 $server = proc_open(
-    'php -S 127.0.0.1:' . $port . ' -t ' . escapeshellarg($docroot),
+    sprintf('%s -S 127.0.0.1:%d -t %s', escapeshellarg(PHP_BINARY), $port, escapeshellarg($docroot)),
     [1 => ['file', $serverStdout, 'w'], 2 => ['file', $serverStderr, 'w']],
     $pipes
 );
+$serverPid = is_resource($server) ? (proc_get_status($server)['pid'] ?? 0) : 0;
+
+function stopU1Server(): void {
+    global $server, $serverPid;
+    if (isset($server) && is_resource($server)) {
+        // Windows-safe reaping: kill the whole process tree so no
+        // orphan php.exe survives an interrupt (proc_terminate alone
+        // can leave the child behind on Win32).
+        if (PHP_OS_FAMILY === 'Windows' && (int) $serverPid > 0) {
+            @exec('taskkill /PID ' . (int) $serverPid . ' /T /F 2>NUL');
+        }
+        @proc_terminate($server);
+        @proc_close($server);
+    }
+    $server = null;
+}
+register_shutdown_function('stopU1Server');
 
 $serverReady = false;
 for ($i = 0; $i < 20; $i++) {
@@ -99,7 +132,7 @@ for ($i = 0; $i < 20; $i++) {
 }
 if (!$serverReady) {
     fwrite(STDERR, "Server on port $port never became reachable after 4s.\n");
-    proc_terminate($server);
+    stopU1Server();
     exit(1);
 }
 
@@ -187,7 +220,7 @@ check('initialPassword present in response', isset($body['initialPassword']) && 
 check('user.role == admin_cabang', isset($body['user']['role']) && $body['user']['role'] === 'admin_cabang');
 check('user.cabangId == branchA', isset($body['user']['cabangId']) && $body['user']['cabangId'] === $branchA);
 check('user.mustChangePassword == true', isset($body['user']['mustChangePassword']) && $body['user']['mustChangePassword'] === true);
-check('user.trainerId == null', isset($body['user'], $body['user']['trainerId']) && $body['user']['trainerId'] === null);
+check('user.trainerId == null', isset($body['user']) && array_key_exists('trainerId', $body['user']) && $body['user']['trainerId'] === null);
 
 $row = $pdo->prepare('SELECT id, role, cabang_id, active, must_change_password FROM users WHERE username = ?');
 $row->execute(['test_new_admin']);
@@ -257,16 +290,20 @@ check('no orphan trainer row left behind', $trainerCountAfter === $trainerCountB
 
 echo "\n--- users.php: admin_cabang can create trainer in own branch ---\n";
 
+// Post-1fcaf79 contract: the session is the branch authority — an
+// admin_cabang must NOT send cabangId (422 if present); the server derives
+// the branch from the session. The assertion below proves the derivation
+// by checking the created row lands in admin B's own branch.
 [$status, $body] = reqU('POST', "$base/server/api/users.php", [
     'action' => 'create',
     'role' => 'trainer',
     'username' => 'test_new_trainer_b',
     'displayName' => 'Trainer By Admin B',
-    'cabangId' => $branchB,
     'trainer' => ['nama' => 'Trainer B'],
 ], $cookieAdminB, $csrfAdminB);
 
 check('admin_cabang B creates trainer in own branch -> 201', $status === 201, "got $status body=" . json_encode($body));
+check('trainer derived into admin B branch', isset($body['user']['cabangId']) && $body['user']['cabangId'] === $branchB, 'body=' . json_encode($body));
 
 echo "\n--- users.php: admin_cabang CANNOT create admin_cabang ---\n";
 
@@ -282,6 +319,10 @@ check('admin_cabang tries to create admin_cabang -> 403', $status === 403, "got 
 
 echo "\n--- users.php: admin_cabang CANNOT create trainer in other branch ---\n";
 
+// Post-1fcaf79 contract: a client-supplied cabangId from an admin_cabang is
+// rejected outright (422) before authorization runs, so cross-branch creation
+// is structurally inexpressible. The tamper attempt below must 422; the
+// follow-up without cabangId proves the session branch (A) is what sticks.
 [$status, $body] = reqU('POST', "$base/server/api/users.php", [
     'action' => 'create',
     'role' => 'trainer',
@@ -291,7 +332,17 @@ echo "\n--- users.php: admin_cabang CANNOT create trainer in other branch ---\n"
     'trainer' => ['nama' => 'Should Fail'],
 ], $cookieAdminA, $csrfAdminA);
 
-check('admin_cabang A creates trainer in branch B -> 403', $status === 403, "got $status body=" . json_encode($body));
+check('admin_cabang A sending foreign cabangId -> 422', $status === 422 && isset($body['error']) && stripos((string) $body['error'], 'cabangId') !== false, "got $status body=" . json_encode($body));
+
+[$status, $body] = reqU('POST', "$base/server/api/users.php", [
+    'action' => 'create',
+    'role' => 'trainer',
+    'username' => 'test_cross_branch2',
+    'displayName' => 'Cross Branch Session-Bound',
+    'trainer' => ['nama' => 'Session Bound'],
+], $cookieAdminA, $csrfAdminA);
+
+check('admin_cabang A without cabangId -> 201 in session branch', $status === 201 && isset($body['user']['cabangId']) && $body['user']['cabangId'] === $branchA, "got $status body=" . json_encode($body));
 
 echo "\n--- users.php: trainer role cannot use endpoint ---\n";
 
@@ -376,7 +427,7 @@ check('audit_log has user_created + trainer_created events from superadmin', $au
 
 // --- cleanup -----------------------------------------------------------
 
-proc_terminate($server);
+stopU1Server();
 cleanupUsersFixtures($pdo, $branchA, $branchB);
 
 echo "\n=== summary: $total checks, $failures failures ===\n";

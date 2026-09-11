@@ -32,8 +32,17 @@ export default function TrainerDashboard({ trainerId }) {
     dibayar: 0,
     sisaHonor: 0,
   }
-  const today = new Date().toISOString().slice(0, 10)
-  const todayName = DAY_NAMES[new Date(`${today}T00:00:00`).getDay()]
+  // Local wall-clock "today" — deliberately NOT the toISOString()/UTC idiom
+  // used elsewhere. Schedule entries carry Indonesian day names picked by
+  // the user in their own timezone (and the A2.5 jadwal spec seeds today's
+  // LOCAL day name). UTC lags WIB by 7h, so 00:00-07:00 WIB the UTC idiom
+  // filters by yesterday's name and Rekap Saya wrongly reports an empty
+  // schedule. Note: absensi `tanggal` values are still written UTC-side, so
+  // the `done` badge below can lag inside that same window until the writer
+  // idiom is localized too — display + filter are correct as of this fix.
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const todayName = DAY_NAMES[now.getDay()]
   const assignedSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
     return sekolah

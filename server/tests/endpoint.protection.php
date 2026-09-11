@@ -88,29 +88,49 @@ $pdo->prepare("INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :cabang
     ->execute([':id' => $sekolahB, ':cabang_id' => $branchB]);
 
 // --- spawn dev server -----------------------------------------------------
-// proc_open() uses 'php' verbatim — Windows test environments without PHP on
-// PATH (the common case once PHP is installed only as XAMPP) need the binary
-// location injected. Prefer PATH discovery; fall back to the well-known
-// XAMPP install path so the test stays runnable on a fresh machine.
-if (stripos((string) getenv('PATH'), 'xampp') === false) {
-    $xamppPhp = 'D:\\Games and Apps\\xampp\\php\\php.exe';
-    if (is_file($xamppPhp)) {
-        $dir = dirname($xamppPhp);
-        putenv('PATH=' . $dir . PATH_SEPARATOR . (string) getenv('PATH'));
-        $_ENV['PATH'] = (string) getenv('PATH');
+// Uses PHP_BINARY (the running interpreter) so no PATH discovery is needed,
+// a free port so a leftover server from a killed run can never squat it,
+// and a shutdown-function reaper with taskkill /T so no orphan php.exe
+// survives on Windows (proc_terminate alone leaves the child behind).
+function findFreePortM33(): int {
+    $socket = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+    if ($socket === false) {
+        fwrite(STDERR, "Could not allocate a free port: {$errstr}\n");
+        exit(1);
     }
+    $name = stream_socket_get_name($socket, false);
+    fclose($socket);
+    $parts = explode(':', (string) $name);
+    return (int) end($parts);
 }
 
 $docroot = realpath(__DIR__ . '/../..');
-$port = 8199;
+$port = findFreePortM33();
 $base = "http://127.0.0.1:$port";
 $serverStdout = tempnam(sys_get_temp_dir(), 'm33_stdout_');
 $serverStderr = tempnam(sys_get_temp_dir(), 'm33_stderr_');
 $server = proc_open(
-    'php -S 127.0.0.1:' . $port . ' -t ' . escapeshellarg($docroot),
+    sprintf('%s -S 127.0.0.1:%d -t %s', escapeshellarg(PHP_BINARY), $port, escapeshellarg($docroot)),
     [1 => ['file', $serverStdout, 'w'], 2 => ['file', $serverStderr, 'w']],
     $pipes
 );
+$serverPid = is_resource($server) ? (proc_get_status($server)['pid'] ?? 0) : 0;
+
+function stopM33Server(): void {
+    global $server, $serverPid;
+    if (isset($server) && is_resource($server)) {
+        // Windows-safe reaping: kill the whole process tree so no
+        // orphan php.exe survives an interrupt (proc_terminate alone
+        // can leave the child behind on Win32).
+        if (PHP_OS_FAMILY === 'Windows' && (int) $serverPid > 0) {
+            @exec('taskkill /PID ' . (int) $serverPid . ' /T /F 2>NUL');
+        }
+        @proc_terminate($server);
+        @proc_close($server);
+    }
+    $server = null;
+}
+register_shutdown_function('stopM33Server');
 
 // Poll for the server to actually accept connections instead of a blind
 // sleep — if a leftover process from a prior interrupted run is still
@@ -138,13 +158,13 @@ if (!$serverReady) {
     fwrite(STDERR, "Server on port $port never became reachable after 4s. proc_get_status running=" . ($status['running'] ? 'true' : 'false') . " exitcode=" . ($status['exitcode'] ?? 'n/a') . "\n");
     fwrite(STDERR, "--- dev server stderr ---\n" . implode('', array_slice(file($serverStderr) ?: [], -20)) . "\n");
     fwrite(STDERR, "--- dev server stdout ---\n" . implode('', array_slice(file($serverStdout) ?: [], -20)) . "\n");
-    proc_terminate($server);
+    stopM33Server();
     exit(1);
 }
 $status = proc_get_status($server);
 if (!$status['running'] && ($status['exitcode'] ?? 0) !== 0) {
     fwrite(STDERR, "php -S died with non-zero exit after binding port. Check stderr above.\n");
-    proc_terminate($server);
+    stopM33Server();
     exit(1);
 }
 
@@ -966,7 +986,7 @@ $pdo->exec("DELETE FROM cabang WHERE id = 'cbg-RESTORE-test'");
 
 // --- cleanup -----------------------------------------------------------
 cleanupFixtures($pdo, $branchA, $branchB);
-proc_terminate($server);
+stopM33Server();
 @unlink($cookieAdminA);
 @unlink($cookieAdminB);
 @unlink($cookieSuper);

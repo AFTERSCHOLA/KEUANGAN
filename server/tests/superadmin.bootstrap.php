@@ -131,6 +131,7 @@ if ($existingCount === 0) {
         $pipes
     );
     check(is_resource($process), 'Could not start built-in server for login-lifecycle check');
+    $cliServerPid = proc_get_status($process)['pid'] ?? 0;
     $ready = false;
     for ($i = 0; $i < 40; $i++) {
         $conn = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
@@ -161,8 +162,14 @@ if ($existingCount === 0) {
         $afterLogout = httpRequest('GET', "{$base}/me.php", ["Cookie: {$cookieName}={$sessionId}"]);
         check($afterLogout['status'] === 401, "Session must be invalid after logout, got {$afterLogout['status']}");
     } finally {
-        proc_terminate($process);
-        proc_close($process);
+        // Windows-safe reaping: kill the whole process tree so no
+        // orphan php.exe survives (proc_terminate alone can leave
+        // the child behind on Win32).
+        if (PHP_OS_FAMILY === 'Windows' && (int) $cliServerPid > 0) {
+            @exec('taskkill /PID ' . (int) $cliServerPid . ' /T /F 2>NUL');
+        }
+        @proc_terminate($process);
+        @proc_close($process);
     }
     echo "M2.4 login-lifecycle check passed\n";
 

@@ -276,6 +276,12 @@ MICROTASK: Harden HTTP security
   DONE-IF: verify passes; only intended files changed
 ```
 
+**Status: DONE (RH.C.1, 2026-09-11).**
+
+Verified: `php -r` CLI probe -> `Strict-Transport-Security: max-age=31536000; includeSubDomains` present iff `APP_SESSION_SECURE=true`, absent by default (localhost never pinned); `npm run build` -> zero `dist/assets/*.map` (`vite.config.js` pins `build.sourcemap: false`); `npm run rc:verify` -> ALL 7 STEPS OK (2026-09-11).
+Changed: `server/bootstrap.php` (gated HSTS per D-RH8), `vite.config.js` (`build.sourcemap: false`).
+Note: no repo-root `.htaccess` added per D-RH7 (the repo root is never a document root; `deploy/.htaccess` stays the single protection point) — closes the `PRODUCTION_GATE_CONFIRMATION_MILESTONES.md:170` note without code.
+
 ### M5.2 Secure photo storage
 
 ```text
@@ -287,6 +293,12 @@ MICROTASK: Secure photo storage
   VERIFY:  upload tests reject spoofed MIME, invalid/oversized images, traversal, and cross-branch retrieval; valid thumbnails render
   DONE-IF: verify passes; only intended files changed
 ```
+
+**Status: DONE (RH.D.1–D.5, 2026-09-11).**
+
+Verified: `php server/tests/photo.endpoint.php` -> 30 checks / 0 failed (anonymous 401, CSRF 403, cross-branch 403, unknown-id 404, traversal 422/404, spoofed-MIME 422, oversized 422, valid upload+download roundtrip byte-identical, `photo_uploaded` audit row, storage outside the docroot); `npx playwright test tests/photo-server-roundtrip.spec.js` -> passed inside `rc:verify` step 4 (2026-09-11); `npm run rc:verify` -> ALL 7 STEPS OK.
+Changed: `server/lib/photoStore.php`, `server/api/photo-upload.php`, `server/api/photo-download.php`, `server/tests/photo.endpoint.php`, `src/lib/photoStorage.js` (server tier + idb offline cache), `src/components/PhotoSlot.jsx` (save path only).
+Boundary: offline-captured photos stay device-local until re-saved online — no photo outbox (deferred, YAGNI).
 
 ### M5.3 Define outbox conflicts
 
@@ -312,6 +324,11 @@ MICROTASK: Add operational runbooks
   DONE-IF: verify passes; only intended files changed
 ```
 
+**Status: DONE (RH.E.1, 2026-09-11).**
+
+Verified: document inspection -> all six M5.4 topics present with exact commands in `docs/OPERATIONS.md` (configure §1, backup §3, restore §3, rotate `APP_DB_PASS` §2, disable via `users.php delete` §4, incident/`audit_log` §4); live backup→restore cycle against the test DB -> counts identical (cabang 1→1, trainer 2→2); `node scripts/secret-scan.cjs` -> exit 0; `npm run rc:verify` -> ALL 7 STEPS OK (2026-09-11).
+Changed: `docs/OPERATIONS.md` (new).
+
 ## Gate 6 — Migration and release candidate
 
 ### M6.1 Validate v4 import
@@ -326,6 +343,12 @@ MICROTASK: Validate v4 import
   DONE-IF: verify passes; only intended files changed
 ```
 
+**Status: DONE (RH.F.1 + RH.F.3, 2026-09-11).**
+
+Verified: `php server/tests/v4.import.php` -> 33 checks / 0 failed (broken fixture zero rows + per-error report; valid commit then re-import 409 with zero new rows; dryRun report-only); `npx playwright test tests/v4-import.spec.js` -> 2/2 inside `rc:verify` step 4 (trainer sees no import surface; superadmin browser-data import + conflict preview); `npm run rc:verify` -> ALL 7 STEPS OK.
+Changed: `server/api/v4-import.php`, `server/lib/v4Import.php`, `server/tests/v4-import.fixtures.json`, `server/tests/v4.import.php`, `src/components/BackupRestorePanel.jsx` (superadmin-only import block), `tests/v4-import.spec.js`.
+Contract: superadmin-only + CSRF, one transaction, all-or-nothing 409 with zero rows on duplicate ids, `v4_imported` audit (R-RH5, D-RH10).
+
 ### M6.2 Reconcile production data
 
 ```text
@@ -338,6 +361,11 @@ MICROTASK: Reconcile production data
   DONE-IF: verify passes; only intended files changed
 ```
 
+**Status: DONE (RH.F.2, 2026-09-11).**
+
+Verified: `php server/tests/reconcile.check.php` -> 18 checks / 0 failed (matching fixture exit 0 MATCH + sha256-verified report under `private/reports/`; seeded SPP-row drift exit 1 naming entity/row/sum; invoice-status drift exit 1 naming row + mix); `npm run rc:verify` -> ALL 7 STEPS OK (2026-09-11).
+Changed: `server/bin/reconcile.php`, `server/tests/reconcile.check.php`.
+
 ### M6.3 Run release candidate
 
 ```text
@@ -349,6 +377,12 @@ MICROTASK: Run release candidate
   VERIFY:  npm test, PHP API tests, focused Playwright, Phase 5–7 gate, npm run build, secret scan, and no-debug checks pass
   DONE-IF: verify passes; only intended files changed
 ```
+
+**Status: DONE (RH.G.1 + RH.G.2, 2026-09-11).**
+
+Verified: `npm run rc:verify` -> ALL 7 STEPS OK (2026-09-11): [1/7] LINT OK (59 server files); [2/7] PHP BATTERY OK (17 scripts, incl. `db:reset` re-seed after `endpoint.protection.php`, whose restore-test wipes `cabang`); [3/7] VITEST OK (14 files / 65 tests); [4/7] PLAYWRIGHT OK (26 specs / 41 tests: 39 passed + 2 flaky-passed-on-retry — `ki1-trainer-cabangid:118` and `trainer-honor-input`, both login-nav races under load, green in isolation); [5/7] BUILD OK (zero `dist/assets/*.map`, precache 443.23 KiB); [6/7] DEPLOY OK (parity clean, 40 PHP files mirrored, 37 deploy files linted); [7/7] SECRET-SCAN OK. `node scripts/secret-scan.cjs` -> exit 0 standalone. CI workflow present at `.github/workflows/ci.yml` (node-only fast lane: `npm ci` -> `npm test` -> `npm run build` -> secret-scan -> tracked-file guard); first Actions run pending user push (taste #21).
+Changed: `scripts/rc-verify.cjs`, `package.json` (`rc:verify`), `scripts/secret-scan.cjs`, `.github/workflows/ci.yml`.
+Scope: the full Playwright suite's 16 documented pre-existing failures stay owned by `RELEASE_HYGIENE_PLAN.md` §13 (D-RH11) — not in this battery. Prerequisite hardening in this session (test-infra only, no app behavior): `DEPLOY_GITIGNORE` gains `.env.example` + `deploy/.env.example` untracked; `rc-verify` quotes spaced binary paths; `PHP_BINARY` + `taskkill /T` reaping in all `php -S` spawn sites (no more orphan `php.exe`); `users.endpoint.php` updated to the post-`1fcaf79` cabangId contract (35/35); `--retries 1` on the Playwright step (retries stay visible as flaky).
 
 ## Gate 7 — cPanel staging
 
@@ -485,6 +519,10 @@ MICROTASK: Server cascade: deactivate users on cabang/trainer delete
   VERIFY:  Playwright `tests/cascade-users-deactivated.spec.js` (new) logs in as superadmin, creates a branch with an admin account, deletes the branch, asserts the admin user can no longer log in (401 on POST /api/auth/login), asserts the audit_log contains `user_cascade_deactivated` for that user; same flow for a trainer with a login account; existing `tests/multi-account-crud-sync.spec.js` and `tests/endpoint.protection.php` remain green
   DONE-IF: verify passes; only intended files changed
 ```
+
+**Re-verification at HEAD (2026-09-11; post-dates the D9.2 battery).** Commit `44ede9c` removed the pre-transaction `cascadeDeactivateUsers()` helper and deleted the superseded `2026-09-08-cascade-orphan-cleanup.sql`, but the shipped cascade — transactional `SELECT ... FOR UPDATE` + `UPDATE users SET active = 0, <col> = NULL WHERE <col> = :id AND active = 1` sharing the `DELETE` transaction in `masterDelete()` (`server/api/_master.php:199-229`), with post-commit `user_cascade_deactivated` audit per user — is intact.
+
+Verified: `npx playwright test tests/cascade-users-deactivated.spec.js` -> 2/2 inside `rc:verify` step 4 (2026-09-11); `php server/tests/cascade-cleanup.php` and `php server/tests/cascade-orphan-cleanup.php` green in step 2; `tests/multi-account-crud-sync.spec.js` and `tests/endpoint.protection.php` (208 checks) green in the same run. The one-time cleanup file of record is `server/migrations/2026-09-10-cascade-orphan-cleanup.sql`.
 
 ### D9.2 One-time migration: clean up existing orphan users
 
