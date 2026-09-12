@@ -1,6 +1,6 @@
 # Logo Portability Plan — making the uploaded logo universal (cPanel-only)
 
-**Status:** DRAFT 2026-09-12 — gate-by-gate fixing plan, docs-only in this change (the two files in this pair). No app code is changed by drafting this plan.
+**Status:** IMPLEMENTED 2026-09-12 — Gate LP-C closed by LP.C.2 (this change is docs-only: the three write-back files listed in §11).
 **Position:** Temporary release-readiness chain per taste #40. It does **not** replace `PRODUCTION_PLAN.md` / `PRODUCTION_MILESTONES.md`, `SCOPE_EXPANSION_PLAN.md`, or `RELEASE_HYGIENE_PLAN.md`. When Gate LP-C closes, §11 records completion back on the source docs and this pair is folded or retired.
 **Contract order:** `docs/UNIVERSAL.md` (primary contract, read first) → `docs/IMPLEMENTATION_PLAN.md` Part 2 → `docs/SCOPE_EXPANSION_PLAN.md` + `docs/SCOPE_EXPANSION_PRIVILEGES.md` (scope-expansion first-reads) → this file.
 
@@ -102,6 +102,17 @@
 ## 11. Completion recording (taste #43)
 
 When Gate LP-C closes: update `docs/DEPLOY_GUIDE_CPANEL.md` (disambiguation DONE note), `tests/settings-logo-picker.spec.js` header (server-tier contract note), `docs/SCOPE_EXPANSION_MILESTONES.md` A2.5-LOGO row (server expectation), and `docs/PRODUCTION_MILESTONES.md` M5.2 block (logo portability DONE with `Verified:` lines). Then the project re-enters the normal staging flow (PRODUCTION Gate D7.1) with no new long-term roadmap edits.
+
+**Closure record (LP.C.2, 2026-09-12 — docs-only, no app behavior changed in this microtask).** Gate exit criteria checkout:
+
+1. `DEPLOY_GUIDE_CPANEL.md` has zero bare config.php occurrences (every occurrence qualified per D-LP5) and the row-4b warning callout is present — Verified: node probe in LP.C.2 session.
+2. Superadmin logo upload on device A renders on device B with zero per-device import; stored `logoEntry` is `{type:'server', id}` — trio (`logo-upload.php` / `logo-current.php` / `logo-download.php`) + client (`uploadLogoToServer`, `uploadMode='global-logo'`, `App.jsx` convergence, `SidebarLogo` fallback) present by inspection; upload matrix Verified: `php server/tests/logo.endpoint.php` -> 48 checks / 0 failed (LP.C.2 session); cross-device leg per the LP.B.4 record (`npx playwright test tests/settings-logo-picker.spec.js --project=default --workers=1` -> 1 passed, 2026-09-12; re-run Unverified in this doc-only session).
+3. Branch-photo contracts unchanged — Verified: LP diff touches no `photo-upload.php` / `photo-download.php` / `photoStore.php` file; `PhotoSlot` default stays `branch-photo`. Full photo-spec green re-run Unverified here; owned by the staging `rc:verify` battery (D7.1).
+4. `deploy-upload.zip` / `login.json` hygiene — Verified: `git check-ignore -v` covers both names (root `.gitignore` LP.C.1), precise `git ls-files` probe shows neither tracked, all of `deploy-upload.zip` / `login.json` / `deploy/config.php` absent on disk (LP.C.2 session).
+5. Per-microtask VERIFY records: LP.A.1 DONE note (`DEPLOY_GUIDE_CPANEL.md` §3.2, Verified probe); LP.B.1 upload matrix (48/0 above); LP.B.2 read tier (code inspection: auth-only, any role, 404 unknown — E2E leg per the LP.B.4 record); LP.B.3 client wiring (inspection: `uploadLogoToServer`, `uploadMode`, hydration in `App.jsx`/`SidebarLayout.jsx`); LP.B.4 contract (`tests/settings-logo-picker.spec.js` header + `SCOPE_EXPANSION_MILESTONES.md` LP.B.4 update, both present); LP.C.1 ignores (check-ignore + ls-files probes); LP.C.2 this record. Manual rows (F-LP6) stay manual with owner + evidence slots (taste #19): `DEPLOY_GUIDE_CPANEL.md` §3.2 checklist — owner = teammate with cPanel access, evidence = Cron Jobs screenshot + File Manager listing, ordered after all automated VERIFYs (taste #55).
+6. §11 write-backs exist: DEPLOY_GUIDE DONE note + manual checklist (LP.C.2), A2.5-LOGO spec header (LP.B.4, present), SCOPE_EXPANSION_MILESTONES A2.5-LOGO LP.B.4 update (present, idb-only expectation superseded per taste #42), PRODUCTION_MILESTONES M5.2 logo-portability DONE (LP.C.2).
+
+Stale claim corrected (taste #42): the A2.5-LOGO `{type:'idb'}`-only expectation is superseded by the `{type:'server', id}` contract; offline/denied stays `{type:'idb'}` (R-LP5). Deferred with owners (taste #53, unchanged): bootstrap-Cron removal proof + server-side zip/login/config cleanup (teammate, runbook above); photo outbox (future scope-expansion); branch-photo scope (non-goal); full-suite green (HYGIENE chain). Next venue: PRODUCTION Gate D7.1 staging (rebuild `deploy/` via `npm run build:deploy`, then domain smoke).
 
 ## 12. Cross-references
 
