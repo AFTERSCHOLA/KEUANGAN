@@ -12,7 +12,8 @@ import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import SidebarLayout from './components/SidebarLayout.jsx'
 import AccountMenu from './components/AccountMenu.jsx'
-import { usePeriod, getUiState, setUiState, getSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
+import { usePeriod, getUiState, setUiState, getSettings, setSettings as persistSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
+import { fetchLogoCurrent, loadPhotoDataUrl } from './lib/photoStorage.js'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
@@ -115,6 +116,32 @@ useEffect(() => {
     if (!currentUser) return
     let cancelled = false
     hydrateServerData().then(() => { if (!cancelled) setSyncStatus(getSyncStatus()) })
+    return () => { cancelled = true }
+  }, [currentUser?.id])
+
+  // LP.B.3 — portable logo convergence (F-LP3; D-LP4): a device whose local
+  // settings carry no logo reference (fresh login) — or a rotated-away
+  // server id — adopts the current global id and warms the idb cache, so
+  // every authenticated device renders the superadmin-picked logo with no
+  // per-device import. Local idb-only picks (offline captures) are left
+  // alone (R-LP5); offline/denied/no-logo-yet resolves silently.
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    fetchLogoCurrent()
+      .then(async current => {
+        const stored = getSettings().logoEntry
+        if (stored && stored.type === 'idb') return
+        if (stored && stored.type === 'server' && stored.id === current.id) return
+        const url = await loadPhotoDataUrl({ type: 'server', id: current.id })
+        if (cancelled || !url) return
+        if (getSettings().logoEntry && getSettings().logoEntry.type === 'idb') return
+        persistSettings({ logoEntry: { type: 'server', id: current.id } })
+        setSettings(getSettings())
+      })
+      .catch(() => {
+        // No portable logo reachable — keep whatever is stored.
+      })
     return () => { cancelled = true }
   }, [currentUser?.id])
 

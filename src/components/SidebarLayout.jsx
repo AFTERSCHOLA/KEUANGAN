@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadPhotoDataUrl } from '../lib/photoStorage.js'
+import { loadPhotoDataUrl, fetchLogoCurrent } from '../lib/photoStorage.js'
 
 /**
  * Single sidebar shell, reused for the desktop sidebar AND the mobile drawer.
@@ -20,7 +20,20 @@ export function SidebarLogo({ logoUrl, logoEntry, size = 'w-10 h-10', iconSize =
         if (!cancelled) setIdbUrl(url)
       })
     } else {
+      // LP.B.3 — portable logo (F-LP3; D-LP4): with no local reference
+      // (fresh device login), resolve the current global id and render its
+      // bytes through the same cache-first loader (which warms the idb
+      // cache). Offline/denied/no-logo-yet stays on the fallback icon
+      // silently (R-LP5 boundary).
       setIdbUrl(null)
+      fetchLogoCurrent()
+        .then(current => loadPhotoDataUrl({ type: 'server', id: current.id }))
+        .then(url => {
+          if (!cancelled && url) setIdbUrl(url)
+        })
+        .catch(() => {
+          // No portable logo reachable — keep the fallback icon.
+        })
     }
     return () => { cancelled = true }
   }, [logoEntry])

@@ -82,6 +82,7 @@ export default function SettingsModal({ open, onClose, onSaved }) {
   label="Logo (Unggah)"
   entry={logoEntry}
   onChange={setLogoEntry}
+  uploadMode="global-logo"
 />
           <div>
             <label className={labelClass}>Judul Dashboard</label>
