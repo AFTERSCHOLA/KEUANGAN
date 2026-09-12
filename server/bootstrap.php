@@ -183,10 +183,14 @@ function runMigrations(PDO $pdo): void {
                     ':checksum' => $checksum,
                     ':row_counts' => $rowCounts ? json_encode($rowCounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 ]);
-            $pdo->commit();
+            // DDL statements (e.g. ALTER TABLE) implicitly commit in
+            // MySQL/MariaDB, ending the transaction above — commit/rollBack
+            // unconditionally would fatal with "no active transaction" on
+            // the first apply of any DDL migration (LP.B.1).
+            if ($pdo->inTransaction()) $pdo->commit();
             $appliedVersions[] = $version;
         } catch (Throwable $error) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) $pdo->rollBack();
             // Don't cache `applied=true` on failure — next call retries.
             return;
         }

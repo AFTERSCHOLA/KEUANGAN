@@ -1,0 +1,25 @@
+-- LP.B.1 / F-LP1 F-LP2 / D-LP1 D-LP2 — allow global logo rows.
+--
+-- photo_uploads.cabang_id was NOT NULL (branch-photo tier, D-RH9), but the
+-- logo tier stores the single global logo with cabang_id = NULL (D-LP2
+-- concrete pick). Without this ALTER every logo INSERT fails under
+-- STRICT_TRANS_TABLES with "Column 'cabang_id' cannot be null" (500),
+-- so the LP.B.1 201 VERIFY can never pass.
+--
+-- Idempotence (taste #35): a single ALTER ... MODIFY COLUMN that is a
+-- no-op when re-applied (same definition); guarded by the `migrations`
+-- table row that server/bootstrap.php::runMigrations() records on
+-- success, so the file runs exactly once per database.
+--
+-- Reference-preserving: only the NULLability of `cabang_id` changes —
+-- no data rewrite, no index change, existing branch-photo rows untouched.
+-- Fresh installs must also see the NULLable definition: server/schema.sql
+-- carries the same `cabang_id VARCHAR(191) NULL` line.
+--
+-- Naming: server/migrations/<timestamp>-<slug>.sql. The 2026-09-12 prefix
+-- is this microtask's landing date and sorts after
+-- 2026-09-10-cascade-orphan-cleanup.sql, so the two files apply in that
+-- order. The `;\n` statement terminator is part of the file's contract
+-- with runMigrations()' splitter.
+
+ALTER TABLE photo_uploads MODIFY COLUMN cabang_id VARCHAR(191) NULL;

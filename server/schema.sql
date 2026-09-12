@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS backups (
 
 CREATE TABLE IF NOT EXISTS photo_uploads (
     id VARCHAR(191) NOT NULL PRIMARY KEY,
-    cabang_id VARCHAR(191) NOT NULL,
+    cabang_id VARCHAR(191) NULL,
     owner_user_id VARCHAR(191) NOT NULL,
     storage_path VARCHAR(500) NOT NULL,
     mime_type VARCHAR(64) NOT NULL,
