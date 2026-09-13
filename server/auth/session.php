@@ -39,6 +39,21 @@ function startSecureSession(): void {
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $config = serverConfig();
     $secure = (bool) ($config['session_secure'] ?? productionMode());
+
+    // Override session.save_path with an app-owned, writable folder.
+    // cPanel's default (/var/cpanel/php/sessions/alt-php82) has caused
+    // silent session-write failures on this host — the session ID gets
+    // issued and the cookie round-trips fine, but $_SESSION data itself
+    // never persists, so every request after login looks anonymous. A
+    // path we control and can verify permissions on sidesteps that.
+    $sessionPath = getenv('APP_SESSION_SAVE_PATH');
+    if (!$sessionPath) {
+        $sessionPath = dirname(__DIR__, 2) . '/php_sessions';
+    }
+    if (is_dir($sessionPath) && is_writable($sessionPath)) {
+        session_save_path($sessionPath);
+    }
+
     ini_set('session.use_only_cookies', '1');
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_trans_sid', '0');
