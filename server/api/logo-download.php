@@ -28,10 +28,13 @@ const LOGO_DOWNLOAD_ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
-$user = requireAuthenticatedUser();
-
-$role = $user['role'] ?? null;
-if (!validServerRole($role)) jsonResponse(['error' => 'Akses tidak diizinkan'], 403);
+// Deliberately public, no requireAuthenticatedUser() — same reasoning as
+// logo-current.php (D-LP4): the login page needs to render the logo
+// before any session exists. The scope check below (cabang_id IS NULL)
+// is now the ONLY thing standing between this endpoint and serving a
+// branch photo — it was already there as a defense-in-depth measure
+// behind auth; now that auth is gone, it is the sole gate. Do not weaken
+// or remove it without re-reviewing this comment.
 
 $id = $_GET['id'] ?? null;
 if (!is_string($id) || trim($id) === '') {

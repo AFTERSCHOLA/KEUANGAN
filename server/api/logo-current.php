@@ -22,10 +22,13 @@ require_once __DIR__ . '/../bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
-$user = requireAuthenticatedUser();
-
-$role = $user['role'] ?? null;
-if (!validServerRole($role)) jsonResponse(['error' => 'Akses tidak diizinkan'], 403);
+// Deliberately public, no requireAuthenticatedUser() — unlike every other
+// read endpoint in this codebase. The logo is public branding shown on
+// the login page BEFORE any session exists (D-LP4, new decision this
+// session). Nothing this endpoint returns is sensitive (a logo id +
+// timestamp); the row-level NULL-cabang_id scope check below is what
+// keeps this safe to expose without auth — it structurally can never
+// resolve to a branch photo, authenticated or not.
 
 $pdo = database();
 

@@ -1,14 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { login } from '../../lib/auth.js'
 import { SidebarLogo } from '../../components/SidebarLayout.jsx'
-import { getSettings } from '../../lib/store.js'
 
 export default function LoginPage({ onAuthenticated }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const settings = getSettings()
+  const [logoUrl, setLogoUrl] = useState(null)
+
+  // Fetches the current logo directly from the server (now-public
+  // logo-current.php / logo-download.php, D-LP4) instead of reading
+  // getSettings()'s local cache — that cache only gets populated after a
+  // successful login somewhere else in the app, so an anonymous visitor
+  // on a fresh browser/device previously saw no logo at all on this page.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/logo-current.php', { credentials: 'same-origin' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!cancelled && data?.id) {
+          setLogoUrl(`/api/logo-download.php?id=${encodeURIComponent(data.id)}`)
+        }
+      })
+      .catch(() => {
+        // No logo uploaded yet, or offline — SidebarLogo already falls
+        // back to its placeholder icon when logoUrl stays null.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -37,8 +59,8 @@ export default function LoginPage({ onAuthenticated }) {
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
           <div className="text-center mb-8">
             <div className="flex justify-center">
-  <SidebarLogo logoUrl={settings.logoUrl} logoEntry={settings.logoEntry} size="w-16 h-16" iconSize="w-9 h-9" />
-</div>
+              <SidebarLogo logoUrl={logoUrl} logoEntry={null} size="w-16 h-16" iconSize="w-9 h-9" />
+            </div>
 
             <h1 className="mt-4 text-2xl font-bold text-slate-900">
               Afterschola
