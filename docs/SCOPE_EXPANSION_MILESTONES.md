@@ -256,6 +256,8 @@ MICROTASK: Settings.logo: add file picker
 
 **DONE record (2026-09-08):** Spec exists (`tests/settings-logo-picker.spec.js`); asserts URL input + PhotoSlot picker, upload → header `img[alt="Logo"]` src delta, `logoEntry {type:'idb'}` storage contract, post-refresh survival, and post-test restore via "Hapus foto". `Verified: npx playwright test tests/settings-logo-picker.spec.js --project=default -> passed` (also green inside the full suite).
 
+**LP.B.4 update (2026-09-12):** Server contract supersedes the idb-only expectation above (taste #42; F-LP1, D-LP4). Online superadmin saves now assert `logoEntry {type:'server', id}` backed by a `photo_uploads` row (`cabang_id NULL`); the spec keeps the same-device refresh leg (now proves idb cache warming) and adds a second-context leg (fresh `browser.newContext`, empty idb/localStorage by construction) that resolves the same id via `logo-current.php` and renders the same bytes via `logo-download.php` with zero per-device import. Offline/denied stays `{type:'idb'}` (R-LP5). Cleanup still clears the local entry via "Hapus foto" (the server row has no delete endpoint and is intentionally retained). `Verified: npx playwright test tests/settings-logo-picker.spec.js --project=default --workers=1 -> 1 passed`.
+
 ### A2.5-JADWAL-1 Sekolah.jadwal: day-picker + Add More (F-18) — **DONE 2026-09-08**
 
 ```text

@@ -17,3 +17,5 @@ audit-report-2.md
 cookies.txt
 private/
 /deploy/config.php*.zip
+deploy-upload.zip
+login.json

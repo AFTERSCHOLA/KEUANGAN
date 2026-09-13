@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { compressImage, storePhoto, loadPhotoDataUrl, deletePhotoEntry, uploadPhotoToServer } from '../lib/photoStorage.js'
+import { compressImage, storePhoto, loadPhotoDataUrl, deletePhotoEntry, uploadPhotoToServer, uploadLogoToServer } from '../lib/photoStorage.js'
 import { getSafeIdentityContext } from '../lib/auth.js'
 
-export default function PhotoSlot({ label, entry, onChange, disabled }) {
+export default function PhotoSlot({ label, entry, onChange, disabled, uploadMode = 'branch-photo' }) {
   const [previewUrl, setPreviewUrl] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -34,10 +34,19 @@ export default function PhotoSlot({ label, entry, onChange, disabled }) {
       // context (no API change) and anonymous/offline has no session — both
       // stay idb-only. Any upload failure falls back to the idb entry
       // silently (photo outbox deferred, RELEASE_HYGIENE_PLAN §13).
+      // LP.B.3 — global-logo mode (D-LP4): only a superadmin session takes
+      // the server path, via the cabang-less uploadLogoToServer; every other
+      // role (and any upload failure) keeps the idb-only entry silently
+      // (R-LP5 boundary). Branch-photo mode below is verbatim (R-LP4).
       const user = getSafeIdentityContext()
-      if (user && user.role !== 'superadmin') {
+      const useServerTier = uploadMode === 'global-logo'
+        ? (user && user.role === 'superadmin')
+        : (user && user.role !== 'superadmin')
+      if (useServerTier) {
         try {
-          const serverEntry = await uploadPhotoToServer(compressed)
+          const serverEntry = uploadMode === 'global-logo'
+            ? await uploadLogoToServer(compressed)
+            : await uploadPhotoToServer(compressed)
           try {
             await deletePhotoEntry(stored)
           } catch {

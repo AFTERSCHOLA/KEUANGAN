@@ -134,13 +134,30 @@ curl.exe -i -X POST https://<domain>/api/auth/login.php -H "Content-Type: applic
 | 2 | **Missing pdo_mysql / fileinfo / openssl / mbstring** | error_log: `Class 'PDO' not found` / `could not find driver` | Select a PHP Version → Extensions → enable |
 | 3 | **Upload incomplete — a mirrored dir missing** (e.g. `lib/`, `auth/`, `bootstrap.php`) | error_log: `Failed opening required '../lib/backupRestore.php'` | re-upload the full bundle (Step 2); verify `api/`, `auth/`, `bin/`, `lib/` dirs exist |
 | 4 | **No `.env` — production fail-closed** (D6) | curl → `Konfigurasi server belum tersedia`; every API call 500s | create `.env` per Step 3 (this is the config "unchanged at all" symptom the teammate saw — bundle defaults intentionally do not point at any real DB in production) |
-| 4b | `config.php` hand-created from an old template | exists in docroot next to `.env` | delete it — `.env` is the only sanctioned config (RH.A.2); a stale config.php masks the `.env` flow and violates D7 |
+| 4b | Stray `<docroot>/config.php` hand-created from an old template | exists in docroot next to `.env` | delete it — `.env` is the only sanctioned config (RH.A.2); a stale `<docroot>/config.php` masks the `.env` flow and violates D7 |
 | 4c | `.env` values wrong: DB name/user unprefixed, password with `#` or leading/trailing spaces, quotes inside | `POST login` → 500 `Konfigurasi database tidak lengkap`, or PDO `Access denied for user` in error_log | fix values; note `parseEnvFile` strips quotes and ` #` comments — a password containing ` #` gets truncated; regenerate the DB password without spaces/hash if needed |
 | 5 | **Schema not imported / wrong database** | phpMyAdmin: `users` table missing in `<db-name>`; login SQL throws → PDO fatal wrapped as 500 | import `schema.sql` (Step 4) |
 | 6 | `.env` not readable (permissions) | error_log: `is_readable` false / file mode | File Manager → `.env` → permissions → 600 |
 | 7 | `private/` missing → backup/photo dirs fail (not login) | first login OK, later 500s on photo/backup ops | create per Step 5 |
 | 8 | Old cached service worker serving a previous bundle | browser DevTools → Application → SW: an old `sw.js` is active | DevTools → Application → Service Workers → Unregister + hard refresh; PWA autoUpdate refreshes within a tab |
 | 9 | `.htaccess` mod_rewrite/headers module disabled on host | 500 on every request incl. static | comment out `Options`/header lines in `.htaccess` one at a time in a copy — if the host rejects a directive, ask the host; the file is generated, report it back so the generator can be adjusted |
+
+> ⚠️ Config-file disambiguation (row 4b) — tracked `server/config.php` must never be deleted and must never be edited on the server (fresh-clone login depends on it — see `docs/CONFIG.md` §4); only a hand-dropped stray `<docroot>/config.php` next to `.env` on the server is deleted.
+>
+> **DONE note (LP.A.1, 2026-09-12):** every bare config.php reference in this guide is now qualified per D-LP5 — `` `server/config.php` `` (tracked source, never delete) vs stray `` `<docroot>/config.php` `` (forbidden, delete if present) — and this callout is the row-4b warning. The `.env`-only sanction (RH.A.2) is unchanged.
+> Verified: node probe -> zero bare occurrences outside the two qualified forms, warning callout present, `git diff --stat` shows only this guide for LP.A.1.
+
+> #### LP.C.2 manual carry-overs — cPanel-side checklist (owner: teammate with cPanel access)
+>
+> These rows are inherently manual (taste #19): no repo command can prove off-repo server state. Run them **after** all automated VERIFYs above pass (destructive/server cleanup last, taste #55), and paste the evidence into the release record.
+>
+> | # | Check (on the server) | Evidence slot |
+> |---|---|---|
+> | M1 | One-time bootstrap Cron removed: cPanel → Cron Jobs shows **no** `create-superadmin` entry (the Step-7 cron-once path was deleted after it fired) | Cron Jobs screenshot: ____ |
+> | M2 | Document root holds **no** `deploy-upload.zip` and **no** `login.json` (repo ignores both since LP.C.1: root `.gitignore` lines 20-21; `git check-ignore -v` covers both names) | File Manager listing screenshot: ____ |
+> | M3 | Document root holds **no** stray `<docroot>/config.php` next to `.env` (row 4b above; tracked `server/config.php` in the repo is a different file and is never touched) | File Manager listing screenshot: ____ |
+>
+> Unverified from the repo (by construction): M1-M3 above. Next: the teammate pastes the two screenshots into the release record and signs the date.
 
 ### 3.3 The exact scenario reported (2026-09-11): "code unchanged, default config, 500 on login"
 
@@ -173,7 +190,7 @@ Given "config is unchanged at all" — bundle deployed with **no `.env`** create
 ## Cross-references
 
 - `docs/OPERATIONS.md` — full runbook: backup/restore, credential rotation, disable users, incident, rollback, logs.
-- `docs/DEPLOY_BUNDLE.md` — what's in the bundle and why `config.php`/`.env` never ship.
+- `docs/DEPLOY_BUNDLE.md` — what's in the bundle and why `<docroot>/config.php`/`.env` never ship.
 - `docs/CONFIG.md` — env-var contract, precedence, D6 fail-closed rationale.
 - `docs/RELEASE_HYGIENE_PLAN.md` — D-RH1 (rotation), D-RH5 (photo storage), F-RH1 (credential incident).
 - `server/auth/session.php` (serverConfig fallback), `server/bootstrap.php` (env loader, database()), `src/lib/api.js` (Permintaan gagal wrap).

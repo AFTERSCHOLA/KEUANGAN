@@ -77,6 +77,43 @@ export async function uploadPhotoToServer(dataUrl, { cabangId } = {}) {
   return entry
 }
 
+// LP.B.3 — global-logo upload (F-LP1, F-LP2; D-LP2, D-LP4; R-LP4, taste #11).
+// Same FormData-through-apiRequest shape as uploadPhotoToServer, but posts
+// to the cabang-less logo-upload.php so a superadmin session (which has no
+// branch context) can persist the global logo. The logo endpoint accepts
+// the `photo` field as an alias, so the FormData shape stays byte-identical
+// to the branch-photo path. Warms the idb cache on success. Throws on
+// offline/401/403/422 — callers fall back to the idb-only entry silently
+// (R-LP5 boundary).
+export async function uploadLogoToServer(dataUrl) {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) throw new Error('Foto tidak valid')
+  const { blob, filename } = dataUrlToUploadFile(dataUrl)
+  const form = new FormData()
+  form.append('photo', blob, filename)
+  const body = await apiRequest('/api/logo-upload.php', { method: 'POST', body: form })
+  const id = body?.id
+  if (typeof id !== 'string' || id === '') throw new Error('Gagal menyimpan logo ke server')
+  const entry = { type: 'server', id }
+  try {
+    await set(serverPhotoCacheKey(id), dataUrl)
+  } catch {
+    // Cache warming is best-effort; the server row is authoritative.
+  }
+  return entry
+}
+
+// LP.B.3 — current-logo reference fetcher (F-LP3; D-LP2, D-LP4).
+// GET with cookie-session auth only (no CSRF — same as read.php and
+// photo-download.php). Any authenticated role may read the current id;
+// the full settings payload stays superadmin-only (D-LP3). Throws on
+// offline/401/404-no-logo — callers treat that as "no portable logo".
+export async function fetchLogoCurrent() {
+  const body = await apiRequest('/api/logo-current.php', { method: 'GET' })
+  const id = body?.id
+  if (typeof id !== 'string' || id === '') throw new Error('Logo belum diunggah')
+  return { id, updatedAt: body?.updatedAt ?? null }
+}
+
 // Fetches the authoritative bytes for a server photo id through the
 // scope-checked download endpoint (GET, cookie session — same as
 // backup-download/read.php, no CSRF). Warms the idb cache on success.
@@ -102,6 +139,41 @@ export async function fetchPhotoDataUrl(id) {
     reader.readAsDataURL(blob)
   })
   if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) throw new Error('Foto tidak valid')
+  try {
+    await set(serverPhotoCacheKey(cleanId), dataUrl)
+  } catch {
+    // Cache warming is best-effort.
+  }
+  return dataUrl
+}
+
+// LP.B.3 — logo-bytes fetcher (F-LP3; D-LP2, D-LP4; taste #11).
+// Verbatim mirror of fetchPhotoDataUrl except the endpoint: the logo is
+// branding (not minor PII), so any authenticated role may stream it via
+// logo-download.php while branch photos stay scope-checked (D-RH9).
+// Warms the idb cache on success under the same serverPhotoCacheKey.
+export async function fetchLogoDataUrl(id) {
+  if (typeof id !== 'string' || id.trim() === '') throw new Error('ID logo tidak valid')
+  const cleanId = id.trim()
+  const response = await fetch(`/api/logo-download.php?id=${encodeURIComponent(cleanId)}`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'image/*,*/*' },
+  })
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Sesi habis, silakan login kembali')
+    if (response.status === 403) throw new Error('Akses logo ditolak')
+    if (response.status === 404) throw new Error('Logo tidak ditemukan')
+    throw new Error(`Gagal memuat logo (${response.status})`)
+  }
+  const blob = await response.blob()
+  if (!blob || blob.size === 0) throw new Error('Logo tidak valid')
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Gagal memuat logo'))
+    reader.onload = () => resolve(reader.result)
+    reader.readAsDataURL(blob)
+  })
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) throw new Error('Logo tidak valid')
   try {
     await set(serverPhotoCacheKey(cleanId), dataUrl)
   } catch {
@@ -185,8 +257,13 @@ export async function loadPhotoDataUrl(entry) {
     } catch {
       // Cache read failure falls through to the network fetch below.
     }
+    // LP.B.3 — the logo tier shares the {type:'server', id} shape (D-LP4).
+    // Global-logo ids (lgo-…, see logo-upload.php) resolve through
+    // logo-download.php; branch-photo ids (pht-…) keep the scope-checked
+    // photo-download.php path untouched (R-LP4).
+    const fetchServerBytes = entry.id.startsWith('lgo-') ? fetchLogoDataUrl : fetchPhotoDataUrl
     try {
-      return await fetchPhotoDataUrl(entry.id)
+      return await fetchServerBytes(entry.id)
     } catch {
       try {
         const cached = await get(cacheKey)
