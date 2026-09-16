@@ -24,7 +24,7 @@ MICROTASK: <one verb + one noun>
 5. Matriks privilese tidak berubah: `invoices` tetap superadmin-write, admin_cabang read-only (R-SB5).
 6. Setiap microtask punya baris `Verified: <command> -> <result>`, dan §10 write-back tercatat di dokumen sumber.
 
-> ⚠️ **BLOCKER AKTIF.** Gate SB-A **belum boleh dibuka** sampai pertanyaan §9 nomor 1 (rekonsiliasi per-siswa vs per-sekolah) dan nomor 2 (jalur invoice kanonik) di `SPP_BILLING_PLAN.md` dijawab. SB.B.3 dan seterusnya bergantung langsung pada keduanya.
+> ✅ **ALL BLOCKERS RESOLVED 2026-09-16.** §9 Q1 (D-SB8), Q2 (D-SB10), Q3 (D-SB11), Q4 (D-SB12: dua kolom, field terpisah), Q5 (D-SB13) — semua Locked. Gate SB-A **dibuka**, tidak ada konfirmasi tersisa.
 
 ---
 
@@ -35,9 +35,9 @@ MICROTASK: <one verb + one noun>
 ```text
 MICROTASK: Add metodePembayaran to sekolah schema
   EDIT:    src/lib/constants.js (newSekolah), src/lib/__tests__/ (unit test baru)
-  FINDS:   F-SB2; D-SB6, D-SB7
+  FINDS:   F-SB2; D-SB6, D-SB7, D-SB8
   RULES:   R-SB3, R-SB4; field lama sekolah.spp dipertahankan apa adanya; record lama tanpa field baru tetap valid (tidak ada migrasi destruktif)
-  DEPENDS: sign-off §9 pertanyaan 1 & 2
+  DEPENDS: resolved 2026-09-16 — §9 Q1 (D-SB8 Locked) & Q2 (D-SB10 Locked)
   OUTCOME: newSekolah() menghasilkan record dengan metodePembayaran default null, dan record lama tanpa field itu tetap lolos validasi entitas.
   VERIFY:  npm test -- constants -> record baru punya metodePembayaran: null; record lama (tanpa field) tidak melempar error di assertReferences()/validasi entitas
   DONE-IF: verify passes; only intended files changed
@@ -48,11 +48,11 @@ MICROTASK: Add metodePembayaran to sekolah schema
 ```text
 MICROTASK: Add per-meeting billing calculator
   EDIT:    src/lib/finance.js (fungsi baru billingForSekolah, belum dipakai UI), src/lib/__tests__/finance-billing.test.js (baru)
-  FINDS:   F-SB1; D-SB5, D-SB7
+  FINDS:   F-SB1; D-SB5, D-SB7, D-SB13
   RULES:   R-SB2, R-SB3, R-SB4; absensi hanya dibaca, tidak pernah ditulis; sekolah tanpa metodePembayaran mengembalikan hasil rumus flat lama persis
   DEPENDS: SB.A.1
-  OUTCOME: satu fungsi menghitung tagihan dari tarif per pertemuan × realisasi absensi untuk keempat trigger, dan jatuh ke rumus lama saat metode belum diisi.
-  VERIFY:  npm test -- finance-billing -> keempat trigger (per_pertemuan, per_n_pertemuan, per_bulan, per_siklus_minggu) menghasilkan angka yang benar pada fixture; basis 'trainer' tidak mengalikan jumlah siswa; sekolah tanpa metodePembayaran menghasilkan angka identik dengan financialData() lama
+  OUTCOME: satu fungsi menghitung tagihan dari tarif per pertemuan × realisasi absensi untuk keempat trigger, dan jatuh ke rumus lama saat metode belum diisi (D-SB13: hanya trainerStatus 'Hadir'; pengganti = record Hadir baru).
+  VERIFY:  npm test -- finance-billing -> keempat trigger (per_pertemuan, per_n_pertemuan, per_bulan, per_siklus_minggu) menghasilkan angka yang benar pada fixture; basis 'trainer' tidak mengalikan jumlah siswa; sekolah tanpa metodePembayaran menghasilkan angka identik dengan financialData() lama; Izin/Alpa tidak menagih, sesi pengganti (record Hadir baru) menagih
   DONE-IF: verify passes; only intended files changed
 ```
 
@@ -78,10 +78,10 @@ MICROTASK: Add regression guard for historical figures
 ```text
 MICROTASK: Add sumberDana to SPP payments
   EDIT:    src/features/payments/SppPaymentModal.jsx, src/lib/constants.js (factory pembayaran), server/validation/entities.php
-  FINDS:   F-SB8; D-SB6
+  FINDS:   F-SB8; D-SB6, D-SB12
   RULES:   R-SB1, R-SB4; pembayaran lama tanpa sumberDana tetap valid dan diperlakukan sebagai 'sekolah'
   DEPENDS: SB.A.3
-  OUTCOME: setiap pembayaran baru membawa asal dana (sekolah atau ortu langsung), dan pembayaran historis tidak berubah.
+  OUTCOME: setiap pembayaran baru membawa asal dana (sekolah atau ortu langsung; D-SB12, kanal `metode` tetap independen), dan pembayaran historis tidak berubah.
   VERIFY:  npm test + php server/tests/entity.validation.php -> pembayaran dengan sumberDana valid diterima, nilai di luar enum ditolak 422, payload lama tanpa field tetap lolos
   DONE-IF: verify passes; only intended files changed
 ```
@@ -93,7 +93,7 @@ MICROTASK: Compute invoice paid/outstanding from ledger
   EDIT:    src/lib/invoices.js (fungsi turunan baru), src/lib/__tests__/invoice-status.test.js (baru)
   FINDS:   F-SB4, F-SB5; D-SB8, D-SB9
   RULES:   R-SB1, R-SB2; status tidak pernah disimpan sebagai field yang bisa menyimpang; ledger tidak pernah diubah
-  DEPENDS: SB.B.1 dan sign-off §9 pertanyaan 1
+  DEPENDS: SB.B.1 (D-SB8 Locked 2026-09-16)
   OUTCOME: untuk satu invoice, sistem dapat menghitung total, sudah dibayar, sisa, dan status Lunas/Belum Lunas murni dari ledger.
   VERIFY:  npm test -- invoice-status -> nol pembayaran = Belum Lunas sisa penuh; pembayaran sebagian = Belum Lunas dengan sisa benar; pembayaran penuh = Lunas sisa 0; pembayaran berlebih = Lunas dengan credit positif
   DONE-IF: verify passes; only intended files changed
@@ -103,12 +103,12 @@ MICROTASK: Compute invoice paid/outstanding from ledger
 
 ```text
 MICROTASK: Show installments and outstanding on invoice
-  EDIT:    src/features/reports/InvoiceModal.jsx, src/features/reports/InvoiceTemplate.jsx
-  FINDS:   F-SB3, F-SB4; D-SB9
+  EDIT:    src/features/reports/InvoiceModal.jsx, src/features/reports/InvoiceTemplate.jsx, src/features/reports/AgingReport.jsx, src/lib/csv.js
+  FINDS:   F-SB3, F-SB4; D-SB9, D-SB12
   RULES:   R-SB4, R-SB5; hapus tombol "Tandai Lunas" (status kini turunan); Draft→Terbit tetap manual; copy Indonesia mengikuti idiom yang ada
   DEPENDS: SB.B.2
-  OUTCOME: invoice menampilkan total tagihan, jumlah dibayar, sisa, dan badge Lunas/Belum Lunas yang berubah sendiri setelah pembayaran dicatat.
-  VERIFY:  npx playwright test tests/invoice-installment.spec.js --workers=1 -> catat 2 pembayaran parsial pada satu invoice, badge berubah Belum Lunas → Lunas tanpa klik manual; tombol "Tandai Lunas" tidak ada di DOM
+  OUTCOME: invoice menampilkan total tagihan, jumlah dibayar, sisa, dan badge Lunas/Belum Lunas yang berubah sendiri setelah pembayaran dicatat; aging memakai dua kolom sumberDana (Sekolah vs Ortu langsung) per D-SB12.
+  VERIFY:  npx playwright test tests/invoice-installment.spec.js --workers=1 -> catat 2 pembayaran parsial pada satu invoice, badge berubah Belum Lunas → Lunas tanpa klik manual; tombol "Tandai Lunas" tidak ada di DOM; aging menampilkan dua kolom (Sekolah vs Ortu langsung), CSV membawa kolom sumberDana
   DONE-IF: verify passes; only intended files changed
 ```
 
@@ -117,11 +117,11 @@ MICROTASK: Show installments and outstanding on invoice
 ```text
 MICROTASK: Carry outstanding and credit to next invoice
   EDIT:    src/lib/invoices.js (penyusun baris carry-over), src/features/reports/InvoiceModal.jsx
-  FINDS:   F-SB7; D-SB3
-  RULES:   R-SB2, R-SB6; carry-over wajib merujuk invoiceId asal; referensi lintas sekolah gagal keras
+  FINDS:   F-SB7; D-SB3, D-SB11
+  RULES:   R-SB2, R-SB6; carry-over wajib merujuk invoiceId asal; referensi lintas sekolah gagal keras; total invoice Terbit dibekukan
   DEPENDS: SB.B.3
-  OUTCOME: invoice berikutnya pada sekolah yang sama menampilkan baris sisa tagihan atau kelebihan bayar dari invoice sebelumnya, lengkap dengan rujukan asal.
-  VERIFY:  npm test -- invoice-carryover -> kurang bayar muncul sebagai baris positif di invoice berikutnya; lebih bayar muncul sebagai baris negatif; percobaan carry-over ke sekolah berbeda ditolak
+  OUTCOME: invoice berikutnya pada sekolah yang sama menampilkan baris sisa tagihan atau kelebihan bayar dari invoice sebelumnya, lengkap dengan rujukan asal; penyimpanan absensi yang menyentuh rentang invoice Terbit memunculkan peringatan dan diteruskan ke invoice berikutnya (D-SB11).
+  VERIFY:  npm test -- invoice-carryover -> kurang bayar muncul sebagai baris positif di invoice berikutnya; lebih bayar muncul sebagai baris negatif; percobaan carry-over ke sekolah berbeda ditolak; edit absensi pada periode Terbit memunculkan peringatan dan tidak mengubah total Terbit
   DONE-IF: verify passes; only intended files changed
 ```
 
@@ -146,11 +146,11 @@ MICROTASK: Add payment-method picker to school form
 
 ```text
 MICROTASK: Consolidate invoice creation paths
-  EDIT:    ditentukan setelah sign-off §9 pertanyaan 2 (src/lib/invoices.js dan/atau server/lib/invoiceGenerator.php + server/api/invoices-generate.php)
+  EDIT:    server/lib/invoiceGenerator.php + server/api/invoices-generate.php (kanonik, D-SB10 Locked 2026-09-16); src/lib/invoices.js + src/features/reports/InvoiceModal.jsx (dijadikan pemanggil / dipensiunkan)
   FINDS:   F-SB6; D-SB10
   RULES:   R-SB2, R-SB5; satu jalur kanonik; jalur lain dipensiunkan atau menjadi pemanggil jalur kanonik; tidak ada invoice ganda untuk sekolah+periode yang sama
-  DEPENDS: SB.C.1 dan sign-off §9 pertanyaan 2
-  OUTCOME: hanya ada satu sumber kebenaran untuk pembuatan invoice, dan bentuk payload-nya seragam.
+  DEPENDS: SB.C.1 (D-SB10 Locked 2026-09-16)
+  OUTCOME: hanya ada satu sumber kebenaran untuk pembuatan invoice, dan bentuk payload-nya seragam (bentuk server: items[] per tarif, grandTotal, nomorInvoice AFS-YYYYMM-XXXX).
   VERIFY:  php server/tests/invoice.endpoint.php -> generate massal dan pembuatan via UI menghasilkan bentuk payload identik; generate dua kali untuk sekolah+periode sama tidak menghasilkan baris ganda
   DONE-IF: verify passes; only intended files changed
 ```
