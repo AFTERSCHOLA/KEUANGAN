@@ -183,20 +183,27 @@ export async function read(key) {
 if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
 
 // Server tetap menjadi sumber data utama.
-// Record yang masih pending sync dipertahankan agar refresh tidak
-// menghapus data lokal yang belum sempat masuk server.
-const pending = pendingRecordsForKey(key)
-const remoteById = new Map(remote.map(record => [record.id, record]))
+    // Record yang masih pending sync SELALU menang atas versi remote —
+    // masuk antrian berarti edit lokal ini belum terkonfirmasi ke-sync
+    // (queueSync() cuma nyimpen 1 entry terbaru per id). Versi remote bisa
+    // aja (a) belum ada sama sekali (record baru yang belum sempet
+    // ke-sync — kasus asli SB.B.5), atau (b) ADA tapi basi (edit ke
+    // record yang udah pernah ke-sync, tapi update-nya belum ke-flush) —
+    // dua-duanya gak boleh ketimpa cuma karena servernya "punya sesuatu"
+    // dengan ID itu. AttendanceForm.jsx mengonfirmasi edit-ulang absensi
+    // itu alur nyata (editingRecord prop, id dipertahankan saat upsert),
+    // jadi kasus (b) ini bukan teori — beneran bisa kejadian.
+    const pending = pendingRecordsForKey(key)
+    const remoteById = new Map(remote.map(record => [record.id, record]))
 
-for (const record of pending) {
-  if (!remoteById.has(record.id)) {
-    remoteById.set(record.id, record)
-  }
-}
+    for (const record of pending) {
+      remoteById.set(record.id, record)
+    }
 
-writeRaw(key, [...remoteById.values()])
-notifyStoreChanged()
-return readCached(key)
+    writeRaw(key, [...remoteById.values()])
+    notifyStoreChanged()
+    return readCached(key)
+
   } catch (error) {
     // 401 means the session is gone (api.js's unauthorized handler has
     // already cleared currentUser). Wipe the protected cache so a
