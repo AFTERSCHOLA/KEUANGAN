@@ -30,6 +30,7 @@ export function attendanceStats(absensi = [], periode) {
   })
 
   return { trainerSessionCount, studentPeriodCount, studentTotalCount }
+
 }
 
 export function honorPaidByTrainer(honorPayments = [], periode) {
@@ -61,6 +62,7 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
 
     potensiSpp += targetSpp
     pemasukanSpp += realisasiSpp
+
 
     const trainerNama = (sch.trainerIds || [])
       .map(id => trainer.find(t => t.id === id)?.nama)
@@ -95,6 +97,7 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     totalBebanHonor += bebanHonor
     const dibayar = dibayarByTrainer[t.id] || 0
 
+
     const sekolahNama = (t.sekolahIds || [])
       .map(id => sekolah.find(s => s.id === id)?.nama)
       .filter(Boolean)
@@ -126,9 +129,52 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     labaRugi,
     potensiSpp,
     belumTertagih,
+
     totalBebanHonor,
     sisaKewajiban,
     sekolahFinance,
     trainerFinance,
   }
+}
+
+// ============================================
+// SB.A.2 — Per-meeting billing calculator (F-SB1; D-SB5, D-SB6, D-SB7, D-SB13)
+// Rumus dasar tunggal (SPP_BILLING_PLAN.md §6): tarifPerPertemuan ×
+// pertemuan_aktual, basis 'siswa' dikali jumlah siswa aktif non-Trial,
+// basis 'trainer' tidak. `trigger`/`jumlahN`/`jumlahMinggu`/`sumberDana`
+// adalah metadata jadwal & pelabelan invoice (dikerjakan di SB.B/SB.C) —
+// TIDAK mengubah rumus di sini; fungsi ini sengaja hanya membaca `basis`
+// dan `tarifPerPertemuan` dari metodePembayaran.
+// D-SB13: hanya trainerStatus 'Hadir' menagih; Izin/Alpa = 0; sesi
+// pengganti = record Hadir baru, terhitung normal (bukan flip status).
+// Sekolah tanpa metodePembayaran (null) → rumus flat lama, IDENTIK dengan
+// financialData() sebelum SB.A ada (R-SB3, dibuktikan SB.A.3). Fungsi ini
+// BELUM dipanggil dari financialData() — berdiri sendiri sampai SB.B/SB.C
+// menyambungkannya ke invoice generator, sesuai urutan gate di
+// SPP_BILLING_MILESTONES.md.
+// ============================================
+
+export function billingForSekolah(sch, { absensi = [], siswa = [], periode }) {
+  const siswaBilling = siswa.filter(s => s.sekolahId === sch.id && s.status !== 'Trial')
+
+  if (!sch.metodePembayaran) {
+    return {
+      total: siswaBilling.length * sch.spp,
+      basis: 'flat_legacy',
+      pertemuanAktual: null,
+
+    }
+  }
+
+  const { basis, tarifPerPertemuan } = sch.metodePembayaran
+
+  const pertemuanAktual = absensi.filter(
+    a => a.sekolahId === sch.id && a.periode === periode && a.trainerStatus === 'Hadir'
+  ).length
+
+  const total = basis === 'trainer'
+    ? tarifPerPertemuan * pertemuanAktual
+    : tarifPerPertemuan * pertemuanAktual * siswaBilling.length
+
+  return { total, basis, pertemuanAktual }
 }
