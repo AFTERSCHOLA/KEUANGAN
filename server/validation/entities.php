@@ -49,6 +49,13 @@ const TRAINER_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
 // future client bug or a hand-crafted API call) from silently landing in
 // the database and rendering as-is in RiwayatAbsensi.jsx/TrainerHistory.jsx.
 
+const SPP_PAYMENT_SUMBER_DANA_VALUES = ['sekolah', 'ortu'];
+// SB.B.1 (D-SB12) — payment source, independent from `metode` (channel).
+// Optional field: legacy payloads without it still validate (R-SB3-style
+// non-destructive migration, mirrored from D-SB7 for sekolah). When
+// present, must be one of the enum values below — this only rejects
+// garbage/typo values, it does not require the field.
+
 function requireNonEmptyString(mixed $value): bool {
     return is_string($value) && trim($value) !== '';
 }
@@ -167,6 +174,10 @@ function validateSppPayment(array $data, PDO $pdo): array {
     if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'sppPayments: id is required';
     if (!requireNonEmptyString($data['siswaId'] ?? null) || !rowExists($pdo, 'siswa', $data['siswaId'])) {
         $errors[] = 'sppPayments: siswaId does not reference an existing siswa';
+    }
+    $sumberDana = $data['sumberDana'] ?? null;
+    if ($sumberDana !== null && !in_array($sumberDana, SPP_PAYMENT_SUMBER_DANA_VALUES, true)) {
+        $errors[] = "sppPayments: sumberDana '" . var_export($sumberDana, true) . "' is not one of " . implode(', ', SPP_PAYMENT_SUMBER_DANA_VALUES);
     }
     return $errors;
 }

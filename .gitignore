@@ -19,3 +19,4 @@ private/
 /deploy/config.php*.zip
 deploy-upload.zip
 login.json
+dump_e2e.txt

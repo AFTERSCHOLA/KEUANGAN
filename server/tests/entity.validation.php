@@ -51,6 +51,20 @@ $pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :cabang
     ':payload' => json_encode(['id' => $trainerId, 'cabangId' => $cabangId], JSON_UNESCAPED_UNICODE),
 ]);
 
+// SB.B.1 — seed a real siswa so validateSppPayment()'s siswaId reference
+// check has something valid to point at.
+$siswaId = 'sw-sb1-' . bin2hex(random_bytes(4));
+$pdo->prepare('INSERT INTO siswa (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)')->execute([
+    ':id' => $siswaId,
+    ':cabang_id' => $cabangId,
+    ':payload' => json_encode([
+        'id' => $siswaId,
+        'cabangId' => $cabangId,
+        'sekolahId' => $sekolahId,
+        'status' => 'Aktif',
+    ], JSON_UNESCAPED_UNICODE),
+]);
+
 try {
     // ================= missing ownership =================
     $errors = validateSekolah(['id' => 'skl-x'], $pdo);
@@ -114,10 +128,29 @@ try {
     $errors = validateSiswa($normal, $pdo);
     fixtureCheck(!hasError($errors, 'exceeds limit'), 'a normal-sized siswa payload should not trip the size limit');
     echo "M3.2 oversized-payload check passed\n";
+
+    // ================= SB.B.1 — sumberDana enum (D-SB12) =================
+    $basePayment = ['id' => 'spp-sb1-' . bin2hex(random_bytes(3)), 'siswaId' => $siswaId];
+
+    $errors = validateSppPayment($basePayment + ['sumberDana' => 'sekolah'], $pdo);
+    fixtureCheck($errors === [], 'sppPayments with sumberDana=sekolah should validate, got: ' . implode('; ', $errors));
+
+    $errors = validateSppPayment($basePayment + ['sumberDana' => 'ortu'], $pdo);
+    fixtureCheck($errors === [], 'sppPayments with sumberDana=ortu should validate, got: ' . implode('; ', $errors));
+
+    $errors = validateSppPayment($basePayment + ['sumberDana' => 'bank'], $pdo);
+    fixtureCheck(hasError($errors, 'sumberDana'), 'sppPayments with an out-of-enum sumberDana should be rejected');
+
+    // Legacy payload: field absent entirely — must still validate (R-SB3,
+    // non-destructive migration). This is the assertion that would catch
+    // someone later "tightening" the field into a required one.
+    $errors = validateSppPayment($basePayment, $pdo);
+    fixtureCheck($errors === [], 'legacy sppPayments without sumberDana should still validate, got: ' . implode('; ', $errors));
+
+    echo "SB.B.1 sumberDana enum check passed\n";
 } finally {
+    $pdo->prepare('DELETE FROM siswa WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM sekolah WHERE cabang_id IN (:c1, :c2)')->execute([':c1' => $cabangId, ':c2' => $otherCabangId]);
     $pdo->prepare('DELETE FROM trainer WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM cabang WHERE id IN (:c1, :c2)')->execute([':c1' => $cabangId, ':c2' => $otherCabangId]);
 }
-
-echo "M3.2 entity validation check passed\n";
