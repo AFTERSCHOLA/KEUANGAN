@@ -3,7 +3,7 @@ import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import { formatRupiah, MONTHS, periodeKey } from '../../lib/format.js'
 import { readCached, usePeriod } from '../../lib/store.js'
-import { newInvoice, addInvoice, invoicesForSekolah, setInvoiceStatus, deleteInvoice } from '../../lib/invoices.js'
+import { newInvoice, addInvoice, invoicesForSekolah, setInvoiceStatus, deleteInvoice, invoiceSettlement } from '../../lib/invoices.js'
 
 const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
 
@@ -58,14 +58,13 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
     setTick(t => t + 1)
   }
 
-  function advanceStatus(inv) {
-    const next = inv.status === 'Draft' ? 'Terbit' : inv.status === 'Terbit' ? 'Lunas' : null
-    if (!next) return
-    setConfirmMsg(next === 'Terbit'
-      ? 'Terbitkan invoice ini? Nomor resmi akan digenerate dan tidak bisa diubah lagi.'
-      : 'Tandai invoice ini sebagai Lunas?')
+  // SB.B.3 — cuma Draft -> Terbit yang masih manual. Lunas/Belum Lunas
+  // sekarang selalu computed dari invoiceSettlement() (D-SB9), jadi tombol
+  // "Tandai Lunas" dihapus, bukan cuma disembunyikan.
+  function terbitkanInvoice(inv) {
+    setConfirmMsg('Terbitkan invoice ini? Nomor resmi akan digenerate dan tidak bisa diubah lagi.')
     setConfirmAction(() => () => {
-      setInvoiceStatus(inv.id, next)
+      setInvoiceStatus(inv.id, 'Terbit')
       setTick(t => t + 1)
     })
     setConfirmOpen(true)
@@ -81,6 +80,10 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   }
 
   const existing = invoicesForSekolah(sekolah.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+
+  // Diambil sekali di luar map biar nggak baca cache berkali-kali per baris.
+  const sppPaymentsAll = readCached('sppPayments')
+  const siswaAll = readCached('siswa')
 
   return (
     <Modal open={open} onClose={onClose} title={`Invoice — ${sekolah.nama}`}>
@@ -149,29 +152,45 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
             <p className="text-xs text-slate-400">Belum ada invoice untuk sekolah ini.</p>
           ) : (
             <div className="space-y-2">
-              {existing.map(inv => (
-                <div key={inv.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2 text-xs">
-                  <div>
-                    <p className="font-bold text-slate-800">{inv.nomor || 'Draft'}</p>
-                    <p className="text-slate-400">{formatRupiah(inv.total)} — {inv.mode === 'semester' ? 'Semester' : 'Bulanan'}</p>
+              {existing.map(inv => {
+                const isDraft = inv.status === 'Draft'
+                // status !== 'Draft' mencakup 'Terbit' (alur baru) dan legacy 'Lunas'
+                // (invoice lama yang sempat ditandai manual sebelum SB.B.2/SB.B.3).
+                const settlement = !isDraft
+                  ? invoiceSettlement(inv, { sppPayments: sppPaymentsAll, siswa: siswaAll })
+                  : null
+                const displayStatus = isDraft ? 'Draft' : settlement.status
+
+                return (
+                  <div key={inv.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2 text-xs">
+                    <div>
+                      <p className="font-bold text-slate-800">{inv.nomor || 'Draft'}</p>
+                      <p className="text-slate-400">{formatRupiah(inv.total)} — {inv.mode === 'semester' ? 'Semester' : 'Bulanan'}</p>
+                      {!isDraft && (
+                        <p className="text-slate-400 mt-0.5">
+                          Dibayar {formatRupiah(settlement.dibayar)} · Sisa {formatRupiah(settlement.sisa)}
+                          {settlement.credit > 0 && ` · Lebih bayar ${formatRupiah(settlement.credit)}`}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded-full font-bold ${
+                        displayStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' :
+                        displayStatus === 'Belum Lunas' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+                      }`}>{displayStatus}</span>
+                      {isDraft && (
+                        <button onClick={() => terbitkanInvoice(inv)} className="text-emerald-600 hover:underline font-bold">
+                          Terbitkan
+                        </button>
+                      )}
+                      <button onClick={() => onPrint(inv, sekolah)} className="text-blue-600 hover:underline font-bold">Cetak</button>
+                      {isDraft && (
+                        <button onClick={() => removeInvoice(inv)} className="text-rose-500 hover:underline font-bold">Hapus</button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full font-bold ${
-                      inv.status === 'Lunas' ? 'bg-emerald-100 text-emerald-700' :
-                      inv.status === 'Terbit' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
-                    }`}>{inv.status}</span>
-                    {inv.status !== 'Lunas' && (
-                      <button onClick={() => advanceStatus(inv)} className="text-emerald-600 hover:underline font-bold">
-                        {inv.status === 'Draft' ? 'Terbitkan' : 'Tandai Lunas'}
-                      </button>
-                    )}
-                    <button onClick={() => onPrint(inv, sekolah)} className="text-blue-600 hover:underline font-bold">Cetak</button>
-                    {inv.status === 'Draft' && (
-                      <button onClick={() => removeInvoice(inv)} className="text-rose-500 hover:underline font-bold">Hapus</button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

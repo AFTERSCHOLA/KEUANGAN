@@ -1,0 +1,79 @@
+import { test, expect, loginAndPrime, createSekolahSuperadmin } from './fixtures.js'
+
+// SB.B.3 — invoice installment + auto Lunas/Belum Lunas badge.
+// Nama siswa diberi suffix unik per run supaya tidak bentrok dengan sisa
+// data dari run gagal sebelumnya (DB test tidak direset otomatis antar run).
+
+async function fillFieldByLabel(page, labelText, value) {
+  const label = page.locator('label', { hasText: labelText }).first()
+  const input = label.locator('xpath=following-sibling::input[1]')
+  await input.fill('')
+  await input.fill(value)
+}
+
+async function selectFieldByLabel(page, labelText, optionLabel) {
+  const label = page.locator('label', { hasText: labelText }).first()
+  await label.locator('xpath=following-sibling::select[1]').selectOption({ label: optionLabel })
+}
+
+test('cicilan invoice: 2 pembayaran parsial -> badge otomatis Lunas, tombol Tandai Lunas tidak ada', async ({ page }) => {
+  const csrf = await loginAndPrime(page, 'superadmin')
+  const suffix = String(Date.now()).slice(-6)
+
+  const { body: sekolah } = await createSekolahSuperadmin(
+    page, csrf, `SIM-E2E Sekolah ${suffix}`, 500000, 'cbg-test-pusat', suffix
+  )
+  const namaSekolah = sekolah.nama || `SIM-E2E Sekolah ${suffix}`
+  const namaA = `SIM-E2E Siswa A ${suffix}`
+  const namaB = `SIM-E2E Siswa B ${suffix}`
+
+  await page.goto('/')
+  await page.waitForLoadState('domcontentloaded')
+
+  await page.getByText('Data Siswa').click()
+  for (const nama of [namaA, namaB]) {
+    await page.getByRole('button', { name: /tambah siswa/i }).click()
+    await fillFieldByLabel(page, 'Nama Siswa', nama)
+    await selectFieldByLabel(page, 'Sekolah', namaSekolah)
+    await page.getByRole('button', { name: 'Simpan', exact: true }).click()
+    await expect(page.getByText(nama)).toBeVisible()
+  }
+
+  await page.getByText('Data Sekolah').click()
+  const firstSchoolCard = page.locator('.grid > div', { hasText: namaSekolah }).first()
+  await firstSchoolCard.getByTitle('Kelola Invoice').click()
+  await expect(page.getByText(`Invoice — ${namaSekolah}`)).toBeVisible()
+
+  const bulanLabel = page.locator('label', { hasText: 'Bulan' }).first()
+  await bulanLabel.locator('xpath=following-sibling::select[1]').selectOption({ label: 'September' })
+
+  await page.getByRole('button', { name: 'Simpan sebagai Draft' }).click()
+  const invoiceRow = page.getByText('Riwayat Invoice').locator('..').locator('.space-y-2 > div').first()
+  await invoiceRow.getByRole('button', { name: 'Terbitkan' }).click()
+  await page.getByRole('button', { name: 'Ya, Lanjutkan' }).click()
+  await expect(invoiceRow.getByText('Belum Lunas')).toBeVisible()
+
+  await expect(page.getByRole('button', { name: /tandai lunas/i })).toHaveCount(0)
+
+  await page.keyboard.press('Escape')
+
+  await page.getByText('Data Siswa').click()
+  const payments = [
+    { nama: namaA, nominal: '300000' },
+    { nama: namaA, nominal: '200000' },
+    { nama: namaB, nominal: '500000' },
+  ]
+  for (const { nama, nominal } of payments) {
+    const studentRow = page.locator('tr', { hasText: nama })
+    await studentRow.getByTitle('Catat pembayaran SPP').click()
+    await fillFieldByLabel(page, 'Nominal', nominal)
+    await fillFieldByLabel(page, 'Tanggal Bayar', new Date().toISOString().slice(0, 10))
+    await fillFieldByLabel(page, 'Diterima Oleh', 'E2E Tester')
+    await page.getByRole('button', { name: 'Simpan Pembayaran' }).click()
+    await expect(page.getByText('Catat Pembayaran SPP')).not.toBeVisible()
+  }
+
+  await page.getByText('Data Sekolah').click()
+  await firstSchoolCard.getByTitle('Kelola Invoice').click()
+  await expect(invoiceRow.getByText('Lunas', { exact: true })).toBeVisible()
+})

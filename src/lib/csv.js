@@ -94,3 +94,22 @@ export function exportRingkasanCSV(finance, periode) {
   ]
   downloadCSV(headers, rows, 'Ringkasan_Keuangan', periode)
 }
+
+// ============================================
+// SB.B.3 (D-SB12) — export laporan piutang aging, membawa kolom
+// Sumber Dana (Sekolah / Ortu Langsung), diambil dari
+// sekolah.metodePembayaran.sumberDana lewat computeAging() di
+// AgingReport.jsx (bukan dari sppPayments — lihat catatan di sana).
+// ============================================
+export function exportAgingCSV(agingRows, periode) {
+  const headers = ["Sekolah", "Sumber Dana", "Bulan Ini", "1 Bulan", "2+ Bulan", "Total Piutang"]
+  const rows = agingRows.map(r => [
+    r.nama,
+    r.sumberDana === 'ortu' ? 'Ortu Langsung' : 'Sekolah',
+    r.bulanIni,
+    r.satuBulan,
+    r.duaBulanPlus,
+    r.total,
+  ])
+  downloadCSV(headers, rows, 'Laporan_Piutang_Aging', periode)
+}
