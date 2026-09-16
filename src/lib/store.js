@@ -180,10 +180,23 @@ export async function read(key) {
   if (!READABLE_SERVER_KEYS.has(key)) return readCached(key)
   try {
     const remote = await apiRequest(`/api/read.php?entity=${encodeURIComponent(key)}`, { method: 'GET' })
-    if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
-    writeRaw(key, remote)
-    notifyStoreChanged()
-    return readCached(key)
+if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
+
+// Server tetap menjadi sumber data utama.
+// Record yang masih pending sync dipertahankan agar refresh tidak
+// menghapus data lokal yang belum sempat masuk server.
+const pending = pendingRecordsForKey(key)
+const remoteById = new Map(remote.map(record => [record.id, record]))
+
+for (const record of pending) {
+  if (!remoteById.has(record.id)) {
+    remoteById.set(record.id, record)
+  }
+}
+
+writeRaw(key, [...remoteById.values()])
+notifyStoreChanged()
+return readCached(key)
   } catch (error) {
     // 401 means the session is gone (api.js's unauthorized handler has
     // already cleared currentUser). Wipe the protected cache so a
@@ -492,6 +505,12 @@ function readSyncLog() {
 function writeSyncLog(entries) {
   localStorage.setItem(SYNC_LOG_KEY, JSON.stringify(entries))
   notifyStoreChanged()
+}
+
+function pendingRecordsForKey(key) {
+  return readSyncLog()
+    .filter(entry => entry.key === key && entry.record && entry.id)
+    .map(entry => entry.record)
 }
 
 // Queues a record for push to its PHP endpoint. Silently no-ops for keys
