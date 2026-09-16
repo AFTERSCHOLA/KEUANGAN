@@ -135,17 +135,20 @@ function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, ar
             $id = 'inv-' . strtoupper(cabangKodeFor($pdo, $cabangId)) . '-' . (string) round(microtime(true) * 1000) . '-' . substr(bin2hex(random_bytes(4)), 0, 7);
 
             $record = [
-                'id' => $id,
-                'cabangId' => $cabangId,
-                'sekolahId' => $sekolahId,
-                'sekolahNama' => $sekolahNama,
-                'pjNama' => $pjNama,
-                'periode' => $periode,
-                'nomorInvoice' => $nomorInvoice,
-                'tanggal' => date('Y-m-d'),
-                'items' => $items,
-                'grandTotal' => $grandTotal,
-            ];
+    'id' => $id,
+    'cabangId' => $cabangId,
+    'sekolahId' => $sekolahId,
+    'sekolahNama' => $sekolahNama,
+    'pjNama' => $pjNama,
+    'periode' => $periode,
+    'nomorInvoice' => $nomorInvoice,
+    'nomor' => $nomorInvoice,
+    'tanggal' => date('Y-m-d'),
+    'tanggalTerbit' => date('Y-m-d'),
+    'status' => 'Terbit',
+    'items' => $items,
+    'grandTotal' => $grandTotal,
+];
 
             $pdo->prepare('INSERT INTO invoices (id, cabang_id, payload) VALUES (:id, :c, :p)')
                 ->execute([

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { readCached, upsert } from '../../lib/store.js'
 import { newAbsensi } from '../../lib/constants.js'
+import { findIssuedInvoiceForPeriod } from '../../lib/invoices.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import QuickSession from './QuickSession.jsx'
@@ -78,6 +79,15 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
 
   function doSave() {
     setConfirmOpen(false)
+    const periode = tanggal.slice(0, 7)
+    const invoices = readCached('invoices')
+    
+    const issuedInvoice = findIssuedInvoiceForPeriod(
+    sekolahId,
+    periode,
+    { invoices }
+  )
+
     const trainer = trainers.find(t => t.id === trainerId)
     const asisten = asistenId ? trainers.find(t => t.id === asistenId) : null
     const dokumentasi = [
@@ -106,6 +116,18 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
       sesiKe: editingRecord?.sesiKe || 1,
       lastEditedAt: editingRecord ? new Date().toISOString() : null,
     })
+
+  if (issuedInvoice) {
+  const invoiceLabel = issuedInvoice.nomor || issuedInvoice.id
+
+  setAlertMsg(
+    `Periode ${periode} sudah tercakup invoice Terbit ${invoiceLabel}. ` +
+    `Perubahan absensi tidak mengubah total invoice Terbit tersebut. ` +
+    `Perubahan akan diperhitungkan pada invoice berikutnya sesuai mekanisme carry-over.`
+  )
+  setAlertOpen(true)
+}
+
     upsert('absensi', record)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)

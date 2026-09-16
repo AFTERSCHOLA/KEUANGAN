@@ -12,23 +12,25 @@ export function newInvoice({
   uraian = '',
   tanggalTerbit,
   cabangKode,
+  carryOverLines = [],
 }) {
   return {
-    id: generateId('inv', cabangKode),
-    nomor: null, // diisi otomatis saat status berubah jadi 'Terbit' (lihat setInvoiceStatus)
-    sekolahId,
-    mode,
-    periodeList,
-    jumlahSiswa,
-    hargaSatuan,
-    jumlahPertemuan,
-    total: jumlahSiswa * hargaSatuan,
-    pjSekolah,
-    uraian,
-    tanggalTerbit,
-    status: 'Draft',
-    createdAt: new Date().toISOString(),
-  }
+  id: generateId('inv', cabangKode),
+  nomor: null,
+  sekolahId,
+  mode,
+  periodeList,
+  jumlahSiswa,
+  hargaSatuan,
+  jumlahPertemuan,
+  total: jumlahSiswa * hargaSatuan,
+  pjSekolah,
+  uraian,
+  tanggalTerbit,
+  status: 'Draft',
+  carryOverLines,
+  createdAt: new Date().toISOString(),
+}
 }
 
 export function listInvoices() {
@@ -108,6 +110,27 @@ export function invoicePeriods(invoice) {
 }
 
 /**
+ * SB.B.4 / D-SB11
+ * Mengecek apakah suatu periode sudah tercakup invoice Terbit
+ * untuk sekolah yang sama.
+ *
+ * Read-only: tidak mengubah invoice apa pun.
+ */
+export function findIssuedInvoiceForPeriod(
+  sekolahId,
+  periode,
+  { invoices = [] } = {}
+) {
+  if (!sekolahId || !periode) return null
+
+  return invoices.find(inv =>
+    inv.sekolahId === sekolahId &&
+    inv.status === 'Terbit' &&
+    invoicePeriods(inv).includes(periode)
+  ) || null
+}
+
+/**
  * Normalizes the invoice's billed total across both shapes:
  *   - server: grandTotal (sum of items[].total)
  *   - client: total (jumlahSiswa * hargaSatuan)
@@ -161,4 +184,78 @@ export function invoiceSettlement(invoice, { sppPayments = [], siswa = [] } = {}
     credit,
     status: sisa <= 0 ? 'Lunas' : 'Belum Lunas',
   }
+}
+
+/**
+ * SB.B.4 — Carry-over dari invoice sebelumnya.
+ *
+ * Carry-over tidak mengubah invoice.total.
+ * Yang dibawa hanya:
+ *   - sisa invoice sebelumnya -> positif
+ *   - credit/kelebihan bayar -> negatif
+ *
+ * Setiap line wajib membawa invoiceId asal agar sumbernya jelas.
+ * Hanya invoice dari sekolah yang sama yang boleh menjadi sumber.
+ */
+export function carryOverLines(
+  invoice,
+  {
+    invoices = [],
+    sppPayments = [],
+    siswa = [],
+  } = {}
+) {
+  if (!invoice?.id || !invoice?.sekolahId) return []
+
+  const previousInvoices = invoices
+    .filter(inv =>
+      inv.id !== invoice.id &&
+      inv.sekolahId === invoice.sekolahId &&
+      inv.status === 'Terbit'
+    )
+    .sort((a, b) => {
+      const aDate = a.tanggalTerbit || a.createdAt || ''
+      const bDate = b.tanggalTerbit || b.createdAt || ''
+      return aDate < bDate ? 1 : -1
+    })
+
+  if (previousInvoices.length === 0) return []
+
+  const previous = previousInvoices[0]
+
+  // Hard guard: carry-over tidak boleh lintas sekolah.
+  if (previous.sekolahId !== invoice.sekolahId) {
+    throw new Error('Carry-over invoice tidak boleh lintas sekolah')
+  }
+
+  const settlement = invoiceSettlement(previous, {
+    sppPayments,
+    siswa,
+  })
+
+  const lines = []
+
+  if (settlement.sisa > 0) {
+    lines.push({
+      type: 'carry-over',
+      kind: 'outstanding',
+      invoiceId: previous.id,
+      nomorInvoiceAsal: previous.nomor || null,
+      description: `Sisa tagihan invoice ${previous.nomor || previous.id}`,
+      amount: settlement.sisa,
+    })
+  }
+
+  if (settlement.credit > 0) {
+    lines.push({
+      type: 'carry-over',
+      kind: 'credit',
+      invoiceId: previous.id,
+      nomorInvoiceAsal: previous.nomor || null,
+      description: `Kelebihan bayar invoice ${previous.nomor || previous.id}`,
+      amount: -settlement.credit,
+    })
+  }
+
+  return lines
 }

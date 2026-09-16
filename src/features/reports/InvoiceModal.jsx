@@ -3,7 +3,7 @@ import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import { formatRupiah, MONTHS, periodeKey } from '../../lib/format.js'
 import { readCached, usePeriod } from '../../lib/store.js'
-import { newInvoice, addInvoice, invoicesForSekolah, setInvoiceStatus, deleteInvoice, invoiceSettlement } from '../../lib/invoices.js'
+import { newInvoice, addInvoice, invoicesForSekolah, setInvoiceStatus, deleteInvoice, invoiceSettlement, carryOverLines,} from '../../lib/invoices.js'
 
 const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
 
@@ -34,29 +34,44 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   const total = jumlahSiswa * hargaSatuan
 
   function handleCreate() {
-    const bulanLabel = MONTHS[MONTH_NUM_LIST.indexOf(bulanTunggal)]
-    const defaultUraian = mode === 'semester'
-      ? `Pembayaran kegiatan Ekstrakurikuler Semester ${semester === 'ganjil' ? 'Ganjil' : 'Genap'} ${period.selectedYear}/${period.selectedYear + 1}${jumlahPertemuan ? ` (${jumlahPertemuan}x Pertemuan)` : ''}`
-      : `Pembayaran SPP bulan ${bulanLabel} ${periodeList[0].slice(0, 4)}`
+  const bulanLabel = MONTHS[MONTH_NUM_LIST.indexOf(bulanTunggal)]
+  const defaultUraian = mode === 'semester'
+    ? `Pembayaran kegiatan Ekstrakurikuler Semester ${semester === 'ganjil' ? 'Ganjil' : 'Genap'} ${period.selectedYear}/${period.selectedYear + 1}${jumlahPertemuan ? ` (${jumlahPertemuan}x Pertemuan)` : ''}`
+    : `Pembayaran SPP bulan ${bulanLabel} ${periodeList[0].slice(0, 4)}`
 
-    const inv = newInvoice({
-      sekolahId: sekolah.id,
-      mode,
-      periodeList,
-      jumlahSiswa,
-      hargaSatuan,
-      jumlahPertemuan: jumlahPertemuan ? Number(jumlahPertemuan) : null,
-      pjSekolah,
-      uraian: uraian || defaultUraian,
-      tanggalTerbit: new Date().toISOString().slice(0, 10),
-      cabangKode,
-    })
-    addInvoice(inv)
-    setPjSekolah('')
-    setUraian('')
-    setJumlahPertemuan('')
-    setTick(t => t + 1)
+  const draftPreview = {
+    id: 'preview',
+    sekolahId: sekolah.id,
+    status: 'Terbit',
+    tanggalTerbit: new Date().toISOString().slice(0, 10),
   }
+
+  const carryLines = carryOverLines(draftPreview, {
+    invoices: existing,
+    sppPayments: sppPaymentsAll,
+    siswa: siswaAll,
+  })
+
+  const inv = newInvoice({
+    sekolahId: sekolah.id,
+    mode,
+    periodeList,
+    jumlahSiswa,
+    hargaSatuan,
+    jumlahPertemuan: jumlahPertemuan ? Number(jumlahPertemuan) : null,
+    pjSekolah,
+    uraian: uraian || defaultUraian,
+    tanggalTerbit: new Date().toISOString().slice(0, 10),
+    cabangKode,
+    carryOverLines: carryLines,
+  })
+
+  addInvoice(inv)
+  setPjSekolah('')
+  setUraian('')
+  setJumlahPertemuan('')
+  setTick(t => t + 1)
+}
 
   // SB.B.3 — cuma Draft -> Terbit yang masih manual. Lunas/Belum Lunas
   // sekarang selalu computed dari invoiceSettlement() (D-SB9), jadi tombol
@@ -159,6 +174,11 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                 const settlement = !isDraft
                   ? invoiceSettlement(inv, { sppPayments: sppPaymentsAll, siswa: siswaAll })
                   : null
+
+                  const carryLines = Array.isArray(inv.carryOverLines)
+  ? inv.carryOverLines
+  : []
+
                 const displayStatus = isDraft ? 'Draft' : settlement.status
 
                 return (
@@ -172,6 +192,19 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                           {settlement.credit > 0 && ` · Lebih bayar ${formatRupiah(settlement.credit)}`}
                         </p>
                       )}
+                      {carryLines.length > 0 && (
+  <div className="mt-1 space-y-0.5">
+    {carryLines.map(line => (
+      <p
+        key={`${line.invoiceId}-${line.kind}`}
+        className={line.amount < 0 ? 'text-emerald-600' : 'text-amber-600'}
+      >
+        {line.description}: {formatRupiah(Math.abs(line.amount))}
+        {line.amount < 0 ? ' (credit)' : ''}
+      </p>
+    ))}
+  </div>
+)}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 rounded-full font-bold ${
