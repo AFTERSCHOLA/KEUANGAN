@@ -38,10 +38,19 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
     nama: '',
     alamat: '',
     foto: '',
-    fotoEntry: null, // A2.5-SEKOLAH-FOTO: { type: 'idb', key, size } | null — IndexedDB reference, never the raw file/dataURL
+    fotoEntry: null,
     jadwal: '',
-    jadwalList: [], // A2.5-JADWAL-1: [{ dayOfWeek: 'Senin', time: '14:00' }, ...]
+    jadwalList: [],
     spp: 0,
+    // SB.A.1 (D-SB6, D-SB7) — metode penagihan per sekolah. Default null
+    // = belum diisi, dan finance.js jatuh ke rumus flat lama (spp ×
+    // jumlah siswa) untuk record seperti ini, sehingga angka historis
+    // tidak bergeser (R-SB3). Bentuk saat diisi:
+    //   { basis: 'siswa'|'trainer', tarifPerPertemuan: number,
+    //     trigger: 'per_pertemuan'|'per_n_pertemuan'|'per_bulan'|'per_siklus_minggu',
+    //     jumlahN: number|null, jumlahMinggu: number|null,
+    //     sumberDana: 'sekolah'|'ortu' }
+    metodePembayaran: null,
     trainerIds: [],
     cabangId: branchId,
   }

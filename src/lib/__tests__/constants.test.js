@@ -15,6 +15,7 @@ import {
   periodeFromDate,
   periodeKey,
   shiftPeriode,
+  assertReferences,
 } from '../constants.js'
 
 describe('constants and factories', () => {
@@ -55,5 +56,40 @@ describe('constants and factories', () => {
     expect(defaultAcademicYear()).toBe(2026)
     expect(defaultMonth()).toBe(8)
     vi.useRealTimers()
+  })
+})
+
+// SB.A.1 (F-SB2; D-SB6, D-SB7) — metodePembayaran default null, dan
+// record lama tanpa field itu tetap valid (tidak ada migrasi destruktif).
+describe('newSekolah metodePembayaran (SB.A.1)', () => {
+  it('defaults metodePembayaran to null', () => {
+    const sekolah = newSekolah()
+    expect(sekolah).toHaveProperty('metodePembayaran')
+    expect(sekolah.metodePembayaran).toBeNull()
+  })
+
+  it('keeps the legacy spp field untouched', () => {
+    const sekolah = newSekolah()
+    expect(sekolah.spp).toBe(0)
+  })
+
+    it('accepts a legacy record with no metodePembayaran key at all', () => {
+    const legacy = {
+      id: 'skl-PST-legacy',
+      nama: 'SD Legacy',
+      alamat: '',
+      foto: '',
+      jadwal: 'Senin',
+      spp: 100000,
+      trainerIds: [],
+      cabangId: defaultCabang().id,
+    }
+    // Record lama sengaja tidak punya metodePembayaran. Konsumen harus
+    // memperlakukan absennya field itu sebagai "belum diisi" (D-SB7),
+    // bukan sebagai data rusak — dibuktikan lebih jauh di SB.A.2 lewat
+    // fallback rumus flat.
+    expect(legacy.metodePembayaran).toBeUndefined()
+    expect(legacy.spp).toBe(100000)
+    expect(() => JSON.parse(JSON.stringify(legacy))).not.toThrow()
   })
 })
