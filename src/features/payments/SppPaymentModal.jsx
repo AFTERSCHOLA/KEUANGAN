@@ -7,6 +7,10 @@ import PhotoSlot from '../../components/PhotoSlot.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 
 const METODE_OPTIONS = ['Tunai-Sekolah', 'Tunai-Trainer', 'Tunai-Admin', 'Transfer']
+const SUMBER_DANA_OPTIONS = [
+  { value: 'sekolah', label: 'Sekolah' },
+  { value: 'ortu', label: 'Ortu langsung' },
+]
 const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
 
 export default function SppPaymentModal({ open, onClose, siswaId, sekolah, period, onSaved }) {
@@ -19,6 +23,7 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
   const [nominal, setNominal] = useState(defaultNominal)
   const [tanggalBayar, setTanggalBayar] = useState(new Date().toISOString().slice(0, 10))
   const [metode, setMetode] = useState(METODE_OPTIONS[0])
+  const [sumberDana, setSumberDana] = useState('sekolah')
   const [diterimaOleh, setDiterimaOleh] = useState('')
   const [bukti, setBukti] = useState(null)
   const [alertOpen, setAlertOpen] = useState(false)
@@ -30,6 +35,7 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
     setNominal(defaultNominal)
     setTanggalBayar(new Date().toISOString().slice(0, 10))
     setMetode(METODE_OPTIONS[0])
+    setSumberDana('sekolah')
     setDiterimaOleh('')
     setBukti(null)
     setAlertOpen(false)
@@ -52,6 +58,7 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
       metode,
       diterimaOleh,
       bukti,
+      sumberDana,
       cabangKode,
     })
     addSppPayment(payment)
@@ -86,6 +93,12 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
           <label className="text-xs font-bold text-slate-400 uppercase">Metode</label>
           <select value={metode} onChange={e => setMetode(e.target.value)} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">
             {METODE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Sumber Dana</label>
+          <select value={sumberDana} onChange={e => setSumberDana(e.target.value)} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">
+            {SUMBER_DANA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div>

@@ -1,4 +1,3 @@
-// src/lib/sppPayments.js
 // Ledger pembayaran SPP siswa — mirror pola honorPayments (append-only).
 // Koreksi dilakukan lewat hapus-entry, bukan edit di tempat.
 import { readCached, write } from './store.js'
@@ -13,6 +12,7 @@ export function newSppPayment({
   diterimaOleh,
   bukti = null,
   sudahDisetor = false,
+  sumberDana = 'sekolah',
   cabangKode,
 }) {
   return {
@@ -25,6 +25,7 @@ export function newSppPayment({
     diterimaOleh,
     bukti,
     sudahDisetor,
+    sumberDana,
   }
 }
 
