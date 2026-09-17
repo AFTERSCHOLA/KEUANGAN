@@ -74,7 +74,25 @@ export default function SchoolList() {
   }
 
   function openEdit(sch) {
-  setForm({ jadwalList: [], ...sch })
+  const nextForm = {
+    jadwalList: [],
+    ...sch,
+  }
+
+  // Legacy school yang belum punya metodePembayaran
+  // tetap aman dibuka dengan default UI.
+  if (!Object.prototype.hasOwnProperty.call(sch, 'metodePembayaran')) {
+    nextForm.metodePembayaran = {
+      basis: 'siswa',
+      tarifPerPertemuan: 0,
+      trigger: 'per_bulan',
+      jumlahN: null,
+      jumlahMinggu: null,
+      sumberDana: 'sekolah',
+    }
+  }
+
+  setForm(nextForm)
   setModalOpen(true)
 }
 
@@ -383,93 +401,383 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
     <>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Cabang</label>
-        <select value={form.cabangId || cabang[0]?.id || defaultCabang().id} onChange={e => {
-          const next = cabang.find(c => c.id === e.target.value) || cabang[0] || defaultCabang()
-          setForm({ ...form, cabangId: next.id })
-        }} className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white">
-          {cabang.map(c => <option key={c.id} value={c.id}>{c.nama} ({c.kode})</option>)}
-        </select>
-      </div>
-      <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">Nama Sekolah</label>
-        <input value={form.nama} onChange={e => setForm({ ...form, nama: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
-      </div>
-      <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">Alamat</label>
-        <textarea value={form.alamat} onChange={e => setForm({ ...form, alamat: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" rows="2" />
-      </div>
-      <div>
-  <label className="text-xs font-bold text-slate-400 uppercase">Foto (URL)</label>
-  <input value={form.foto}
-        onChange={e => setForm({ ...form, foto: e.target.value })}
-        className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
-  <p className="text-[11px] text-slate-400 mt-1">Atau unggah foto langsung di bawah ini — jika ada, foto unggahan akan lebih diprioritaskan tampil.</p>
-</div>
-<PhotoSlot
-  label="Foto Sekolah (Unggah)"
-  entry={form.fotoEntry}
-  onChange={(entry) => setForm({ ...form, fotoEntry: entry })}
-/>
-      <div>
-  <label className="text-xs font-bold text-slate-400 uppercase">Jadwal Kelas</label>
-  <div className="space-y-2 mt-1">
-    {(form.jadwalList || []).map((entry, idx) => (
-      <div key={idx} className="flex gap-2 items-center">
         <select
-          value={entry.dayOfWeek}
+          value={form.cabangId || cabang[0]?.id || defaultCabang().id}
           onChange={e => {
-            const next = [...form.jadwalList]
-            next[idx] = { ...next[idx], dayOfWeek: e.target.value }
-            setForm({ ...form, jadwalList: next })
+            const next =
+              cabang.find(c => c.id === e.target.value) ||
+              cabang[0] ||
+              defaultCabang()
+
+            setForm({ ...form, cabangId: next.id })
           }}
-          className="flex-1 rounded-lg border p-2 text-sm bg-white"
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
         >
-          {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].map(d => (
-            <option key={d} value={d}>{d}</option>
+          {cabang.map(c => (
+            <option key={c.id} value={c.id}>
+              {c.nama} ({c.kode})
+            </option>
           ))}
         </select>
-        <input
-          type="time"
-          value={entry.time}
-          onChange={e => {
-            const next = [...form.jadwalList]
-            next[idx] = { ...next[idx], time: e.target.value }
-            setForm({ ...form, jadwalList: next })
-          }}
-          className="w-32 rounded-lg border p-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={() => setForm({ ...form, jadwalList: form.jadwalList.filter((_, i) => i !== idx) })}
-          className="text-rose-500 hover:text-rose-700 p-1"
-          title="Hapus jadwal ini"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
-    ))}
-    <button
-      type="button"
-      onClick={() => setForm({ ...form, jadwalList: [...(form.jadwalList || []), { dayOfWeek: 'Senin', time: '14:00' }] })}
-      className="text-xs font-semibold text-blue-600 hover:underline"
-    >
-      + Tambah Jadwal
-    </button>
-  </div>
-</div>
+
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">SPP Bulanan</label>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Nama Sekolah
+        </label>
+        <input
+          value={form.nama}
+          onChange={e => setForm({ ...form, nama: e.target.value })}
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Alamat
+        </label>
+        <textarea
+          value={form.alamat}
+          onChange={e => setForm({ ...form, alamat: e.target.value })}
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          rows="2"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Foto (URL)
+        </label>
+        <input
+          value={form.foto}
+          onChange={e => setForm({ ...form, foto: e.target.value })}
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+        />
+        <p className="text-[11px] text-slate-400 mt-1">
+          Atau unggah foto langsung di bawah ini — jika ada, foto unggahan akan
+          lebih diprioritaskan tampil.
+        </p>
+      </div>
+
+      <PhotoSlot
+        label="Foto Sekolah (Unggah)"
+        entry={form.fotoEntry}
+        onChange={entry => setForm({ ...form, fotoEntry: entry })}
+      />
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Jadwal Kelas
+        </label>
+
+        <div className="space-y-2 mt-1">
+          {(form.jadwalList || []).map((entry, idx) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <select
+                value={entry.dayOfWeek}
+                onChange={e => {
+                  const next = [...form.jadwalList]
+                  next[idx] = {
+                    ...next[idx],
+                    dayOfWeek: e.target.value,
+                  }
+                  setForm({ ...form, jadwalList: next })
+                }}
+                className="flex-1 rounded-lg border p-2 text-sm bg-white"
+              >
+                {[
+                  'Senin',
+                  'Selasa',
+                  'Rabu',
+                  'Kamis',
+                  'Jumat',
+                  'Sabtu',
+                  'Minggu',
+                ].map(d => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="time"
+                value={entry.time}
+                onChange={e => {
+                  const next = [...form.jadwalList]
+                  next[idx] = {
+                    ...next[idx],
+                    time: e.target.value,
+                  }
+                  setForm({ ...form, jadwalList: next })
+                }}
+                className="w-32 rounded-lg border p-2 text-sm"
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    jadwalList: form.jadwalList.filter(
+                      (_, i) => i !== idx
+                    ),
+                  })
+                }
+                className="text-rose-500 hover:text-rose-700 p-1"
+                title="Hapus jadwal ini"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() =>
+              setForm({
+                ...form,
+                jadwalList: [
+                  ...(form.jadwalList || []),
+                  {
+                    dayOfWeek: 'Senin',
+                    time: '14:00',
+                  },
+                ],
+              })
+            }
+            className="text-xs font-semibold text-blue-600 hover:underline"
+          >
+            + Tambah Jadwal
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          SPP Bulanan
+        </label>
         <RupiahInput
           value={form.spp}
           onChange={val => setForm({ ...form, spp: val })}
           className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
         />
       </div>
+
+      <div className="pt-2 border-t border-slate-100">
+  <p className="text-xs font-bold text-slate-400 uppercase mb-3">
+    Metode Pembayaran
+  </p>
+
+  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+    <input
+      type="checkbox"
+      checked={!!form.metodePembayaran}
+      onChange={e => {
+        if (e.target.checked) {
+          setForm({
+            ...form,
+            metodePembayaran: {
+              basis: 'siswa',
+              tarifPerPertemuan: 0,
+              trigger: 'per_bulan',
+              jumlahN: null,
+              jumlahMinggu: null,
+              sumberDana: 'sekolah',
+            },
+          })
+        } else {
+          setForm({
+            ...form,
+            metodePembayaran: null,
+          })
+        }
+      }}
+      className="rounded border-slate-300"
+    />
+    <span>Gunakan Tarif per Pertemuan</span>
+  </label>
+
+  {form.metodePembayaran && (
+    <div className="space-y-3 mt-3">
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Basis Penagihan
+        </label>
+        <select
+          value={form.metodePembayaran.basis}
+          onChange={e =>
+            setForm({
+              ...form,
+              metodePembayaran: {
+                ...form.metodePembayaran,
+                basis: e.target.value,
+              },
+            })
+          }
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
+        >
+          <option value="siswa">Per Siswa</option>
+          <option value="trainer">Per Trainer</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Tarif per Pertemuan
+        </label>
+        <RupiahInput
+          value={form.metodePembayaran.tarifPerPertemuan || 0}
+          onChange={val =>
+            setForm({
+              ...form,
+              metodePembayaran: {
+                ...form.metodePembayaran,
+                tarifPerPertemuan: val,
+              },
+            })
+          }
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Pemicu Penagihan
+        </label>
+        <select
+          value={form.metodePembayaran.trigger}
+          onChange={e => {
+            const trigger = e.target.value
+
+            setForm({
+              ...form,
+              metodePembayaran: {
+                ...form.metodePembayaran,
+                trigger,
+                jumlahN:
+                  trigger === 'per_n_pertemuan'
+                    ? form.metodePembayaran.jumlahN ?? null
+                    : null,
+                jumlahMinggu:
+                  trigger === 'per_siklus_minggu'
+                    ? form.metodePembayaran.jumlahMinggu ?? null
+                    : null,
+              },
+            })
+          }}
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
+        >
+          <option value="per_pertemuan">Per Pertemuan</option>
+          <option value="per_n_pertemuan">Per N Pertemuan</option>
+          <option value="per_bulan">Per Bulan</option>
+          <option value="per_siklus_minggu">Per Siklus Minggu</option>
+        </select>
+      </div>
+
+      {form.metodePembayaran.trigger === 'per_n_pertemuan' && (
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">
+            Jumlah Pertemuan
+          </label>
+          <input
+            type="number"
+            min="1"
+            value={form.metodePembayaran.jumlahN ?? ''}
+            onChange={e =>
+              setForm({
+                ...form,
+                metodePembayaran: {
+                  ...form.metodePembayaran,
+                  jumlahN:
+                    e.target.value === ''
+                      ? null
+                      : Number(e.target.value),
+                },
+              })
+            }
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
+      )}
+
+      {form.metodePembayaran.trigger === 'per_siklus_minggu' && (
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">
+            Jumlah Minggu
+          </label>
+          <input
+            type="number"
+            min="1"
+            value={form.metodePembayaran.jumlahMinggu ?? ''}
+            onChange={e =>
+              setForm({
+                ...form,
+                metodePembayaran: {
+                  ...form.metodePembayaran,
+                  jumlahMinggu:
+                    e.target.value === ''
+                      ? null
+                      : Number(e.target.value),
+                },
+              })
+            }
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
+      )}
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Sumber Dana
+        </label>
+        <select
+          value={form.metodePembayaran.sumberDana}
+          onChange={e =>
+            setForm({
+              ...form,
+              metodePembayaran: {
+                ...form.metodePembayaran,
+                sumberDana: e.target.value,
+              },
+            })
+          }
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
+        >
+          <option value="sekolah">Sekolah</option>
+          <option value="ortu">Ortu langsung</option>
+        </select>
+      </div>
+    </div>
+  )}
+</div>
+
       <div className="flex gap-3 pt-2">
-        <button onClick={save} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">Simpan</button>
-        <button onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
+        <button
+          onClick={save}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm"
+        >
+          Simpan
+        </button>
+
+        <button
+          onClick={onClose}
+          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition"
+        >
+          Batal
+        </button>
       </div>
     </>
   )

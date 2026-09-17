@@ -42,15 +42,25 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
     jadwal: '',
     jadwalList: [],
     spp: 0,
-    // SB.A.1 (D-SB6, D-SB7) — metode penagihan per sekolah. Default null
-    // = belum diisi, dan finance.js jatuh ke rumus flat lama (spp ×
-    // jumlah siswa) untuk record seperti ini, sehingga angka historis
-    // tidak bergeser (R-SB3). Bentuk saat diisi:
-    //   { basis: 'siswa'|'trainer', tarifPerPertemuan: number,
-    //     trigger: 'per_pertemuan'|'per_n_pertemuan'|'per_bulan'|'per_siklus_minggu',
-    //     jumlahN: number|null, jumlahMinggu: number|null,
-    //     sumberDana: 'sekolah'|'ortu' }
-    metodePembayaran: null,
+    // SB.C.1 (D-SB6) — optional structured payment method. null means
+    // "use the legacy flat spp × jumlah siswa formula" (D-SB7,
+    // non-destructive migration) — schools created before this
+    // microtask, and any new school the admin hasn't explicitly
+    // configured, behave exactly as before. Setting this object is what
+    // opts a school into the new per-meeting formula in finance.js
+    // (separate microtask per R-SB4, not touched here). Shape when set:
+    // { basis: 'siswa'|'trainer', tarifPerPertemuan: number,
+    //   trigger: 'per_pertemuan'|'per_n_pertemuan'|'per_bulan'|'per_siklus_minggu',
+    //   jumlahN: number|null, jumlahMinggu: number|null,
+    //   sumberDana: 'sekolah'|'ortu' }
+    metodePembayaran: {
+    basis: 'siswa',
+    tarifPerPertemuan: 0,
+    trigger: 'per_bulan',
+    jumlahN: null,
+    jumlahMinggu: null,
+    sumberDana: 'sekolah',
+  },
     trainerIds: [],
     cabangId: branchId,
   }
