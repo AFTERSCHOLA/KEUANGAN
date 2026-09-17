@@ -53,14 +53,7 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
     //   trigger: 'per_pertemuan'|'per_n_pertemuan'|'per_bulan'|'per_siklus_minggu',
     //   jumlahN: number|null, jumlahMinggu: number|null,
     //   sumberDana: 'sekolah'|'ortu' }
-    metodePembayaran: {
-    basis: 'siswa',
-    tarifPerPertemuan: 0,
-    trigger: 'per_bulan',
-    jumlahN: null,
-    jumlahMinggu: null,
-    sumberDana: 'sekolah',
-  },
+    metodePembayaran: null,
     trainerIds: [],
     cabangId: branchId,
   }
