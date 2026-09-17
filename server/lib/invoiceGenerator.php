@@ -32,8 +32,17 @@ declare(strict_types=1);
  * hitting different DB connections at the exact same instant under high
  * concurrency, prefer a dedicated `invoice_sequences` counter table later.
  * Not expected to matter for manual-click + single-cron-run usage.
+ *
+ * SB.C.2: $sekolahIdFilter narrows generation to exactly 1 sekolah (the
+ * InvoiceModal / via-UI path). When set it takes priority over
+ * $cabangIdFilter — the query below only ever applies ONE of the two
+ * filters, never both, since a single-sekolah request is already maximally
+ * specific. $carryOverLines is only meaningful together with
+ * $sekolahIdFilter (enforced by the caller in invoices-generate.php) and is
+ * attached to the resulting record as-is; it never feeds into $grandTotal —
+ * carry-over must not change invoice.total (see SB.B.4).
  */
-function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, array $actor, ?string $cabangIdFilter = null): array
+function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, array $actor, ?string $cabangIdFilter = null, ?string $sekolahIdFilter = null, array $carryOverLines = []): array
 {
     if (!preg_match('/^\d{4}-\d{2}$/', $periode)) {
         throw new InvalidArgumentException('Periode harus format YYYY-MM');
@@ -44,12 +53,19 @@ function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, ar
 
     $result = ['generated' => [], 'skipped' => []];
 
+    $where = [];
+    $params = [];
     if ($cabangIdFilter !== null) {
-        $stmt = $pdo->prepare('SELECT id, cabang_id, payload FROM sekolah WHERE cabang_id = :c');
-        $stmt->execute([':c' => $cabangIdFilter]);
-    } else {
-        $stmt = $pdo->query('SELECT id, cabang_id, payload FROM sekolah');
+        $where[] = 'cabang_id = :c';
+        $params[':c'] = $cabangIdFilter;
     }
+    if ($sekolahIdFilter !== null) {
+        $where[] = 'id = :sid';
+        $params[':sid'] = $sekolahIdFilter;
+    }
+    $sql = 'SELECT id, cabang_id, payload FROM sekolah' . ($where ? ' WHERE ' . implode(' AND ', $where) : '');
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     $allSekolah = $stmt->fetchAll();
 
     foreach ($allSekolah as $sekolahRow) {
@@ -149,6 +165,14 @@ function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, ar
     'items' => $items,
     'grandTotal' => $grandTotal,
 ];
+
+            // SB.C.2: carry-over lines only attached for the exact sekolah
+            // targeted by $sekolahIdFilter, and only when non-empty — a
+            // cabang-wide/all-sekolah batch run or an untargeted sekolah
+            // never gets this key at all, keeping their shape unchanged.
+            if ($sekolahIdFilter !== null && $sekolahId === $sekolahIdFilter && !empty($carryOverLines)) {
+                $record['carryOverLines'] = $carryOverLines;
+            }
 
             $pdo->prepare('INSERT INTO invoices (id, cabang_id, payload) VALUES (:id, :c, :p)')
                 ->execute([

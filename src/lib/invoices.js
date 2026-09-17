@@ -1,5 +1,31 @@
-import { readCached, write } from './store.js'
+import { readCached, write, deleteRemote } from './store.js'
+import { apiRequest } from './api.js'
 import { generateId, DEFAULT_CABANG_KODE } from './constants.js'
+
+// ============================================================
+// SB.C.2 (D-SB10) — LEGACY. newInvoice()/addInvoice()/setInvoiceStatus()/
+// generateInvoiceNumber()/deleteInvoice() below write ONLY to
+// localStorage and were NEVER wired to any server endpoint (confirmed:
+// 'invoices' was absent from store.js's WRITE_ENDPOINTS/READABLE_SERVER_KEYS
+// until this same microtask added it for reading). They are kept
+// UNCHANGED here purely so any invoice created by the old InvoiceModal
+// flow, before this migration, remains readable/printable from whatever
+// is still sitting in a user's local cache.
+//
+// DO NOT call these to create new invoices. The canonical creation path
+// is generateInvoiceForSekolah() at the bottom of this file, which calls
+// /api/invoices-generate.php — the same function the cron/manual-trigger
+// bulk generator uses (server/lib/invoiceGenerator.php).
+//
+// KNOWN GAP (flagging, not solving here — out of SB.C.2's stated scope):
+// any invoice created via the OLD client flow before this migration
+// exists ONLY in that browser's localStorage and was never in MySQL. It
+// will not appear for other devices/sessions, and — because 'invoices'
+// create/update was never in WRITE_ENDPOINTS — there is no automatic
+// backfill path. If those old records need to survive, that's a
+// one-time data migration, not something this microtask silently
+// attempts.
+// ============================================================
 
 export function newInvoice({
   sekolahId,
@@ -15,22 +41,22 @@ export function newInvoice({
   carryOverLines = [],
 }) {
   return {
-  id: generateId('inv', cabangKode),
-  nomor: null,
-  sekolahId,
-  mode,
-  periodeList,
-  jumlahSiswa,
-  hargaSatuan,
-  jumlahPertemuan,
-  total: jumlahSiswa * hargaSatuan,
-  pjSekolah,
-  uraian,
-  tanggalTerbit,
-  status: 'Draft',
-  carryOverLines,
-  createdAt: new Date().toISOString(),
-}
+    id: generateId('inv', cabangKode),
+    nomor: null, // diisi otomatis saat status berubah jadi 'Terbit' (lihat setInvoiceStatus)
+    sekolahId,
+    mode,
+    periodeList,
+    jumlahSiswa,
+    hargaSatuan,
+    jumlahPertemuan,
+    total: jumlahSiswa * hargaSatuan,
+    pjSekolah,
+    uraian,
+    tanggalTerbit,
+    status: 'Draft',
+    carryOverLines,
+    createdAt: new Date().toISOString(),
+  }
 }
 
 export function listInvoices() {
@@ -96,8 +122,8 @@ export function deleteInvoice(id) {
 
 /**
  * Normalizes the periode(s) an invoice covers, across both shapes that
- * currently exist in the codebase (F-SB6/D-SB10 — not yet consolidated):
- *   - client newInvoice(): { periodeList: [...] }
+ * currently exist in the codebase (F-SB6/D-SB10):
+ *   - client newInvoice() [legacy, no longer used to CREATE]: { periodeList: [...] }
  *   - server generateInvoicesForPeriod(): { periode: 'YYYY-MM' }
  * Returns [] if neither is present.
  */
@@ -133,7 +159,7 @@ export function findIssuedInvoiceForPeriod(
 /**
  * Normalizes the invoice's billed total across both shapes:
  *   - server: grandTotal (sum of items[].total)
- *   - client: total (jumlahSiswa * hargaSatuan)
+ *   - client legacy: total (jumlahSiswa * hargaSatuan)
  * Prefers grandTotal since D-SB10 names the server path canonical.
  */
 export function invoiceTotal(invoice) {
@@ -196,6 +222,11 @@ export function invoiceSettlement(invoice, { sppPayments = [], siswa = [] } = {}
  *
  * Setiap line wajib membawa invoiceId asal agar sumbernya jelas.
  * Hanya invoice dari sekolah yang sama yang boleh menjadi sumber.
+ *
+ * SB.C.2 — hasil fungsi ini dikirim ke server (invoices-generate.php)
+ * sebagai carryOverLines pada request; server MEMVALIDASI ULANG setiap
+ * invoiceId di dalamnya benar-benar milik sekolahId yang sama (R-SB6)
+ * sebelum menyimpannya. Fungsi ini sendiri tetap read-only.
  */
 export function carryOverLines(
   invoice,
@@ -258,4 +289,67 @@ export function carryOverLines(
   }
 
   return lines
+}
+
+// ============================================================
+// SB.C.2 (D-SB10) — CANONICAL invoice creation. Server-authoritative:
+// this calls /api/invoices-generate.php, which runs the SAME
+// generateInvoicesForPeriod() the cron/manual-trigger bulk generator
+// uses (server/lib/invoiceGenerator.php). There is now exactly one
+// function in the whole codebase that decides how an invoice's items/
+// grandTotal/nomorInvoice are computed.
+// ============================================================
+
+/**
+ * Membuat invoice untuk satu sekolah via server.
+ *
+ * mode 'bulanan' -> periodeList berisi 1 periode -> 1 panggilan server.
+ * mode 'semester' -> periodeList berisi 6 periode -> N panggilan server,
+ * satu per bulan (D-SB10 §9 poin 2 follow-up, opsi (a): map ke N invoice
+ * single-periode, bukan extend generator jadi multi-periode-per-invoice).
+ *
+ * KNOWN LIMITATION: carryOverLines cuma dipasang di invoice PERTAMA
+ * dalam batch (bulan pertama semester). Invoice ke-2 dst dalam batch yang
+ * sama BELUM di-chain carry-over dari invoice ke-1 dalam batch yang sama
+ * (baru "invoice Terbit sungguhan yang sudah ada di server sebelum batch
+ * ini mulai" yang ter-carry). Kalau chaining intra-batch dibutuhkan, itu
+ * follow-up terpisah — tidak ditebak di sini.
+ *
+ * Melempar (throw) kalau salah satu panggilan gagal; panggilan
+ * sebelumnya dalam batch yang sama TETAP tersimpan di server (tidak ada
+ * rollback lintas-request) — pemanggil (UI) perlu refresh data invoice
+ * setelah error untuk melihat state sebenarnya, bukan asumsi "semua
+ * gagal".
+ */
+export async function generateInvoiceForSekolah({
+  sekolahId,
+  cabangId,
+  uraian,
+  periodeList,
+  carryOverLines: precomputedCarryOverLines = [],
+}) {
+  if (!Array.isArray(periodeList) || periodeList.length === 0) {
+    throw new Error('periodeList tidak boleh kosong')
+  }
+
+  const results = []
+  for (let i = 0; i < periodeList.length; i++) {
+    const periode = periodeList[i]
+    const body = { periode, uraian, sekolahId }
+    if (cabangId) body.cabangId = cabangId
+    if (i === 0 && precomputedCarryOverLines.length > 0) {
+      body.carryOverLines = precomputedCarryOverLines
+    }
+    const result = await apiRequest('/api/invoices-generate.php', {
+      method: 'POST',
+      body,
+    })
+    results.push(result)
+  }
+  return results
+}
+
+/** Menghapus invoice via server (superadmin-only, ditegakkan di invoices.php). */
+export async function deleteInvoiceServer(id) {
+  return deleteRemote('invoices', id)
 }

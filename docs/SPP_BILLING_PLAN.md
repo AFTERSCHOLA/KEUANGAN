@@ -124,6 +124,8 @@ Honor trainer **tidak** mengikuti tabel ini; tetap `trainer.honor × sesi hadir`
 
 Saat Gate SB-C ditutup: perbarui `PRODUCTION_MILESTONES.md` (koreksi klaim basi M3.4 per F-SB9 + catatan DONE billing), `SCOPE_EXPANSION_MILESTONES.md` (baris SPP/invoice), dan header `src/lib/finance.js` (kontrak rumus baru). Chain berikutnya (dashboard/target/rekap) baru boleh dibuka setelah itu.
 
+**Status Gate SB-C: DITUTUP (2026-09-17).** SB.B.4, SB.B.5, SB.C.1, SB.C.2 verified (lihat `SCOPE_EXPANSION_MILESTONES.md` Gate SB-C). SB.C.3 (dokumen ini) mencatat penyelesaian dan mengoreksi klaim basi M3.4 (`PRODUCTION_MILESTONES.md`). Chain berikutnya (dashboard/target/rekap, D-SB4) dapat dibuka.
+
 ## 11. Cross-references
 
 - `docs/PRODUCTION_PLAN.md` — invariant keuangan (cash basis, ledger append-only, tidak ada derived finance writes)

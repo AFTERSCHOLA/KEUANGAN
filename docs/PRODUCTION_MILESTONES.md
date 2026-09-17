@@ -216,6 +216,8 @@ Verified: `D:\\Games and Apps\\xampp\\php\\php.exe --version` -> PHP 8.2.12; `cu
 Changed: `server/api/_master.php`, `server/api/cabang.php`, `server/api/siswa.php`, `server/api/trainer.php`, `server/schema.sql`, and `server/tests/endpoint.protection.php`; milestone evidence documentation updated; `server/config.php` remains ignored and uncommitted.
 Remaining: local T3 evidence does not prove cPanel production readiness; Platform-auth / Data-release owns staging/hosting verification.
 
+**Koreksi klaim basi (SB.C.3, F-SB9):** entitas `invoices` di M3.4 di atas sudah lengkap dan aktif dipakai UI, bukan status "ditunda" seperti sempat tercatat di draf/catatan internal chain SB — lihat `docs/SPP_BILLING_PLAN.md` §3 F-SB9 dan Gate SB-C di bawah untuk status final.
+
 ## Gate 4 — Authenticated React mode
 
 ### M4.1 Add API/auth adapter

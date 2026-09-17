@@ -32,6 +32,19 @@ if ($action === 'delete') {
     // no special action name needed like settings.php's 'manage_settings'.
     requireAuthorization('delete', 'invoices', ['cabangId' => $existing['cabang_id']], $user);
 
+    // SB.C.3 sign-off: invoice yang sudah punya pembayaran (spp_payments
+    // dengan invoiceId ini) tidak boleh dihapus lewat tombol Hapus biasa —
+    // mencegah data pembayaran jadi yatim (orphan) tanpa invoice induknya.
+    $payStmt = $pdo->prepare(
+        "SELECT 1 FROM spp_payments
+         WHERE JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoiceId')) = :iid
+         LIMIT 1"
+    );
+    $payStmt->execute([':iid' => $data['id']]);
+    if ($payStmt->fetchColumn() !== false) {
+        jsonResponse(['error' => 'Invoice sudah memiliki pembayaran dan tidak dapat dihapus'], 422);
+    }
+
     $pdo->prepare('DELETE FROM invoices WHERE id = :id')->execute([':id' => $data['id']]);
     auditEvent('invoices_deleted', $user, 'invoices', $data['id'], ['cabangId' => $existing['cabang_id']]);
     jsonResponse(['ok' => true, 'id' => $data['id']], 200);

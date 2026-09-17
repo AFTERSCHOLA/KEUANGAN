@@ -12,12 +12,19 @@ const LEDGER_KEYS = new Set(['absensi', 'sppPayments', 'honorPayments'])
 
 // Everything server-readable via the generic /api/read.php?entity=...
 // (M3.3) — the 3 ledgers above, plus the 4 full-CRUD entities that have
-// dedicated write endpoints. 'settings'/'invoices' aren't included here:
-// no client write path exists for them yet, though read.php itself
-// supports them.
+// dedicated write endpoints, plus 'invoices' (SB.C.2).
+//
+// SB.C.2 — 'invoices' added. read.php already supported this entity
+// since M3.3 (per the original comment here); what was missing was the
+// client ever asking for it. Invoices are still NOT written through the
+// generic write() adapter below — creation only happens via
+// /api/invoices-generate.php (see src/lib/invoices.js
+// generateInvoiceForSekolah()), per D-SB10's single-canonical-path
+// decision. 'settings' still has no client write path.
 const READABLE_SERVER_KEYS = new Set([
   'absensi', 'sppPayments', 'honorPayments',
   'sekolah', 'trainer', 'siswa', 'cabang',
+  'invoices',
 ])
 
 function notifyStoreChanged() {
@@ -349,6 +356,15 @@ const WRITE_ENDPOINTS = {
   // in one call through /api/users.php. Falls back to /api/trainer.php for
   // trainers without login accounts (D6 substitute-trainer case).
   users: '/api/users.php',
+  // SB.C.2 — registered ONLY so deleteRemote('invoices', id) has an
+  // endpoint to call. writeRemote('invoices', ...) (create/update) is
+  // intentionally NEVER called by any UI: invoice creation is exclusively
+  // through /api/invoices-generate.php (see src/lib/invoices.js
+  // generateInvoiceForSekolah()), per D-SB10's single-canonical-path
+  // decision. Calling writeRemote('invoices', ...) directly would bypass
+  // the generator's grouping/sequence/carry-over logic — don't add a
+  // call site for it.
+  invoices: '/api/invoices.php',
 }
 
 // MULTI_ACCOUNT_SYNC M-MAS1.1 — single owner of the per-entity `cabangId`
@@ -413,9 +429,9 @@ export function prepareWritePayload(key, record, ctx) {
 //   - { status: 'forbidden', message }                  → authorize() menolak
 // Error lain (mis. 500, network) tetap di-throw sebagai ApiError biasa.
 //
-// PENTING: semua 4 endpoint (trainer/siswa/cabang/sekolah .php) cuma
-// nerima POST, dan create/update/delete dibedain lewat field `action` di
-// body — bukan lewat HTTP method PUT/DELETE (dikonfirmasi lewat
+// PENTING: semua endpoint (trainer/siswa/cabang/sekolah/invoices .php)
+// cuma nerima POST, dan create/update/delete dibedain lewat field `action`
+// di body — bukan lewat HTTP method PUT/DELETE (dikonfirmasi lewat
 // endpoint.protection.php, 201 checks, Gate 3). "Update apa belum"
 // ditentukan dari ADA-TIDAKNYA record ini di local store, bukan dari
 // record.version — payload JSON di server nggak pernah nyimpen `version`

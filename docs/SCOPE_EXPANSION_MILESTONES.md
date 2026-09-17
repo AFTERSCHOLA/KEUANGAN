@@ -294,6 +294,15 @@ MICROTASK: <one verb + one noun>
 - R6: Checkpoint discipline (narrowest pass/fail after every edit)
 - R7: Ownership boundaries (only your files)
 
+## Gate SB-C — SPP Billing Chain (invoice consolidation)
+
+**Status: DONE (SB.B.4–SB.C.3, 2026-09-17).**
+
+Verified: SB.B.4 invoice carry-over (18 test files / 96 tests, `npm run build`, manual UI); SB.B.5 pending-ledger hydration preservation (manual + Riwayat/Invoice/Pembayaran checks); SB.C.1 sekolah metode pembayaran (Playwright 2/2, single worker); SB.C.2 invoice generation consolidation (`npx playwright test tests/invoice-generate-consolidation.spec.js --workers=1` -> 2/2 passed; `npm test` 161/161; `npm run build` green).
+Changed (SB.C.2): `server/lib/invoiceGenerator.php` (sekolahIdFilter + carryOverLinesForSekolah params, combined WHERE filter, carry-over attached only to targeted sekolah), `server/api/invoices-generate.php` (sekolahId + carryOverLines input, R-SB6 422 validation), `src/lib/invoices.js` (legacy path marked dead code, `generateInvoiceForSekolah()` as new canonical caller), `src/features/reports/InvoiceModal.jsx` (Draft stage removed, PJ Sekolah field removed, calls canonical endpoint), `src/lib/store.js` (invoices added to READABLE_SERVER_KEYS/WRITE_ENDPOINTS for delete), `server/api/invoices.php` (delete guard: invoice with existing spp_payments cannot be deleted), `tests/invoice-generate-consolidation.spec.js` (new).
+Removed: `server/tests/invoice.generation.php` (orphan duplicate of invoiceGenerator.php, never included anywhere — see git history for prior content).
+Sign-off decisions (SB.C.3): (1) VERIFY method — Playwright accepted as canonical for SB.C.2, no separate PHP harness required; (2) legacy localStorage-only invoices predating this migration are left as-is (read-only via invoices.js LEGACY path), no auto-backfill to MySQL — tracked as separate backlog item if real production data is affected; (3) invoice delete policy tightened — an invoice with any recorded spp_payments cannot be deleted via the standard delete action (422), closing the gap opened when the Draft stage was removed; (4) EDIT list expansion to `src/lib/store.js` and `src/features/reports/InvoiceModal.jsx` approved as necessary for the client to reach the canonical server-side invoice path (D-SB10).
+
 ---
 
 **End of Microtask Chains**
