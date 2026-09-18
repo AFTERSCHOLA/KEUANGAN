@@ -1,7 +1,7 @@
 import { formatRupiah } from '../../lib/format.js'
 import { terbilang } from '../../lib/terbilang.js'
 import { readCached, getSettings } from '../../lib/store.js'
-import { invoiceSettlement } from '../../lib/invoices.js'
+import { invoiceSettlement, invoiceTotal, invoicePeriods } from '../../lib/invoices.js'
 
 const LOGO_URL = '/invoice/logo.png'
 const SIGNATURE_URL = '/invoice/signature.png'
@@ -18,11 +18,31 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
     ? invoiceSettlement(invoice, { sppPayments: readCached('sppPayments'), siswa: readCached('siswa') })
     : null
 
-  const periodeLabel = invoice.periodeList.length === 1
-    ? new Date(`${invoice.periodeList[0]}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-    : `${new Date(`${invoice.periodeList[0]}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} - ${new Date(`${invoice.periodeList[invoice.periodeList.length - 1]}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`
+  const periodeList = invoicePeriods(invoice)
+  const periodeLabel = periodeList.length <= 1
+    ? (periodeList[0] ? new Date(`${periodeList[0]}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '-')
+    : `${new Date(`${periodeList[0]}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} - ${new Date(`${periodeList[periodeList.length - 1]}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`
 
-  const tanggalLabel = invoice.tanggalTerbit.split('-').reverse().join('-')
+  // SBF.1 (D-SBF1) — normalize both shapes: server canonical
+  // (periode/items[]/grandTotal/nomorInvoice) and legacy client
+  // (periodeList/uraian/total/nomor). Totals always derive from
+  // invoiceTotal() so print matches the history list; carry lines
+  // below are display-only and never feed the total (SB.B.4 rule).
+  const nomorDisplay = invoice.nomor || invoice.nomorInvoice || null
+  const tanggalSrc = invoice.tanggalTerbit || invoice.tanggal || (invoice.createdAt ? invoice.createdAt.slice(0, 10) : '')
+  const tanggalLabel = tanggalSrc ? tanggalSrc.split('-').reverse().join('-') : '-'
+  const grandTotal = invoiceTotal(invoice)
+  const carryLines = Array.isArray(invoice.carryOverLines) ? invoice.carryOverLines : []
+  const tableRows = Array.isArray(invoice.items) && invoice.items.length > 0
+    ? invoice.items.map((it, idx) => ({
+        no: idx + 1,
+        uraian: it.deskripsi || invoice.uraian || '',
+        qty: it.jumlahSiswa,
+        harga: it.hargaSatuan,
+        total: it.total,
+      }))
+    : [{ no: 1, uraian: invoice.uraian || '', qty: invoice.jumlahSiswa, harga: invoice.hargaSatuan, total: invoice.total }]
+  const pjDisplay = invoice.pjSekolah || invoice.pjNama || ''
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -30,7 +50,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
         <div>
           <h2 className="text-xl font-bold text-slate-800">Invoice — {sekolah.nama}</h2>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-slate-500">{invoice.nomor || 'Draft (belum bernomor)'}</p>
+            <p className="text-xs text-slate-500">{nomorDisplay || 'Draft (belum bernomor)'}</p>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
               isDraft ? 'bg-slate-100 text-slate-500' :
               settlement.status === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
@@ -57,7 +77,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
           </div>
           <div className="text-right">
             <h3 className="text-3xl font-extrabold text-blue-900 tracking-wide">INVOICE</h3>
-            <p className="text-sm font-bold text-blue-700">{invoice.nomor || '(Draft)'}</p>
+            <p className="text-sm font-bold text-blue-700">{nomorDisplay || '(Draft)'}</p>
             <p className="text-xs text-slate-400 mt-1">Tanggal: {tanggalLabel}</p>
           </div>
         </div>
@@ -66,7 +86,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
           <div>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Kepada Yth:</p>
             <p className="font-bold text-slate-800 mt-0.5">{sekolah.nama}</p>
-            {invoice.pjSekolah && <p className="text-xs text-slate-500 mt-0.5">PJ: {invoice.pjSekolah}</p>}
+            {pjDisplay && <p className="text-xs text-slate-500 mt-0.5">PJ: {pjDisplay}</p>}
           </div>
           <div className="text-right">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Bulan Tagihan:</p>
@@ -85,23 +105,39 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-slate-200">
-              <td className="py-4 align-top">1</td>
-              <td className="py-4 pr-6 align-top">{invoice.uraian}</td>
-              <td className="py-4 text-center align-top">{invoice.jumlahSiswa}</td>
-              <td className="py-4 text-right align-top whitespace-nowrap">{formatRupiah(invoice.hargaSatuan)}</td>
-              <td className="py-4 text-right align-top font-bold whitespace-nowrap">{formatRupiah(invoice.total)}</td>
-            </tr>
+            {tableRows.map(row => (
+              <tr key={row.no} className="border-b border-slate-200">
+                <td className="py-4 align-top">{row.no}</td>
+                <td className="py-4 pr-6 align-top">{row.uraian}</td>
+                <td className="py-4 text-center align-top">{row.qty}</td>
+                <td className="py-4 text-right align-top whitespace-nowrap">{formatRupiah(row.harga)}</td>
+                <td className="py-4 text-right align-top font-bold whitespace-nowrap">{formatRupiah(row.total)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
 
+        {carryLines.length > 0 && (
+          <div className="mt-1 mb-2 space-y-0.5 text-xs">
+            {carryLines.map(line => (
+              <p
+                key={`${line.invoiceId}-${line.kind}`}
+                className={line.amount < 0 ? 'text-emerald-600' : 'text-amber-600'}
+              >
+                {line.description}: {formatRupiah(Math.abs(line.amount))}
+                {line.amount < 0 ? ' (credit)' : ''}
+              </p>
+            ))}
+          </div>
+        )}
+
         <div className="flex justify-between items-center pt-4 pb-3">
           <span className="font-extrabold text-slate-800 tracking-wide">GRAND TOTAL</span>
-          <span className="text-xl font-extrabold text-blue-700">{formatRupiah(invoice.total)}</span>
+          <span className="text-xl font-extrabold text-blue-700">{formatRupiah(grandTotal)}</span>
         </div>
         <div className={`bg-blue-50/60 rounded-lg px-4 py-2.5 text-xs text-slate-600 border border-blue-100/60 ${isDraft ? 'mb-10' : 'mb-6'}`}>
           <span className="font-semibold text-slate-700">Terbilang: </span>
-          <span className="italic">"{terbilang(invoice.total)}"</span>
+          <span className="italic">"{terbilang(grandTotal)}"</span>
         </div>
 
         {!isDraft && (

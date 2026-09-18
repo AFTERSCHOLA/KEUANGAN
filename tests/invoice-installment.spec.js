@@ -1,6 +1,9 @@
 import { test, expect, loginAndPrime, createSekolahSuperadmin } from './fixtures.js'
 
-// SB.B.3 — invoice installment + auto Lunas/Belum Lunas badge.
+// SB.B.3 / SBF.3 — invoice installment + auto Lunas/Belum Lunas badge,
+// updated to the SB.C.2 canonical flow (D-SBF3): creation is
+// "Buat & Terbitkan Invoice" straight to Terbit via
+// /api/invoices-generate.php — no Draft stage, no per-row Terbitkan.
 // Nama siswa diberi suffix unik per run supaya tidak bentrok dengan sisa
 // data dari run gagal sebelumnya (DB test tidak direset otomatis antar run).
 
@@ -16,7 +19,7 @@ async function selectFieldByLabel(page, labelText, optionLabel) {
   await label.locator('xpath=following-sibling::select[1]').selectOption({ label: optionLabel })
 }
 
-test('cicilan invoice: 2 pembayaran parsial -> badge otomatis Lunas, tombol Tandai Lunas tidak ada', async ({ page }) => {
+test('cicilan invoice: 2 pembayaran parsial -> badge otomatis Lunas, tombol Tandai Lunas tidak ada', async ({ page, pageErrors }) => {
   const csrf = await loginAndPrime(page, 'superadmin')
   const suffix = String(Date.now()).slice(-6)
 
@@ -47,11 +50,11 @@ test('cicilan invoice: 2 pembayaran parsial -> badge otomatis Lunas, tombol Tand
   const bulanLabel = page.locator('label', { hasText: 'Bulan' }).first()
   await bulanLabel.locator('xpath=following-sibling::select[1]').selectOption({ label: 'September' })
 
-  await page.getByRole('button', { name: 'Simpan sebagai Draft' }).click()
-  const invoiceRow = page.getByText('Riwayat Invoice').locator('..').locator('.space-y-2 > div').first()
-  await invoiceRow.getByRole('button', { name: 'Terbitkan' }).click()
+  // SBF.3: canonical creation — direct to Terbit, no Draft stage.
+  await page.getByRole('button', { name: 'Buat & Terbitkan Invoice' }).click()
   await page.getByRole('button', { name: 'Ya, Lanjutkan' }).click()
-  await expect(invoiceRow.getByText('Belum Lunas')).toBeVisible()
+  const invoiceRow = page.getByText('Riwayat Invoice').locator('..').locator('.space-y-2 > div').first()
+  await expect(invoiceRow.getByText('Belum Lunas')).toBeVisible({ timeout: 20000 })
 
   await expect(page.getByRole('button', { name: /tandai lunas/i })).toHaveCount(0)
 
@@ -66,6 +69,9 @@ test('cicilan invoice: 2 pembayaran parsial -> badge otomatis Lunas, tombol Tand
   for (const { nama, nominal } of payments) {
     const studentRow = page.locator('tr', { hasText: nama })
     await studentRow.getByTitle('Catat pembayaran SPP').click()
+    // Pin the payment periode to the invoiced month so the ledger match
+    // (sekolahId + periode) holds whatever the current month is.
+    await selectFieldByLabel(page, 'Periode', 'September')
     await fillFieldByLabel(page, 'Nominal', nominal)
     await fillFieldByLabel(page, 'Tanggal Bayar', new Date().toISOString().slice(0, 10))
     await fillFieldByLabel(page, 'Diterima Oleh', 'E2E Tester')
@@ -74,6 +80,10 @@ test('cicilan invoice: 2 pembayaran parsial -> badge otomatis Lunas, tombol Tand
   }
 
   await page.getByText('Data Sekolah').click()
-  await firstSchoolCard.getByTitle('Kelola Invoice').click()
-  await expect(invoiceRow.getByText('Lunas', { exact: true })).toBeVisible()
+  const reopenCard = page.locator('.grid > div', { hasText: namaSekolah }).first()
+  await reopenCard.getByTitle('Kelola Invoice').click()
+  const reopenedRow = page.getByText('Riwayat Invoice').locator('..').locator('.space-y-2 > div').first()
+  await expect(reopenedRow.getByText('Lunas', { exact: true })).toBeVisible({ timeout: 20000 })
+
+  expect(pageErrors).toHaveLength(0)
 })

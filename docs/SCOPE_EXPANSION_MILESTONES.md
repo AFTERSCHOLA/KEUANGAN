@@ -303,6 +303,9 @@ Changed (SB.C.2): `server/lib/invoiceGenerator.php` (sekolahIdFilter + carryOver
 Removed: `server/tests/invoice.generation.php` (orphan duplicate of invoiceGenerator.php, never included anywhere — see git history for prior content).
 Sign-off decisions (SB.C.3): (1) VERIFY method — Playwright accepted as canonical for SB.C.2, no separate PHP harness required; (2) legacy localStorage-only invoices predating this migration are left as-is (read-only via invoices.js LEGACY path), no auto-backfill to MySQL — tracked as separate backlog item if real production data is affected; (3) invoice delete policy tightened — an invoice with any recorded spp_payments cannot be deleted via the standard delete action (422), closing the gap opened when the Draft stage was removed; (4) EDIT list expansion to `src/lib/store.js` and `src/features/reports/InvoiceModal.jsx` approved as necessary for the client to reach the canonical server-side invoice path (D-SB10).
 
+**Follow-up fix gate SBF (2026-09-18, CLOSED).** Post–SB-C audit found three gaps behind the DONE claim; all fixed per `docs/SB_FOLLOWUP_FIX.md` (retired on close): (1) `InvoiceTemplate.jsx` now prints canonical server invoices (items/grandTotal/nomorInvoice) as well as legacy ones, totals via `invoiceTotal()`; (2) `validateSppPayment()` accepts invoice-level rows (`siswaId` null + real `invoiceId`, optional matching `sekolahId`, R-SB6) while legacy rows validate as before — the D-SB8 follow-up is now implemented; (3) `tests/invoice-installment.spec.js` drives the canonical "Buat & Terbitkan Invoice" flow with zero pageerrors.
+Verified: `D:\Games and Apps\xampp\php\php.exe server/tests/entity.validation.php -> all checks passed incl. SBF.2 invoice-level`; `npx playwright test tests/invoice-installment.spec.js --workers=1 -> 1 passed, pageErrors 0`; `npm test -> 33 files / 164 passed`; `npm run build -> green`.
+
 ---
 
 **End of Microtask Chains**

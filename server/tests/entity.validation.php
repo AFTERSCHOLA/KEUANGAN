@@ -65,6 +65,21 @@ $pdo->prepare('INSERT INTO siswa (id, cabang_id, payload) VALUES (:id, :cabang_i
     ], JSON_UNESCAPED_UNICODE),
 ]);
 
+// SBF.2 — seed a real invoice so invoice-level payment rows have
+// something valid to point at.
+$invoiceId = 'inv-sbf2-' . bin2hex(random_bytes(4));
+$pdo->prepare('INSERT INTO invoices (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)')->execute([
+    ':id' => $invoiceId,
+    ':cabang_id' => $cabangId,
+    ':payload' => json_encode([
+        'id' => $invoiceId,
+        'cabangId' => $cabangId,
+        'sekolahId' => $sekolahId,
+        'periode' => '2031-02',
+        'status' => 'Terbit',
+    ], JSON_UNESCAPED_UNICODE),
+]);
+
 try {
     // ================= missing ownership =================
     $errors = validateSekolah(['id' => 'skl-x'], $pdo);
@@ -148,7 +163,25 @@ try {
     fixtureCheck($errors === [], 'legacy sppPayments without sumberDana should still validate, got: ' . implode('; ', $errors));
 
     echo "SB.B.1 sumberDana enum check passed\n";
+
+    // ================= SBF.2 — invoice-level rows (D-SB8/D-SBF2) =================
+    $invoiceBase = ['id' => 'spp-sbf2-' . bin2hex(random_bytes(3))];
+
+    $errors = validateSppPayment($invoiceBase + ['siswaId' => null, 'invoiceId' => $invoiceId], $pdo);
+    fixtureCheck($errors === [], 'invoice-level sppPayments (null siswaId + real invoiceId) should validate, got: ' . implode('; ', $errors));
+
+    $errors = validateSppPayment($invoiceBase + ['invoiceId' => 'inv-does-not-exist'], $pdo);
+    fixtureCheck(hasError($errors, 'invoiceId'), 'sppPayments with a fake invoiceId should be rejected');
+
+    $errors = validateSppPayment($invoiceBase + ['invoiceId' => $invoiceId, 'sekolahId' => 'skl-wrong-school'], $pdo);
+    fixtureCheck(hasError($errors, 'sekolahId'), 'sppPayments with mismatched sekolahId should be rejected (R-SB6)');
+
+    $errors = validateSppPayment($invoiceBase + ['invoiceId' => $invoiceId, 'sekolahId' => $sekolahId], $pdo);
+    fixtureCheck($errors === [], 'invoice-level sppPayments with matching sekolahId should validate, got: ' . implode('; ', $errors));
+
+    echo "SBF.2 invoice-level payment check passed\n";
 } finally {
+    $pdo->prepare('DELETE FROM invoices WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM siswa WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM sekolah WHERE cabang_id IN (:c1, :c2)')->execute([':c1' => $cabangId, ':c2' => $otherCabangId]);
     $pdo->prepare('DELETE FROM trainer WHERE cabang_id = :c')->execute([':c' => $cabangId]);

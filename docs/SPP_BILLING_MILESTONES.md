@@ -190,3 +190,7 @@ MICROTASK: Write completion back to source docs
 | Modul rapot / nilai / sertifikat | Modul baru, venue tersendiri | Setara besarnya dengan modul Absensi; bukan bagian billing |
 | Export CSV seluruh transaksi | Chain laporan berikutnya | Sebagian sudah ada di FinanceReport; perluasan menunggu rumus final |
 | Utang tes lama (16 kegagalan pre-existing) | HYGIENE chain | Dimiliki tempat lain; chain ini hanya menjamin tidak ada regresi baru |
+
+## Follow-up fix gate SBF (2026-09-18, CLOSED)
+
+Post–SB-C audit (`docs/SB_FOLLOWUP_FIX.md`, retired on close) fixed three gaps: print-template server-shape support, invoice-level payment validation (D-SB8 follow-up now implemented), installment spec on the canonical flow. Verified: `entity.validation.php -> all passed incl. SBF.2`; `invoice-installment.spec.js --workers=1 -> 1 passed, pageErrors 0`; `npm test -> 33/164`; `npm run build -> green`.

@@ -172,7 +172,32 @@ function validateHonorPayment(array $data, PDO $pdo): array {
 function validateSppPayment(array $data, PDO $pdo): array {
     $errors = array_merge([], checkPayloadSize($data, 'sppPayments'));
     if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'sppPayments: id is required';
-    if (!requireNonEmptyString($data['siswaId'] ?? null) || !rowExists($pdo, 'siswa', $data['siswaId'])) {
+    // SBF.2 (D-SBF2, D-SB8) — invoice-level rows: siswaId may be null/empty
+    // iff invoiceId references an existing invoice. Legacy per-siswa rows
+    // (no invoiceId) validate exactly as before (R-SB3). When both are
+    // present, each reference is checked independently; a supplied
+    // sekolahId must match the invoice's sekolahId (R-SB6), absent is
+    // tolerated (no writer sends it yet — full column deferred, §8).
+    $invoiceId = $data['invoiceId'] ?? null;
+    $hasInvoiceRef = is_string($invoiceId) && trim($invoiceId) !== '';
+    $siswaId = $data['siswaId'] ?? null;
+    $hasSiswaRef = requireNonEmptyString($siswaId);
+    if ($hasInvoiceRef) {
+        $invStmt = $pdo->prepare("SELECT JSON_UNQUOTE(JSON_EXTRACT(payload, '$.sekolahId')) FROM invoices WHERE id = :id");
+        $invStmt->execute([':id' => $invoiceId]);
+        $invSekolahId = $invStmt->fetchColumn();
+        if ($invSekolahId === false) {
+            $errors[] = 'sppPayments: invoiceId does not reference an existing invoice';
+        } else {
+            $rowSekolahId = $data['sekolahId'] ?? null;
+            if (is_string($rowSekolahId) && trim($rowSekolahId) !== '' && $rowSekolahId !== $invSekolahId) {
+                $errors[] = 'sppPayments: sekolahId does not match the referenced invoice (R-SB6)';
+            }
+        }
+        if ($hasSiswaRef && !rowExists($pdo, 'siswa', $siswaId)) {
+            $errors[] = 'sppPayments: siswaId does not reference an existing siswa';
+        }
+    } elseif (!$hasSiswaRef || !rowExists($pdo, 'siswa', $siswaId)) {
         $errors[] = 'sppPayments: siswaId does not reference an existing siswa';
     }
     $sumberDana = $data['sumberDana'] ?? null;

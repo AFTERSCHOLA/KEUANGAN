@@ -13,9 +13,11 @@ export function newSppPayment({
   bukti = null,
   sudahDisetor = false,
   sumberDana = 'sekolah',
+  invoiceId = null,
+  sekolahId = null,
   cabangKode,
 }) {
-  return {
+  const payment = {
     id: generateId('spp', cabangKode),
     siswaId,
     periode,
@@ -27,6 +29,11 @@ export function newSppPayment({
     sudahDisetor,
     sumberDana,
   }
+  // SBF.2 (D-SB8) — optional invoice-level linkage. Omitted when unset so
+  // legacy per-siswa rows keep their exact shape (R-SB3).
+  if (invoiceId) payment.invoiceId = invoiceId
+  if (sekolahId) payment.sekolahId = sekolahId
+  return payment
 }
 
 export function listSppPayments() {
