@@ -5,6 +5,8 @@
 // field `periode` (bukan prefix string tanggal).
 // ============================================
 
+import { formatJadwalList } from './format.js'
+
 function downloadCSV(headers, rows, filename, periode) {
   const csvContent = "\uFEFF" + [
     headers.join(","),
@@ -30,7 +32,9 @@ export function exportSekolahCSV(sekolah, trainer, periode) {
   const rows = sekolah.map(s => [
     s.nama,
     s.alamat,
-    s.jadwal,
+    // TEAM_FEEDBACK G3 — same formatted range the cards show (no column
+    // change); legacy rows without jadwalList fall back to s.jadwal.
+    formatJadwalList(s.jadwalList) || s.jadwal,
     s.spp,
     (s.trainerIds || []).map(id => trainer.find(t => t.id === id)?.nama).filter(Boolean).join('; ') || 'Belum Ditugaskan',
   ])

@@ -111,13 +111,19 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
       tarif: t.honor,
       bebanHonor,
       dibayar,
-      sisaHonor: bebanHonor - dibayar,
+      // TEAM_FEEDBACK D5 (G5.1) — floor at zero; excess surfaces as credit.
+      sisaHonor: Math.max(0, bebanHonor - dibayar),
+      lebihBayarHonor: Math.max(0, dibayar - bebanHonor),
     }
   })
 
   const totalHonorDibayar = trainerFinance.reduce((sum, t) => sum + t.dibayar, 0)
-  const belumTertagih = potensiSpp - pemasukanSpp
-  const sisaKewajiban = totalBebanHonor - totalHonorDibayar
+  // TEAM_FEEDBACK D5 (G5.1) — sisaKewajiban sums the floored per-trainer
+  // balances (overpay on one trainer never offsets another's debt).
+  const belumTertagih = Math.max(0, potensiSpp - pemasukanSpp)
+  const sisaKewajiban = trainerFinance.reduce((sum, t) => sum + t.sisaHonor, 0)
+  const lebihBayarSpp = Math.max(0, pemasukanSpp - potensiSpp)
+  const lebihBayarHonor = trainerFinance.reduce((sum, t) => sum + t.lebihBayarHonor, 0)
 
   // D1 — cash basis saja. Beban Honor / Sisa Kewajiban tidak pernah masuk baris ini.
   const labaRugi = pemasukanSpp - totalHonorDibayar
@@ -129,6 +135,8 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     labaRugi,
     potensiSpp,
     belumTertagih,
+    lebihBayarSpp,
+    lebihBayarHonor,
 
     totalBebanHonor,
     sisaKewajiban,

@@ -1,11 +1,24 @@
 import { useState } from 'react'
-import { formatRupiah, waNormalize } from '../../lib/format.js'
+import { formatRupiah, waNormalize, formatJadwalList } from '../../lib/format.js'
 import { newTrainer, defaultCabang } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import { readCached, getRoleContext, writeRemote, deleteRemote, pullRemote } from '../../lib/store.js'
+
+// TEAM_FEEDBACK D3 (G4.1) — single shared derivation (no second
+// implementation): read-only text from the assigned schools' jadwalList
+// in existing formatJadwalList order, no re-sort. Legacy trainer.jadwal
+// values are ignored by render, never backfilled (R6).
+function derivedJadwalText(sekolahIds, sekolahList) {
+  const parts = (sekolahIds || [])
+    .map(id => (sekolahList || []).find(s => s.id === id))
+    .filter(Boolean)
+    .map(s => formatJadwalList(s.jadwalList) || s.jadwal || '')
+    .filter(Boolean)
+  return parts.join(', ') || 'Belum diatur'
+}
 
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => readCached('trainer'))
@@ -104,7 +117,6 @@ export default function TrainerList() {
       const trainerPayload = {
         nama: form.nama,
         wa: form.wa,
-        jadwal: form.jadwal,
         honor: form.honor,
         sekolahIds: form.sekolahIds,
       }
@@ -141,7 +153,12 @@ if (serverTrainer && initialPassword) {
   setPasswordAcknowledged(false)
 }
     } else {
-      result = await writeRemote('trainer', form)
+      // TEAM_FEEDBACK D3 (G4.1) — stop writing the manual free-text jadwal;
+      // the schedule is derived only. Legacy stored values are left
+      // untouched, never rendered (R6).
+      const trainerToSave = { ...form }
+      delete trainerToSave.jadwal
+      result = await writeRemote('trainer', trainerToSave)
 
       if (result.status === 'forbidden') {
         showError(result.message || 'Kamu tidak punya izin untuk menyimpan trainer ini.')
@@ -333,7 +350,7 @@ if (serverTrainer && initialPassword) {
                 </div>
                 <div className="flex justify-between pt-1.5 border-t border-dashed">
                   <span className="text-slate-400">Jadwal Mengajar</span>
-                  <span className="font-semibold text-slate-700">{t.jadwal}</span>
+                  <span className="font-semibold text-slate-700">{derivedJadwalText(t.sekolahIds, readCached('sekolah'))}</span>
                 </div>
                 <div className="flex justify-between font-bold text-slate-700 pt-1 border-t">
                   <span>Honor per Kedatangan</span>
@@ -440,8 +457,8 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
         <input value={form.wa} onChange={e => setForm({ ...form, wa: e.target.value })} onBlur={e => setForm({ ...form, wa: waNormalize(e.target.value) })} disabled={saving} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60" />
       </div>
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase">Jadwal</label>
-        <input value={form.jadwal} onChange={e => setForm({ ...form, jadwal: e.target.value })} disabled={saving} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60" />
+        <label className="text-xs font-bold text-slate-400 uppercase">Jadwal Mengajar</label>
+        <p className="w-full mt-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-700">{derivedJadwalText(form.sekolahIds, sekolah)}</p>
       </div>
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Honor per Kedatangan</label>

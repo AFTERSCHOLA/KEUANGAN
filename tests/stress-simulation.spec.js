@@ -171,7 +171,17 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   await fieldSelect(page, 'Cabang').selectOption({ label: 'Cabang Bandung Sim (BDS)' })
   await fieldInput(page, 'Nama Sekolah').fill('SDN Simulasi 01')
   await fieldTextarea(page, 'Alamat').fill('Jl. Simulasi No. 1, Bandung')
-  await fieldInput(page, 'Jadwal').fill(`${todayName} & Sabtu, 15.30-17.00`)
+  // Schedule via day-picker (free-text Jadwal is gone since G3.2/G4.1):
+  // today + Sabtu 15:30–17:00. The today row is what Phase C Rekap matches.
+  await page.getByRole('button', { name: '+ Tambah Jadwal' }).click()
+  await page.getByRole('button', { name: '+ Tambah Jadwal' }).click()
+  const schedRows01 = page.locator('div.space-y-2 > .flex.gap-2.items-center')
+  await schedRows01.nth(0).locator('select').selectOption(todayName)
+  await schedRows01.nth(0).getByLabel('Jam mulai').fill('15:30')
+  await schedRows01.nth(0).getByLabel('Jam selesai').fill('17:00')
+  await schedRows01.nth(1).locator('select').selectOption('Sabtu')
+  await schedRows01.nth(1).getByLabel('Jam mulai').fill('15:30')
+  await schedRows01.nth(1).getByLabel('Jam selesai').fill('17:00')
   // SPP Bulanan (RupiahInput)
   const sppBox = page.locator('div:has(> label:text-is("SPP Bulanan"))').first().locator('input')
   await sppBox.fill('150000')
@@ -181,7 +191,11 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
   await fieldSelect(page, 'Cabang').selectOption({ label: 'Cabang Jakarta Sim (JKT)' })
   await fieldInput(page, 'Nama Sekolah').fill('SDN Jakarta 02')
-  await fieldInput(page, 'Jadwal').fill('Selasa, 15.00-16.30')
+  await page.getByRole('button', { name: '+ Tambah Jadwal' }).click()
+  const schedRows02 = page.locator('div.space-y-2 > .flex.gap-2.items-center')
+  await schedRows02.nth(0).locator('select').selectOption('Selasa')
+  await schedRows02.nth(0).getByLabel('Jam mulai').fill('15:00')
+  await schedRows02.nth(0).getByLabel('Jam selesai').fill('16:30')
   await page.locator('div:has(> label:text-is("SPP Bulanan"))').first().locator('input').fill('120000')
   await page.getByRole('button', { name: 'Simpan' }).click()
   await expect(page.getByText('SDN Jakarta 02')).toBeVisible()
@@ -198,7 +212,7 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   }
   if (emptyButtons > 0) logFinding(`SchoolList card action bar: ${emptyButtons}/${n} buttons have NO icon AND NO title (invisible/dead edit button). Code: SchoolList.jsx line ~223 <button onClick={openEdit}> has empty children.`)
 
-  // --- A3. Trainer (deliberately saved without jadwal first) ---
+  // --- A3. Trainer (deliberately saved unassigned first) ---
   await page.getByRole('button', { name: 'Data Trainer' }).click()
   await page.getByRole('button', { name: 'Tambah Trainer Baru' }).click()
   await fieldInput(page, 'Nama Trainer').fill('Pak Budi Sim')
@@ -207,13 +221,14 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   await waField.blur()
   const waNormalized = await waField.inputValue()
   if (waNormalized !== '6281234567890') logFinding(`WA normalization produced "${waNormalized}", expected 6281234567890`)
-  // leave Jadwal empty and honor 0 -> save
+  // leave unassigned and honor 0 -> save
   await page.getByRole('button', { name: 'Simpan' }).click()
   await expect(page.getByText('Pak Budi Sim')).toBeVisible()
-  // check jadwal row rendering with empty value
+  // check jadwal row rendering for unassigned trainer (G4.1: derived text,
+  // 'Belum diatur' when no school is assigned; no editable Jadwal input).
   const budiCard = page.locator('div.bg-white.p-5', { hasText: 'Pak Budi Sim' }).first()
-  const jadwalRowText = await budiCard.getByText('Jadwal Mengajar').textContent()
-  logFinding(`Trainer saved with empty Jadwal renders an unlabeled-looking blank "Jadwal Mengajar:" row (value empty). Row text: "${jadwalRowText}"`)
+  if (await budiCard.getByText('Belum diatur').count()) console.log('OK: unassigned trainer shows "Belum diatur" (derived schedule).')
+  else logFinding('Unassigned trainer card does not show "Belum diatur" for Jadwal Mengajar.')
   // BUG CHECK: truncated trash SVG path (missing bottom segments)
   const delBtnPath = await budiCard.locator('button').nth(1).locator('svg path').getAttribute('d')
   if (delBtnPath && !delBtnPath.includes('m5 4v6')) logFinding(`TrainerList delete-icon SVG path is truncated (ends at "...A2 2 0 0116.138 21"): "${delBtnPath}" — icon renders as broken arc instead of trash can.`)
@@ -237,12 +252,21 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
     await page.waitForTimeout(200)
   }
 
-  // edit Budi: assign school + jadwal incl. today + honor
+  // edit Budi: assign SDN Simulasi 01 + honor. The schedule is DERIVED
+  // from the school since G4.1 (no manual Jadwal field); SDN Simulasi 01
+  // rows above already include todayName, so the card must show today's
+  // range after assignment.
+  // NOTE (pre-existing, not G4.1): trainer create/edit UI is gated to
+  // admin_cabang+superadmin for edit, create/delete admin_cabang-only —
+  // as superadmin the Tambah button above is hidden, so this A3 UI pass
+  // only runs green under a role with trainer-write scope.
   await budiCard.getByTitle('Edit').or(budiCard.locator('button').nth(0)).first().click()
-  await fieldInput(page, 'Jadwal').fill(`${todayName} 15.30`)
+  const trainerDialog = page.getByRole('dialog')
+  await trainerDialog.locator('label', { hasText: 'SDN Simulasi 01' }).locator('input[type="checkbox"]').check()
+  await expect(trainerDialog.getByText(`${todayName} 15:30–17:00`)).toBeVisible()
   await fieldInput(page, 'Honor per Kedatangan').fill('75000')
-  await page.getByRole('checkbox').first().check()
   await page.getByRole('button', { name: 'Simpan' }).click()
+  await expect(budiCard.getByText(`${todayName} 15:30–17:00`).first()).toBeVisible()
 
   // --- A4. Students ---
   await page.getByRole('button', { name: 'Data Siswa' }).click()
@@ -303,7 +327,8 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   }
   const sisaCell = payRow.locator('td').nth(6)
   const sisaText = await sisaCell.textContent()
-  logFinding(`Overpayment accepted silently once confirmed; Sisa Kewajiban now displays "${sisaText}" (negative balance shown, never clamped or surfaced as credit).`)
+  console.log(`Overpayment state; Sisa Kewajiban now displays "${sisaText}" (floored at Rp 0 since G5.1; excess in the Lebih Bayar credit).`)
+  if (sisaText.includes('-')) logFinding(`REGRESSION: Sisa Kewajiban shows a negative "${sisaText}" despite the G5.1 floor.`)
   // BUG CHECK: does the confirm dialog close itself after onConfirm?
   const stuckDialog = await page.locator('.fixed.inset-0 p.text-sm').count()
   if (stuckDialog) {
@@ -396,10 +421,10 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   await waitForHydration(page)
   await expect(page.getByRole('heading', { name: 'Rekap Saya' })).toBeVisible()
 
-  // Rekap: today schedule should list SDN Simulasi 01 (jadwal includes todayName)
+  // Rekap: today schedule should list SDN Simulasi 01 (its jadwalList includes todayName)
   const rekapSchool = await page.getByText('SDN Simulasi 01').count()
   console.log('rekap today-school found:', rekapSchool, '(today=' + todayName + ')')
-  if (!rekapSchool) logFinding(`TrainerDashboard "Jadwal Hari Ini" did not match school although jadwal string contains ${todayName}.`)
+  if (!rekapSchool) logFinding(`TrainerDashboard "Jadwal Hari Ini" did not match school although its jadwalList includes ${todayName}.`)
 
   // forbidden tabs really hidden?
   for (const t of ['Data Sekolah', 'Data Trainer', 'Data Pembayaran', 'Data Keuangan', 'Umur Piutang', 'Data Cabang', 'Overview']) {

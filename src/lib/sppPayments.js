@@ -1,5 +1,5 @@
 // Ledger pembayaran SPP siswa — mirror pola honorPayments (append-only).
-// Koreksi dilakukan lewat hapus-entry, bukan edit di tempat.
+// Koreksi lewat entry baru, bukan hapus/edit di tempat.
 import { readCached, write } from './store.js'
 import { generateId } from './constants.js'
 
@@ -48,21 +48,11 @@ export function sppPaymentsForPeriode(periode) {
   return readCached('sppPayments').filter(p => p.periode === periode)
 }
 
-/** Tambah entry baru ke ledger (append-only — tidak ada fungsi "update") */
+/** Tambah entry baru ke ledger (append-only — tidak ada fungsi "update"/"hapus") */
 export function addSppPayment(payment) {
   const all = readCached('sppPayments')
   write('sppPayments', [...all, payment])
   return payment
-}
-
-/** Hapus 1 entry — ini satu-satunya jalur koreksi */
-export function deleteSppPayment(id) {
-  const all = readCached('sppPayments')
-  const deleted = all.find(p => p.id === id)
-  const remaining = all.filter(p => p.id !== id)
-  write('sppPayments', remaining)
-  if (deleted) recomputeSppLunasForSiswa(deleted.siswaId)
-  return remaining
 }
 
 /** Turunkan sppLunas dari jumlah nominal ledger terhadap tarif sekolah. */

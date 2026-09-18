@@ -231,7 +231,7 @@ export default function PaymentTable() {
           <button onClick={() => setModalOpen(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
         </div>
       </Modal>
-      <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setConfirmOnConfirm(null) }} onConfirm={() => confirmOnConfirm?.()} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Lanjutkan" />
+      <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setConfirmOnConfirm(null) }} onConfirm={() => { confirmOnConfirm?.(); setConfirmOpen(false); setConfirmOnConfirm(null) }} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Lanjutkan" />
     </div>
   )
 }

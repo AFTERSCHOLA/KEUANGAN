@@ -101,9 +101,11 @@ export default function FinanceReport() {
     { label: 'Potensi SPP', key: 'potensiSpp', tag: 'Memo' },
     { label: 'Pemasukan SPP', key: 'pemasukanSpp', tag: 'Kas' },
     { label: 'SPP Belum Tertagih', key: 'belumTertagih', tag: 'Memo' },
+    { label: 'Lebih Bayar SPP', key: 'lebihBayarSpp', tag: 'Memo' },
     { label: 'Beban Honor', key: 'totalBebanHonor', tag: 'Memo' },
     { label: 'Honor Dibayar', key: 'totalHonorDibayar', tag: 'Kas' },
     { label: 'Sisa Kewajiban', key: 'sisaKewajiban', tag: 'Memo' },
+    { label: 'Lebih Bayar Honor', key: 'lebihBayarHonor', tag: 'Memo' },
     { label: 'Laba / Rugi', key: 'labaRugi', tag: 'Kas' },
   ]
 
@@ -267,6 +269,11 @@ export default function FinanceReport() {
               <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Sisa Kewajiban <span className="normal-case font-normal text-blue-200">(memo)</span></p>
               <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.sisaKewajiban)}</h3>
               <p className="text-[10px] text-blue-200">Beban − Dibayar</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Lebih Bayar <span className="normal-case font-normal text-blue-200">(memo)</span></p>
+              <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.lebihBayarSpp + data.lebihBayarHonor)}</h3>
+              <p className="text-[10px] text-blue-200">Kelebihan kas tercatat</p>
             </div>
             <div className="space-y-1 border-t md:border-t-0 md:border-l border-blue-800 pt-4 md:pt-0 md:pl-4">
               <p className="text-xs font-bold text-yellow-300 uppercase tracking-wider">Laba / Rugi <span className="normal-case font-normal text-blue-200">(kas)</span></p>

@@ -59,6 +59,14 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
   }
 }
 
+// TEAM_FEEDBACK D2 (G3.1) — new-entry factory: default Senin 14:00–15:00
+// (start + 60 min). newSekolah keeps jadwalList: [] (empty-start per
+// A2.5-JADWAL-1); the SchoolForm "+ Tambah Jadwal" button uses this
+// factory (G3.2) so every added row carries endTime from birth.
+export function newJadwalEntry(overrides = {}) {
+  return { dayOfWeek: 'Senin', time: '14:00', endTime: '15:00', ...overrides }
+}
+
 export function newTrainer(cabangId, cabangKode) {
   return { id: generateId('trn', cabangKode || cabangId), nama: '', wa: '', jadwal: '', sekolahIds: [], honor: 0, cabangId: cabangId || null }
 }

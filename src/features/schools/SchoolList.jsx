@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
-import { newSekolah, defaultCabang } from '../../lib/constants.js'
+import { newSekolah, defaultCabang, newJadwalEntry } from '../../lib/constants.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -114,6 +114,15 @@ async function save() {
   // happened before writeRemote).
   if (!form.cabangId || !cabang.some(c => c.id === form.cabangId)) {
     setAlertMsg('Cabang tidak valid')
+    setAlertOpen(true)
+    return
+  }
+  // TEAM_FEEDBACK D2 (G3.2) — end must be after start. A missing endTime
+  // (legacy row) is blocked with the same pinned copy so the first save
+  // upgrades the record instead of persisting a half-range (R6).
+  const badRange = (form.jadwalList || []).some(e => !e.endTime || e.endTime <= e.time)
+  if (badRange) {
+    setAlertMsg('Jam selesai harus setelah jam mulai')
     setAlertOpen(true)
     return
   }
@@ -457,6 +466,9 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
           Atau unggah foto langsung di bawah ini — jika ada, foto unggahan akan
           lebih diprioritaskan tampil.
         </p>
+        <p className="text-[11px] text-slate-400 mt-1">
+          Disarankan foto landscape 16:9 agar terpotong rapi.
+        </p>
       </div>
 
       <PhotoSlot
@@ -502,12 +514,28 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
 
               <input
                 type="time"
+                aria-label="Jam mulai"
                 value={entry.time}
                 onChange={e => {
                   const next = [...form.jadwalList]
                   next[idx] = {
                     ...next[idx],
                     time: e.target.value,
+                  }
+                  setForm({ ...form, jadwalList: next })
+                }}
+                className="w-32 rounded-lg border p-2 text-sm"
+              />
+
+              <input
+                type="time"
+                aria-label="Jam selesai"
+                value={entry.endTime || ''}
+                onChange={e => {
+                  const next = [...form.jadwalList]
+                  next[idx] = {
+                    ...next[idx],
+                    endTime: e.target.value,
                   }
                   setForm({ ...form, jadwalList: next })
                 }}
@@ -551,10 +579,7 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
                 ...form,
                 jadwalList: [
                   ...(form.jadwalList || []),
-                  {
-                    dayOfWeek: 'Senin',
-                    time: '14:00',
-                  },
+                  newJadwalEntry(),
                 ],
               })
             }
@@ -805,7 +830,7 @@ function SchoolThumbnail({ sch }) {
     <img
       src={src}
       alt={sch.nama}
-      className="w-full h-full object-cover"
+      className="w-full h-full object-cover object-center"
       onError={(e) => { e.target.src = fallback }}
     />
   )

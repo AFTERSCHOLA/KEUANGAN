@@ -25,7 +25,19 @@ export function waNormalize(wa) {
   return digits;
 }
 
+// TEAM_FEEDBACK D2 (G3.1) — range formatter. Legacy {day,time} entries
+// without endTime render as time + 60 min (R6, no crash on old records).
+function addOneHour(time) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(time || ''))
+  if (!m) return String(time || '')
+  const mins = (Number(m[1]) * 60 + Number(m[2]) + 60) % (24 * 60)
+  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
+}
+
 export function formatJadwalList(jadwalList) {
   if (!Array.isArray(jadwalList) || jadwalList.length === 0) return ''
-  return jadwalList.map(entry => `${entry.dayOfWeek} ${entry.time}`).join(', ')
+  return jadwalList.map(entry => {
+    if (!entry.time) return entry.dayOfWeek
+    return `${entry.dayOfWeek} ${entry.time}–${entry.endTime || addOneHour(entry.time)}`
+  }).join(', ')
 }

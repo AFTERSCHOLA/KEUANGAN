@@ -3,12 +3,13 @@ import { test, expect, loginAndPrime, createTrainerSuperadmin, logout } from './
 // ============================================================
 // A2.5-JADWAL-1 — Sekolah.jadwal: day-picker + Add More (F-18, D-18 = B)
 //
-// VERIFY (per SCOPE_EXPANSION_MILESTONES.md A2.5-JADWAL-1):
-// opens Tambah Sekolah as superadmin, adds 2 jadwal entries
-// (Senin 14:00, Rabu 15:00), saves, refreshes, asserts the form
-// re-hydrates with 2 entries; opens the app as a trainer assigned
-// to that school, asserts the Rekap Saya page shows the school on
-// the matching day.
+// VERIFY (per SCOPE_EXPANSION_MILESTONES.md A2.5-JADWAL-1, extended with
+// TEAM_FEEDBACK G3.2 ranges):
+// opens Tambah Sekolah as superadmin, adds 2 jadwal range entries
+// (Senin 14:00–15:00, Rabu 15:00–16:00), saves, refreshes, asserts the
+// form re-hydrates with start + end entries; opens the app as a trainer
+// assigned to that school, asserts the Rekap Saya page shows the school
+// on the matching day with the en-dash range.
 //
 // Date-awareness (testing taste): the day the trainer sees the
 // school is derived at runtime — the seeded jadwalList always
@@ -88,19 +89,25 @@ test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rek
   const entryRows = modal.locator('div.space-y-2 > .flex.gap-2.items-center')
   await expect(entryRows).toHaveCount(2)
 
-  // Entry 0: Senin 14:00 (the factory default is already Senin 14:00;
-  // set the time explicitly to prove the control works).
-  await entryRows.nth(0).locator('input[type="time"]').fill('14:00')
-  // Entry 1: Rabu 15:00.
+  // Entry 0: Senin 14:00–15:00 (the newJadwalEntry default is already
+  // Senin 14:00–15:00; set the start explicitly to prove the control
+  // works, leave the default end in place).
+  await entryRows.nth(0).getByLabel('Jam mulai').fill('14:00')
+  await expect(entryRows.nth(0).getByLabel('Jam selesai')).toHaveValue('15:00')
+  // Entry 1: Rabu 15:00–16:00. The end MUST be set explicitly: the row
+  // default end (15:00) is not after start 15:00, and the G3.2 guard
+  // blocks saving with end <= start.
   await entryRows.nth(1).locator('select').selectOption('Rabu')
-  await entryRows.nth(1).locator('input[type="time"]').fill('15:00')
+  await entryRows.nth(1).getByLabel('Jam mulai').fill('15:00')
+  await entryRows.nth(1).getByLabel('Jam selesai').fill('16:00')
 
   // If today is neither Senin nor Rabu, add a third entry for today
   // so the Rekap Saya leg is deterministic.
   if (todayName !== 'Senin' && todayName !== 'Rabu') {
     await modal.getByRole('button', { name: '+ Tambah Jadwal' }).click()
     await entryRows.nth(2).locator('select').selectOption(todayName)
-    await entryRows.nth(2).locator('input[type="time"]').fill('16:00')
+    await entryRows.nth(2).getByLabel('Jam mulai').fill('16:00')
+    await entryRows.nth(2).getByLabel('Jam selesai').fill('17:00')
   }
 
   await modal.getByRole('button', { name: 'Simpan' }).click()
@@ -113,8 +120,8 @@ test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rek
     return row ? row.jadwalList : null
   }, sekolahNama)
   expect(savedJadwalList).toBeTruthy()
-  expect(savedJadwalList.some((e) => e.dayOfWeek === 'Senin' && e.time === '14:00')).toBe(true)
-  expect(savedJadwalList.some((e) => e.dayOfWeek === 'Rabu' && e.time === '15:00')).toBe(true)
+  expect(savedJadwalList.some((e) => e.dayOfWeek === 'Senin' && e.time === '14:00' && e.endTime === '15:00')).toBe(true)
+  expect(savedJadwalList.some((e) => e.dayOfWeek === 'Rabu' && e.time === '15:00' && e.endTime === '16:00')).toBe(true)
 
   const sekolahId = await page.evaluate((nama) => {
     const rows = JSON.parse(localStorage.getItem('afterschola_v4_sekolah') || '[]')
@@ -142,11 +149,12 @@ test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rek
   const hydrated = await editRows.evaluateAll((rows) =>
     rows.map((r) => ({
       day: r.querySelector('select')?.value,
-      time: r.querySelector('input[type="time"]')?.value,
+      start: r.querySelector('input[aria-label="Jam mulai"]')?.value,
+      end: r.querySelector('input[aria-label="Jam selesai"]')?.value,
     })),
   )
-  expect(hydrated).toContainEqual({ day: 'Senin', time: '14:00' })
-  expect(hydrated).toContainEqual({ day: 'Rabu', time: '15:00' })
+  expect(hydrated).toContainEqual({ day: 'Senin', start: '14:00', end: '15:00' })
+  expect(hydrated).toContainEqual({ day: 'Rabu', start: '15:00', end: '16:00' })
   await editModal.getByRole('button', { name: 'Batal' }).click()
   await expect(editModal).toBeHidden()
 
@@ -239,9 +247,9 @@ test('A2.5-JADWAL-1: day-picker adds 2 entries, re-hydrates, and surfaces on Rek
   await expect(main.getByText(sekolahNama)).toBeVisible({ timeout: 15000 })
   await expect(main.getByText('Belum Diisi').or(main.getByText('Selesai')).first()).toBeVisible()
 
-  // The schedule line renders the formatted jadwalList (e.g.
-  // "Senin 14:00 · Rabu 15:00" — formatJadwalList join).
-  await expect(main.getByText(/Senin 14:00/)).toBeVisible()
+  // The schedule line renders the formatted jadwalList range (e.g.
+  // "Senin 14:00–15:00, Rabu 15:00–16:00" — formatJadwalList join).
+  await expect(main.getByText(/Senin 14:00–15:00/)).toBeVisible()
 
   expect(pageErrors).toHaveLength(0)
 })
