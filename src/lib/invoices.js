@@ -179,14 +179,36 @@ export function invoiceTotal(invoice) {
  */
 export function matchedPaymentsForInvoice(invoice, { sppPayments = [], siswa = [] } = {}) {
   const periods = invoicePeriods(invoice)
+
   const siswaIdsForSekolah = new Set(
-    siswa.filter(s => s.sekolahId === invoice.sekolahId).map(s => s.id)
+    siswa
+      .filter(s => s.sekolahId === invoice.sekolahId)
+      .map(s => s.id)
   )
 
   return sppPayments.filter(p => {
-    if (p.invoiceId) return p.invoiceId === invoice.id
-    if (!siswaIdsForSekolah.has(p.siswaId)) return false
-    return periods.includes(p.periode)
+    // Pembayaran baru: langsung terhubung ke invoice.
+    if (p.invoiceId) {
+      return p.invoiceId === invoice.id
+    }
+
+    // Pembayaran level sekolah:
+    // rekonsiliasi invoice dilakukan terhadap sekolah,
+    // bukan split per siswa.
+    if (p.sekolahId) {
+      return (
+        p.sekolahId === invoice.sekolahId &&
+        periods.includes(p.periode)
+      )
+    }
+
+    // Backward compatibility:
+    // pembayaran lama yang belum punya invoiceId/sekolahId
+    // masih dicocokkan lewat siswa + periode.
+    return (
+      siswaIdsForSekolah.has(p.siswaId) &&
+      periods.includes(p.periode)
+    )
   })
 }
 

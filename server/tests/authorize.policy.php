@@ -108,8 +108,74 @@ foreach (['sekolah', 'trainer', 'siswa'] as $resource) {
         policyCheck(!authorize($action, $resource, ['id' => 'x', 'trainerIds' => ['trn-1'], '_sekolahTrainerIds' => ['trn-1']], $trainer), "Trainer should NOT {$action} {$resource}");
     }
 }
-foreach (['honorPayments', 'invoices', 'sppPayments'] as $resource) {
-    policyCheck(!authorize('read', $resource, ['cabangId' => 'cab-1'], $trainer), "Trainer should NOT read {$resource} — not in canonical read entities");
+// Trainer: sppPayments read-only, scoped through the student's school
+// assignment. The caller (read.php) MUST enrich the payment record with
+// _sekolahTrainerIds before authorize() is called. Missing ownership data
+// fails closed.
+policyCheck(
+    !authorize('read', 'sppPayments', ['id' => 'spp-1', 'siswaId' => 'sis-1'], $trainer),
+    'Trainer sppPayments read without _sekolahTrainerIds must fail closed'
+);
+
+policyCheck(
+    authorize(
+        'read',
+        'sppPayments',
+        [
+            'id' => 'spp-1',
+            'siswaId' => 'sis-1',
+            '_sekolahTrainerIds' => ['trn-1', 'trn-9'],
+        ],
+        $trainer
+    ),
+    'Trainer should read sppPayments for assigned sekolah'
+);
+
+policyCheck(
+    !authorize(
+        'read',
+        'sppPayments',
+        [
+            'id' => 'spp-2',
+            'siswaId' => 'sis-2',
+            '_sekolahTrainerIds' => ['trn-9'],
+        ],
+        $trainer
+    ),
+    'Trainer should NOT read sppPayments for unassigned sekolah'
+);
+
+// Trainer must remain read-only for financial ledgers other than the
+// explicitly allowed sppPayments.
+foreach (['honorPayments', 'invoices'] as $resource) {
+    policyCheck(
+        !authorize('read', $resource, ['cabangId' => 'cab-1'], $trainer),
+        "Trainer should NOT read {$resource}"
+    );
+
+    foreach (['create', 'update', 'delete', 'write'] as $action) {
+        policyCheck(
+            !authorize($action, $resource, ['cabangId' => 'cab-1'], $trainer),
+            "Trainer should NOT {$action} {$resource}"
+        );
+    }
+}
+
+// sppPayments is read-only for Trainer — no mutation access.
+foreach (['create', 'update', 'delete', 'write'] as $action) {
+    policyCheck(
+        !authorize(
+            $action,
+            'sppPayments',
+            [
+                'id' => 'spp-1',
+                'siswaId' => 'sis-1',
+                '_sekolahTrainerIds' => ['trn-1'],
+            ],
+            $trainer
+        ),
+        "Trainer should NOT {$action} sppPayments"
+    );
 }
 
 // ---------------------------------------------------------------------

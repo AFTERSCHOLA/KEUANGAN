@@ -15,7 +15,13 @@ function roleCanReadEntity(string $role, string $entity): bool {
         // closed entirely, not filtered).
         'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
     ], true);
-    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi'], true);
+    if ($role === 'trainer') return in_array($entity, [
+    'sekolah',
+    'trainer',
+    'siswa',
+    'absensi',
+    'sppPayments',
+], true);
     return false;
 }
 
@@ -64,16 +70,36 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
         $recordId = $data['id'] ?? null;
         return is_string($recordId) && $recordId === $trainerId;
     }
+
     if ($resource === 'sekolah') {
         return in_array($trainerId, $data['trainerIds'] ?? [], true);
     }
+
     if ($resource === 'absensi') {
         return trainerOwnsAttendance($data, $user);
     }
+
     if ($resource === 'siswa') {
-        // See docblock above — fails closed if the caller didn't enrich $data.
-        return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
+        // Assignment siswa mengikuti sekolahnya.
+        // read.php wajib mengisi _sekolahTrainerIds.
+        return in_array(
+            $trainerId,
+            $data['_sekolahTrainerIds'] ?? [],
+            true
+        );
     }
+
+    if ($resource === 'sppPayments') {
+        // Payment mengikuti siswa -> sekolah -> trainer.
+        // read.php wajib mengisi _sekolahTrainerIds
+        // berdasarkan siswaId pada payment.
+        return in_array(
+            $trainerId,
+            $data['_sekolahTrainerIds'] ?? [],
+            true
+        );
+    }
+
     return false;
 }
 
