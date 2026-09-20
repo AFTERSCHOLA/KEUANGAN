@@ -41,53 +41,26 @@ $output = [];
 // trainer might need it (siswa is in scope AND role is trainer) — avoids
 // an unnecessary query for every other role/entity combination.
 $sekolahTrainerIds = [];
-$siswaSekolahIds = [];
-$invoiceSekolahIds = [];
-
-if (
-    $user['role'] === 'trainer'
-    && (
-        in_array('siswa', $entities, true)
-        || in_array('sppPayments', $entities, true)
-    )
-) {
-    $sekolahRows = $pdo->query(
-        'SELECT payload FROM sekolah ORDER BY created_at, id'
-    )->fetchAll();
-
+if ($user['role'] === 'trainer' && (in_array('siswa', $entities, true) || in_array('sppPayments', $entities, true))) {
+    $sekolahRows = $pdo->query('SELECT payload FROM sekolah ORDER BY created_at, id')->fetchAll();
     foreach ($sekolahRows as $row) {
         $sch = json_decode($row['payload'], true);
-
         if (is_array($sch) && isset($sch['id'])) {
             $sekolahTrainerIds[$sch['id']] = $sch['trainerIds'] ?? [];
         }
     }
+}
 
-    $siswaRows = $pdo->query(
-        'SELECT payload FROM siswa ORDER BY created_at, id'
-    )->fetchAll();
-
+// sppPayments butuh 1 hop tambahan: siswaId -> sekolahId. Precompute
+// sekali di sini juga, sama alasannya kayak $sekolahTrainerIds di atas —
+// hindari query berulang per-record di loop filter di bawah.
+$siswaSekolahId = [];
+if ($user['role'] === 'trainer' && in_array('sppPayments', $entities, true)) {
+    $siswaRows = $pdo->query('SELECT payload FROM siswa ORDER BY created_at, id')->fetchAll();
     foreach ($siswaRows as $row) {
-        $student = json_decode($row['payload'], true);
-
-        if (is_array($student) && isset($student['id'])) {
-            $siswaSekolahIds[$student['id']] = $student['sekolahId'] ?? null;
-        }
-    }
-
-    // Invoice-level SPP payment bisa tidak punya siswaId.
-    // Jadi ownership trainer harus bisa ditentukan dari invoice -> sekolah.
-    if (in_array('sppPayments', $entities, true)) {
-        $invoiceRows = $pdo->query(
-            'SELECT payload FROM invoices ORDER BY created_at, id'
-        )->fetchAll();
-
-        foreach ($invoiceRows as $row) {
-            $invoice = json_decode($row['payload'], true);
-
-            if (is_array($invoice) && isset($invoice['id'])) {
-                $invoiceSekolahIds[$invoice['id']] = $invoice['sekolahId'] ?? null;
-            }
+        $sw = json_decode($row['payload'], true);
+        if (is_array($sw) && isset($sw['id'])) {
+            $siswaSekolahId[$sw['id']] = $sw['sekolahId'] ?? null;
         }
     }
 }
@@ -161,45 +134,16 @@ foreach ($entities as $name) {
     // match, sekolah.trainerIds must contain them, siswa needs the indirect
     // sekolah lookup precomputed above).
     if ($user['role'] === 'trainer' || ($user['role'] === 'admin_cabang' && $name === 'cabang')) {
-    $records = array_values(array_filter(
-        $records,
-        static function (array $record) use (
-            $name,
-            $user,
-            $sekolahTrainerIds,
-            $siswaSekolahIds,
-            $invoiceSekolahIds
-        ): bool {
-            if ($name === 'siswa') {
-                $sekolahId = $record['sekolahId'] ?? null;
-
-                $record['_sekolahTrainerIds'] =
-                    $sekolahTrainerIds[$sekolahId] ?? [];
-            }
-
-            if ($name === 'sppPayments') {
-                $siswaId = $record['siswaId'] ?? null;
-
-                // Jalur siswa -> sekolah -> trainer
-                $sekolahId = $siswaSekolahIds[$siswaId] ?? null;
-
-                // Jalur invoice -> sekolah -> trainer
-                // untuk payment yang tidak punya siswaId.
-                if (
-                    (!is_string($sekolahId) || $sekolahId === '')
-                    && isset($record['invoiceId'])
-                ) {
-                    $sekolahId =
-                        $invoiceSekolahIds[$record['invoiceId']] ?? null;
-                }
-
-                $record['_sekolahTrainerIds'] =
-                    $sekolahTrainerIds[$sekolahId] ?? [];
-            }
-
-            return authorize('read', $name, $record, $user);
+    $records = array_values(array_filter($records, static function (array $record) use ($name, $user, $sekolahTrainerIds, $siswaSekolahId): bool {
+        if ($name === 'siswa') {
+            $record['_sekolahTrainerIds'] = $sekolahTrainerIds[$record['sekolahId'] ?? null] ?? [];
         }
-    ));
+        if ($name === 'sppPayments') {
+            $sekolahId = $siswaSekolahId[$record['siswaId'] ?? null] ?? null;
+            $record['_sekolahTrainerIds'] = $sekolahTrainerIds[$sekolahId] ?? [];
+        }
+        return authorize('read', $name, $record, $user);
+    }));
 }
 
     $output[$name] = $records;

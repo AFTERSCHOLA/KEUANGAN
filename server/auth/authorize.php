@@ -15,13 +15,7 @@ function roleCanReadEntity(string $role, string $entity): bool {
         // closed entirely, not filtered).
         'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
     ], true);
-    if ($role === 'trainer') return in_array($entity, [
-    'sekolah',
-    'trainer',
-    'siswa',
-    'absensi',
-    'sppPayments',
-], true);
+    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments'], true);
     return false;
 }
 
@@ -90,15 +84,13 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
     }
 
     if ($resource === 'sppPayments') {
-        // Payment mengikuti siswa -> sekolah -> trainer.
-        // read.php wajib mengisi _sekolahTrainerIds
-        // berdasarkan siswaId pada payment.
-        return in_array(
-            $trainerId,
-            $data['_sekolahTrainerIds'] ?? [],
-            true
-        );
-    }
+    // Two-hop indirection: sppPayments punya siswaId, bukan sekolahId
+    // langsung — rantainya siswaId -> siswa.sekolahId -> sekolah.trainerIds[].
+    // Sama kayak kontrak siswa di atas: caller (read.php) WAJIB enrich
+    // $data['_sekolahTrainerIds'] sebelum manggil authorize(), fail closed
+    // (return false) kalau nggak di-enrich, bukan fail open.
+    return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
+}
 
     return false;
 }
