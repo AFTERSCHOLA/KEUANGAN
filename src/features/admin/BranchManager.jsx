@@ -196,6 +196,8 @@ export default function BranchManager() {
     try {
       const result = await deleteRemote('cabang', pendingDeleteId)
       if (result.status === 'forbidden') {
+        setConfirmOpen(false)
+        setPendingDeleteId(null)
         showError(result.message || 'Kamu tidak punya izin untuk menghapus cabang ini.')
         return
       }

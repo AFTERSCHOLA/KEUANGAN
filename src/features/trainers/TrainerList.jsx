@@ -249,6 +249,8 @@ if (serverTrainer && initialPassword) {
     const result = await deleteRemote('trainer', pendingRemoveId)
 
     if (result.status === 'forbidden') {
+      setConfirmOpen(false)
+      setPendingRemoveId(null)
       showError(
         result.message ||
         'Kamu tidak punya izin untuk menghapus trainer ini.'

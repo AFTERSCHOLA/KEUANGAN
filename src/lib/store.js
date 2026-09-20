@@ -502,6 +502,14 @@ export async function deleteRemote(key, id) {
     if (error instanceof ApiError && error.status === 403) {
       return { status: 'forbidden', message: error.message }
     }
+    // INV.1 (D-INV1): the invoice-has-payments 422 is a business refusal,
+    // not a bug — surface it structurally like 403 so the caller renders
+    // the pinned guard copy instead of the generic catch-all. Scoped to
+    // the exact guard message so other 422s (e.g. 'Record membutuhkan id',
+    // 'Invoice tidak ditemukan') still throw.
+    if (key === 'invoices' && error instanceof ApiError && error.status === 422 && error.body?.error === 'Invoice sudah memiliki pembayaran dan tidak dapat dihapus') {
+      return { status: 'guarded', message: error.message }
+    }
     throw error
   }
 }

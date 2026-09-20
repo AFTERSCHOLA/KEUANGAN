@@ -105,6 +105,11 @@ export default function StudentList({ readOnly = false }) {
     const result = await deleteRemote('siswa', pendingRemoveId)
 
     if (result.status === 'forbidden') {
+      // INV.2 (D-INV3): close-then-return, mirroring save()'s silent
+      // forbidden return in this same file (no AlertDialog facility here —
+      // adding one is deferred; the server still enforces the refusal).
+      setPendingRemoveId(null)
+      setConfirmOpen(false)
       return
     }
 

@@ -116,6 +116,8 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
         const result = await deleteInvoiceServer(inv.id)
         if (result?.status === 'forbidden') {
           setErrorMsg(result.message || 'Tidak diizinkan menghapus invoice ini')
+        } else if (result?.status === 'guarded') {
+          setErrorMsg('Invoice sudah memiliki pembayaran dan tidak dapat dihapus')
         } else {
           await read('invoices')
           setTick(t => t + 1)
