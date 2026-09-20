@@ -1,14 +1,32 @@
+import { useState } from 'react'
 import { formatRupiah } from '../../lib/format.js'
 import { terbilang } from '../../lib/terbilang.js'
 import { readCached, getSettings } from '../../lib/store.js'
-import { invoiceSettlement, invoiceTotal, invoicePeriods } from '../../lib/invoices.js'
+import { invoiceSettlement, invoiceTotal, invoicePeriods, openInvoiceDoc } from '../../lib/invoices.js'
 
 const LOGO_URL = '/invoice/logo.png'
 const SIGNATURE_URL = '/invoice/signature.png'
 
 export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
+  const [docError, setDocError] = useState(null)
+  const [docBusy, setDocBusy] = useState(false)
   if (!invoice || !sekolah) return null
   const settings = getSettings()
+
+  // IP.3 (D-IP7) — dokumen resmi dari server (visual invoice-template.pdf).
+  // Cetak lama tetap sebagai fallback offline; parent tidak punya slot
+  // error di komponen ini, jadi refusal tampil di baris lokal ini (R-IP2).
+  async function handleDoc() {
+    setDocError(null)
+    setDocBusy(true)
+    try {
+      await openInvoiceDoc(invoice.id)
+    } catch (error) {
+      setDocError(error?.message || 'Gagal membuka dokumen')
+    } finally {
+      setDocBusy(false)
+    }
+  }
 
   // SB.B.3 — badge Lunas/Belum Lunas otomatis, computed sama seperti di
   // InvoiceModal (D-SB9). Draft belum punya settlement karena belum resmi
@@ -61,9 +79,11 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
         </div>
         <div className="flex gap-2">
           <button onClick={onBack} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm px-4 py-2 rounded-xl transition">Kembali</button>
+          <button onClick={handleDoc} disabled={docBusy} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">{docBusy ? 'Membuka...' : 'Dokumen Resmi'}</button>
           <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">Cetak Invoice</button>
         </div>
       </div>
+      {docError && <p className="text-xs text-rose-600 font-semibold bg-white px-4 py-2 rounded-2xl shadow-sm border no-print">{docError}</p>}
 
       <div className="printable-report bg-white rounded-2xl shadow-sm border p-8 max-w-3xl mx-auto">
         <div className="flex items-start justify-between pb-5 border-b border-slate-200">

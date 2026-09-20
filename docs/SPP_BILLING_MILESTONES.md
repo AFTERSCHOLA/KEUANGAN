@@ -151,9 +151,11 @@ MICROTASK: Consolidate invoice creation paths
   RULES:   R-SB2, R-SB5; satu jalur kanonik; jalur lain dipensiunkan atau menjadi pemanggil jalur kanonik; tidak ada invoice ganda untuk sekolah+periode yang sama
   DEPENDS: SB.C.1 (D-SB10 Locked 2026-09-16)
   OUTCOME: hanya ada satu sumber kebenaran untuk pembuatan invoice, dan bentuk payload-nya seragam (bentuk server: items[] per tarif, grandTotal, nomorInvoice AFS-YYYYMM-XXXX).
-  VERIFY:  php server/tests/invoice.endpoint.php -> generate massal dan pembuatan via UI menghasilkan bentuk payload identik; generate dua kali untuk sekolah+periode sama tidak menghasilkan baris ganda
-  DONE-IF: verify passes; only intended files changed
+   VERIFY:  php server/tests/invoice.endpoint.php -> generate massal dan pembuatan via UI menghasilkan bentuk payload identik; generate dua kali untuk sekolah+periode sama tidak menghasilkan baris ganda
+   DONE-IF: verify passes; only intended files changed
 ```
+
+> **Note 2026-09-20 (INVOICE_DOC_PARITY):** rendering follows the same canonical payload read-only (`POST /api/invoices-doc.php` → `server/lib/invoiceDoc.php`; settlement mirrors `invoiceSettlement`, terbilang/Rp/periode ported to PHP). No new creation path — D-SB10 untouched. Contract: `php server/tests/invoice-doc.check.php` (25 checks); E2E: `tests/invoice-doc.spec.js`.
 
 ### SB.C.3 Record completion and correct stale claims
 

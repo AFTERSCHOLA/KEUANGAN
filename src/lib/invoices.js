@@ -1,5 +1,5 @@
-import { readCached, write, deleteRemote } from './store.js'
-import { apiRequest } from './api.js'
+import { readCached, write, deleteRemote, getSettings } from './store.js'
+import { apiRequest, getCsrfToken } from './api.js'
 import { generateId, DEFAULT_CABANG_KODE } from './constants.js'
 
 // ============================================================
@@ -352,4 +352,48 @@ export async function generateInvoiceForSekolah({
 /** Menghapus invoice via server (superadmin-only, ditegakkan di invoices.php). */
 export async function deleteInvoiceServer(id) {
   return deleteRemote('invoices', id)
+}
+
+// ============================================================
+// IP.3 (D-IP7) — Dokumen invoice resmi dari server.
+// POST /api/invoices-doc.php mengembalikan HTML mandiri (inline CSS,
+// dataURL images, tanpa JS) yang divisualkan seperti invoice-template.pdf.
+// settings (localStorage-only, tidak ada endpoint server) dikirim dalam
+// body display-only dan tidak pernah disimpan. Response dibuka di tab
+// baru; pengguna menyimpan sebagai PDF lewat dialog Cetak browser.
+// Idiom blob-download meniru downloadBackup() di src/lib/backup.js.
+// ============================================================
+
+/**
+ * Membuka dokumen invoice resmi di tab baru. Melempar Error dengan pesan
+ * Indonesia (dari server bila ada) saat gagal — pemanggil menampilkan di
+ * slot errorMsg miliknya (R-IP2: parent owns the explanation).
+ */
+export async function openInvoiceDoc(id) {
+  const token = await getCsrfToken()
+  const response = await fetch('/api/invoices-doc.php', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/html',
+      'X-CSRF-Token': token,
+    },
+    body: JSON.stringify({ id, settings: getSettings() }),
+  })
+  if (!response.ok) {
+    let message = `Gagal membuka dokumen (${response.status})`
+    try {
+      const data = await response.json()
+      if (data?.error) message = data.error
+    } catch {
+      // non-JSON error body — pesan default di atas yang dipakai
+    }
+    throw new Error(message)
+  }
+  const html = await response.text()
+  const blob = new Blob([html], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener')
+  return url
 }

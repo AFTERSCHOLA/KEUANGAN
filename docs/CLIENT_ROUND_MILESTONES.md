@@ -102,8 +102,10 @@ MICROTASK: Port PDF layout
   DEPENDS: G2.1
   OUTCOME: printed invoice shows every PLAN section-6 slot (logo+alamat, AFS-style nomor + tanggal, KEPADA YTH + PJ, BULAN TAGIHAN, NO/URAIAN/SISWA/HARGA/TOTAL, GRAND TOTAL, Terbilang, Catatan Pembayaran, Hormat Kami + signature + name) from its single mapped source
   VERIFY:  Playwright (testing taste #29): intercept window.print, open Cetak on a Terbit invoice, assert intercepted + nomor + 'SMP TRIDAYA TUNAS BANGSA'-style name + grand total + terbilang all render; eyeball one full-page screenshot vs pdf_page1_I0.jpg
-  DONE-IF: verify passes; only InvoiceTemplate.jsx changed
+   DONE-IF: verify passes; only InvoiceTemplate.jsx changed
 ```
+
+> **Note 2026-09-20 (INVOICE_DOC_PARITY, visual-only):** the visual-parity half is satisfied by the standalone server document `POST /api/invoices-doc.php` (renderer `server/lib/invoiceDoc.php`) — every PLAN §6 slot + settlement appendix, eyeball-accepted vs `pdf_page1_I0.jpg`. Client `InvoiceTemplate.jsx` print path kept as offline fallback (not restyled here). Contract: `php server/tests/invoice-doc.check.php`; E2E: `tests/invoice-doc.spec.js`.
 
 ### G2.3 Deterministic download path
 
@@ -114,9 +116,11 @@ MICROTASK: Add download artifact
   RULES:   R2, R4 (no new dep: isolated print root + browser Save-as-PDF; dataURL avoids /invoice/*.png deploy-subpath 404)
   DEPENDS: G2.2
   OUTCOME: Cetak/Download from the invoice view yields a clean single-document A4 file with no app chrome and working logo/signature offline
-  VERIFY:  Playwright: block network, click Cetak, print intercept fires and logo/signature img elements have data: or cache-backed src (no 404); production build passes
-  DONE-IF: verify passes; only the two files changed
+   VERIFY:  Playwright: block network, click Cetak, print intercept fires and logo/signature img elements have data: or cache-backed src (no 404); production build passes
+   DONE-IF: verify passes; only the two files changed
 ```
+
+> **Note 2026-09-20 (INVOICE_DOC_PARITY):** partially satisfied via the server document — standalone A4 page (no app chrome) with dataURL logo/signature embedded from disk (`server/api/invoices-doc.php` + `server/lib/invoiceDoc.php`). Client print-root isolation + dataURL in `InvoiceTemplate.jsx`/`print.css` remains open (client print kept as fallback).
 
 ---
 
