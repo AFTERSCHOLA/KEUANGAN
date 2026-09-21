@@ -3,7 +3,9 @@
 **Companion to `docs/TRAINER_ATTENDANCE_PLAN.md`.**  
 Memecah implementasi Absensi Tenaga Pengajar menjadi microtask yang berurutan. Setiap microtask harus VERIFY sebelum microtask berikutnya dimulai. Kegagalan menjadi follow-up terbatas dan tidak otomatis memperlebar scope.
 
-**Source of truth:** `TRAINER_ATTENDANCE_PLAN.md` §3 (F-TA1–F-TA9), §4 (D-TA1–D-TA15), dan §10 (R-TA1–R-TA12).
+**Source of truth:** `TRAINER_ATTENDANCE_PLAN.md` §3 (F-TA1–F-TA9), §4 (D-TA1–D-TA16), dan §10 (R-TA1–R-TA14).
+
+**Catatan status:** D-TA14 (sumber perhitungan honor) berstatus **Pending** sampai microtask TA.C.2b disetujui secara eksplisit — lihat Gate TA.C di bawah.
 
 ---
 
@@ -13,7 +15,7 @@ Rantai ditutup bila seluruh kriteria berikut terpenuhi:
 
 1. `trainer` mendukung `tipePengajar = instruktur | asisten`.
 2. Honor tetap merupakan field per orang dan tidak di-hardcode berdasarkan tipe.
-3. Entitas Penugasan dapat menghubungkan sekolah, instruktur, dan asisten.
+3. Entitas Penugasan dapat menghubungkan sekolah, instruktur, dan asisten (`asistenId` nullable — instruktur solo tanpa asisten harus tetap valid).
 4. Satu sekolah dapat memiliki banyak instruktur dan asisten.
 5. Absensi tenaga pengajar terpisah dari `absensi` kegiatan lama.
 6. Trainer/asisten dapat membuat absensi untuk dirinya sendiri.
@@ -23,7 +25,7 @@ Rantai ditutup bila seluruh kriteria berikut terpenuhi:
 10. Rekap matriks per bulan menampilkan sekolah sebagai baris dan tanggal sebagai kolom.
 11. Satu sel dapat memuat lebih dari satu tenaga pengajar dengan label `I`/`A`.
 12. Ringkasan pribadi trainer/asisten hanya menghitung data orang tersebut.
-13. Gate C menghitung honor dari `Hadir × trainer.honor`.
+13. Checkpoint keputusan bisnis TA.C.2b disetujui eksplisit sebelum TA.C.3 dijalankan; jika disetujui, Gate C menghitung honor dari `Hadir × trainer.honor`.
 14. `honorPayments` dan laporan lama tetap lolos regression check.
 15. Setiap microtask mempunyai `VERIFY`.
 16. Completion write-back tercatat pada dokumen sumber.
@@ -80,6 +82,7 @@ VERIFY: test assignment:
         -> satu sekolah dapat mempunyai >1 penugasan;
         -> satu instruktur dapat mempunyai >1 sekolah;
         -> satu instruktur dapat mempunyai >1 asisten;
+        -> instruktur tanpa asisten (asistenId = null) tetap valid;
         -> referensi sekolah/trainer yang tidak ada ditolak.
 
 DONE-IF: verify passes; only intended files changed
@@ -157,12 +160,16 @@ RULES: R-TA6, R-TA7, R-TA8
 DEPENDS: TA.B.1
 
 OUTCOME: trainer/asisten dapat menyimpan absensi dirinya sendiri
-         hanya untuk sekolah yang valid menurut penugasannya.
+         hanya untuk sekolah yang valid menurut penugasannya DAN
+         hanya jika tanggal absensi jatuh di dalam rentang penugasan
+         yang aktif (periodeMulai/periodeSelesai/aktif=true).
 
 VERIFY: endpoint test:
         -> trainer A create absensi trainer A = allowed;
         -> trainer A create absensi trainer B = 403;
-        -> trainer A memakai sekolah di luar assignment = 403.
+        -> trainer A memakai sekolah di luar assignment = 403;
+        -> trainer A memakai tanggal di luar rentang penugasan aktif
+           (atau penugasan aktif=false) = 403.
 
 DONE-IF: verify passes; only intended files changed
 ```
@@ -279,6 +286,42 @@ VERIFY: fixture September 2026:
 DONE-IF: verify passes; only intended files changed
 ```
 
+### TA.C.2b Business decision checkpoint — validasi & sign-off sumber honor
+
+```text
+MICROTASK: Business decision checkpoint before honor integration
+
+EDIT: docs/TRAINER_ATTENDANCE_PLAN.md (update status D-TA14),
+      dokumen validasi (mis. docs/TA_C2B_VALIDATION.md — perbandingan
+      rekap matriks vs pencatatan manual September 2026),
+      tidak ada perubahan kode produksi pada microtask ini
+
+FINDS: F-TA9; D-TA14
+
+RULES: R-TA11; keputusan ini TIDAK boleh diasumsikan/ditebak,
+       harus eksplisit disetujui sebelum TA.C.3 dimulai
+
+DEPENDS: TA.C.2
+
+OUTCOME: (a) rekap matriks bulanan dari absensiPengajar dibandingkan
+         baris-per-baris dengan pencatatan manual September 2026 dan
+         selisihnya didokumentasikan; (b) keputusan eksplisit diambil
+         dan dicatat: apakah finance.js/honor berpindah sumber ke
+         absensiPengajar, atau tetap memakai absensi kegiatan lama;
+         (c) D-TA14 di TRAINER_ATTENDANCE_PLAN.md diupdate dari
+         "Pending" menjadi "Locked" dengan hasil keputusannya.
+
+VERIFY: document inspection:
+        -> perbandingan matriks vs pencatatan manual September
+           terlampir dengan hasil match/selisih;
+        -> keputusan sumber honor tertulis eksplisit (bukan implisit);
+        -> D-TA14 berstatus Locked dengan keputusan final tercatat.
+
+DONE-IF: verify passes; jika keputusan = "tidak berpindah", maka
+         TA.C.3 dan TA.C.4 di bawah ini dianggap tidak diperlukan
+         dan chain dapat ditutup dari TA.C.2b langsung ke TA.D.1.
+```
+
 ### TA.C.3 Integrate attendance into honor calculation
 
 ```text
@@ -293,7 +336,7 @@ RULES: R-TA3, R-TA11, R-TA12;
        honor = jumlah Hadir × trainer.honor;
        tidak ada hardcode 100k/75k/50k
 
-DEPENDS: TA.C.2
+DEPENDS: TA.C.2b (hanya dijalankan jika keputusan checkpoint = "berpindah ke absensiPengajar")
 
 OUTCOME: Gate C menghubungkan absensi tenaga pengajar dengan
          perhitungan honor per kedatangan tanpa mengganti kontrak
@@ -402,7 +445,8 @@ DONE-IF: verify passes; only intended files changed
 - **TA.B.2 sebelum TA.B.3:** server harus menegakkan ownership lebih dulu agar UI tidak menjadi satu-satunya pengaman.
 - **TA.B.4 setelah self-write:** admin management membaca kontrak absensi yang sama dengan trainer.
 - **TA.C.1 sebelum TA.C.2:** summary pribadi memastikan filter/ownership benar sebelum data diproyeksikan menjadi matriks.
-- **TA.C.2 sebelum TA.C.3:** perhitungan honor membutuhkan bukti bahwa record Hadir yang akan dihitung sudah benar.
+- **TA.C.2 sebelum TA.C.2b:** checkpoint validasi butuh matriks bulanan yang sudah bisa digenerate untuk dibandingkan dengan pencatatan manual.
+- **TA.C.2b sebelum TA.C.3:** integrasi honor ke `finance.js` tidak boleh dimulai sebelum ada keputusan bisnis eksplisit bahwa sumber honor memang berpindah ke `absensiPengajar` — ini bukan asumsi otomatis dari selesainya Gate B.
 - **TA.C.3 sebelum TA.C.4:** setelah formula honor masuk, batas antara beban honor dan pembayaran aktual harus diuji.
 - **TA.D terakhir:** hardening dan write-back hanya dilakukan setelah semua perilaku utama terbukti.
 
@@ -435,7 +479,8 @@ identity
   -> admin correction
   -> monthly matrix
   -> personal summary
-  -> Gate C honor calculation
+  -> business decision checkpoint (TA.C.2b)
+  -> Gate C honor calculation (conditional on checkpoint approval)
   -> existing honor payment ledger
   -> regression/security verification
   -> source-doc write-back

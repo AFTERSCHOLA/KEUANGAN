@@ -90,7 +90,7 @@
 | D-TA3 | Label operasional `I` = Instruktur dan `A` = Asisten. Label ini bukan status absensi. | Locked |
 | D-TA4 | Honor per kedatangan disimpan pada record orang dan diinput Admin Cabang saat membuat/mengelola akun. | Locked |
 | D-TA5 | Nilai Rp100k/Rp75k/Rp50k hanya contoh bisnis, bukan enum/hardcode aplikasi. | Locked |
-| D-TA6 | Relasi penugasan dibuat eksplisit melalui entitas Penugasan dengan bentuk dasar `{ sekolahId, trainerId, asistenId }`. | Locked |
+| D-TA6 | Relasi penugasan dibuat eksplisit melalui entitas Penugasan dengan bentuk dasar `{ sekolahId, trainerId, asistenId }`. `asistenId` bersifat **nullable** — satu instruktur boleh bertugas tanpa asisten. | Locked |
 | D-TA7 | Absensi tenaga pengajar dibuat sebagai entitas terpisah dari `absensi` kegiatan lama. | Locked |
 | D-TA8 | Record absensi menyimpan orang yang hadir, sekolah, tanggal, status, keterangan, cabang, dan periode. | Locked |
 | D-TA9 | Status absensi menggunakan `Hadir \| Izin \| Alpa`. | Locked |
@@ -98,8 +98,9 @@
 | D-TA11 | Tenaga pengajar mengisi absensi sendiri dari dashboard masing-masing. | Locked |
 | D-TA12 | Admin Cabang mengelola/koreksi absensi di cabangnya; Superadmin dapat mengelola/koreksi semua cabang. | Locked |
 | D-TA13 | Tenaga pengajar hanya melihat ringkasan absensinya sendiri. | Locked |
-| D-TA14 | Perhitungan honor dari absensi baru masuk Gate C. | Locked |
+| D-TA14 | Perhitungan honor dari absensi baru **boleh** masuk Gate C — tetapi apakah `finance.js`/honor benar-benar berpindah sumber ke `absensiPengajar` (vs tetap dari absensi kegiatan lama) **belum diputuskan**. Keputusan ini menunggu hasil validasi TA.C.2b (data absensi tenaga pengajar vs pencatatan manual September). | **Pending** |
 | D-TA15 | Matriks bulanan dibangun dari record absensi dan dapat menampilkan beberapa pengajar dalam satu sel. | Locked |
+| D-TA16 | Rekap matriks historis mengambil label `I`/`A` dari `trainer.tipePengajar` saat ini (bukan snapshot per record). Jika tipe pengajar seseorang berubah, label pada rekap lama ikut berubah mengikuti tipe terbaru. Ini risiko yang disadari, bukan bug — dievaluasi ulang bila perubahan tipe pengajar mulai sering terjadi. | Locked |
 
 ---
 
@@ -145,10 +146,11 @@ penugasanPengajar
 Interpretasi:
 
 - `trainerId` = instruktur utama;
-- `asistenId` = asisten yang mendampingi instruktur tersebut;
+- `asistenId` = asisten yang mendampingi instruktur tersebut. **Nullable** — satu baris penugasan boleh berupa instruktur solo tanpa asisten;
 - satu sekolah dapat mempunyai banyak baris penugasan;
 - satu instruktur dapat mempunyai banyak baris penugasan;
-- satu asisten dapat muncul pada penugasan yang berbeda selama relasinya valid.
+- satu asisten dapat muncul pada penugasan yang berbeda selama relasinya valid;
+- `aktif` + rentang `periodeMulai`/`periodeSelesai` menentukan apakah penugasan itu **valid untuk tanggal absensi tertentu**. Penulisan absensi (§7, TA.B.2) wajib mengecek bahwa tanggal absensi jatuh di dalam rentang penugasan yang `aktif = true`, bukan hanya mengecek bahwa sekolah pernah ditugaskan.
 
 Jika kebutuhan implementasi akhirnya membutuhkan pasangan yang lebih fleksibel, field relasi boleh diperluas, tetapi tidak boleh menghilangkan identitas sekolah + orang yang ditugaskan.
 
@@ -310,7 +312,7 @@ Satu sel dapat berisi banyak tenaga pengajar.
 
 ---
 
-## 9. Honor integration — Gate C only
+## 9. Honor integration — Gate C only, keputusan pending
 
 Sebelum Gate C:
 
@@ -318,7 +320,9 @@ Sebelum Gate C:
 - jangan mengubah `financialData()`/`honorPayments`;
 - jangan membuat nominal honor baru dari hardcode tipe.
 
-Pada Gate C:
+**Gate C tidak otomatis berarti "honor pasti dipindah ke absensi tenaga pengajar".** Sebelum TA.C.3 (integrasi honor) dieksekusi, harus ada checkpoint validasi eksplisit (lihat TA.C.2b pada dokumen milestone): data absensi tenaga pengajar dibandingkan dengan pencatatan manual September 2026, dan baru setelah itu diputuskan apakah sumber perhitungan honor benar-benar berpindah, atau tetap memakai absensi kegiatan lama. D-TA14 berstatus **Pending** sampai checkpoint ini disetujui.
+
+Jika checkpoint disetujui, pada Gate C:
 
 ```text
 honor = absensiPengajar(status = Hadir) × trainer.honor
@@ -343,11 +347,13 @@ Integrasi harus tetap menjaga audit trail dan invariant ledger yang sudah berlak
 - **R-TA5** — Matriks rekap adalah derived view, bukan source of truth.
 - **R-TA6** — Trainer/asisten hanya boleh menulis absensinya sendiri.
 - **R-TA7** — Server tetap menjadi sumber enforcement untuk branch scope dan ownership.
-- **R-TA8** — Penugasan harus valid sebelum sekolah dapat dipilih pada form absensi.
+- **R-TA8** — Penugasan harus valid **dan aktif untuk tanggal yang dipilih** (sesuai `periodeMulai`/`periodeSelesai`/`aktif`) sebelum sekolah dapat dipilih pada form absensi.
 - **R-TA9** — Satu sekolah boleh memiliki banyak pengajar pada tanggal yang sama.
 - **R-TA10** — Setiap microtask mempunyai satu outcome dan satu verify yang falsifiable.
-- **R-TA11** — Gate C adalah satu-satunya gate yang boleh mengubah jalur perhitungan honor berdasarkan absensi baru.
+- **R-TA11** — Gate C adalah satu-satunya gate yang boleh mengubah jalur perhitungan honor berdasarkan absensi baru, **dan hanya boleh dieksekusi setelah checkpoint keputusan bisnis TA.C.2b disetujui secara eksplisit**.
 - **R-TA12** — Implementasi baru tidak boleh mengubah angka historis `honorPayments` tanpa bukti regresi eksplisit.
+- **R-TA13** — `asistenId` pada Penugasan bersifat nullable; validator tidak boleh menolak penugasan instruktur tanpa asisten.
+- **R-TA14** — Label `I`/`A` pada rekap matriks selalu mengikuti `trainer.tipePengajar` terkini (bukan snapshot), sesuai D-TA16; ini bukan bug dan tidak boleh "diperbaiki" tanpa keputusan eksplisit untuk menambah field snapshot.
 
 ---
 
@@ -366,7 +372,7 @@ Rantai dianggap selesai jika:
 9. Rekap matriks September/periodik dapat menghasilkan bentuk yang setara dengan tabel operasional.
 10. Satu sekolah + satu tanggal dapat menampilkan banyak tenaga pengajar.
 11. Ringkasan pribadi tenaga pengajar hanya menampilkan data miliknya.
-12. Gate C menghitung honor berdasarkan `Hadir × trainer.honor` tanpa hardcode nominal.
+12. Checkpoint keputusan bisnis (TA.C.2b) disetujui secara eksplisit sebelum Gate C dieksekusi; jika disetujui, Gate C menghitung honor berdasarkan `Hadir × trainer.honor` tanpa hardcode nominal.
 13. Jalur `honorPayments` yang sudah ada tetap lolos regresi.
 14. Setiap microtask mempunyai bukti `Verified:`.
 15. Dokumen sumber diperbarui setelah chain selesai.
