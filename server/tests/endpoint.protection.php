@@ -621,14 +621,12 @@ $pdo->prepare(
     ':id' => $assignmentSchoolA,
     ':cabang_id' => $branchA,
     ':payload' => json_encode([
-    'id' => $assignmentSchoolA,
-    'cabangId' => $branchA,
-    'penugasanPengajar' => [
-        [
-            'trainerId' => $trnA['id'],
-        ],
-    ],
-], JSON_UNESCAPED_UNICODE),
+        'id' => $assignmentSchoolA,
+        'cabangId' => $branchA,
+        // penugasanPengajar TIDAK disimpan di sekolah — sengaja dihapus
+        // dari sini supaya test membuktikan read.php baca dari trainer,
+        // bukan diam-diam lolos gara-gara data dobel di kedua tempat.
+    ], JSON_UNESCAPED_UNICODE),
 ]);
 
 $pdo->prepare(
@@ -638,15 +636,12 @@ $pdo->prepare(
     ':id' => $assignmentSchoolB,
     ':cabang_id' => $branchA,
     ':payload' => json_encode([
-    'id' => $assignmentSchoolB,
-    'cabangId' => $branchA,
-    'penugasanPengajar' => [
-        [
-            'trainerId' => $trnB['id'],
-        ],
-    ],
-], JSON_UNESCAPED_UNICODE),
-
+        'id' => $assignmentSchoolB,
+        'cabangId' => $branchA,
+        // penugasanPengajar TIDAK disimpan di sekolah — sengaja dihapus
+        // dari sini supaya test membuktikan read.php baca dari trainer,
+        // bukan diam-diam lolos gara-gara data dobel di kedua tempat.
+    ], JSON_UNESCAPED_UNICODE),
 ]);
 
 $assignmentA = [

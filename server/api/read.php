@@ -56,6 +56,14 @@ $output = [];
  */
 $sekolahTrainerIds = [];
 
+// TA.A.3 fix: penugasanPengajar disimpan di TRAINER.payload (sesuai
+// validateTrainer() — assignment.trainerId harus match trainer record
+// yang divalidasi), BUKAN di sekolah.payload. Baca dari trainer, bukan
+// sekolah — sebelumnya read.php mencari penugasanPengajar di
+// sekolah.payload, tempat yang tidak pernah ditulis oleh trainer.php,
+// jadi scope trainer/asisten selalu kosong di jalur nyata (hanya lolos
+// test karena fixture-nya menyuntik data manual ke sekolah.payload
+// lewat SQL langsung, bukan lewat trainer.php).
 if (
     $user['role'] === 'trainer'
     && (
@@ -64,24 +72,18 @@ if (
         || in_array('sppPayments', $entities, true)
     )
 ) {
-    $sekolahRows = $pdo
-        ->query('SELECT payload FROM sekolah ORDER BY created_at, id')
+    $trainerRows = $pdo
+        ->query('SELECT payload FROM trainer ORDER BY created_at, id')
         ->fetchAll();
 
-    foreach ($sekolahRows as $row) {
-        $sekolahPayload = json_decode($row['payload'], true);
+    foreach ($trainerRows as $row) {
+        $trainerPayload = json_decode($row['payload'], true);
 
-        if (!is_array($sekolahPayload)) {
+        if (!is_array($trainerPayload)) {
             continue;
         }
 
-        $sekolahId = $sekolahPayload['id'] ?? null;
-
-        if (!is_string($sekolahId) || trim($sekolahId) === '') {
-            continue;
-        }
-
-        $assignments = $sekolahPayload['penugasanPengajar'] ?? [];
+        $assignments = $trainerPayload['penugasanPengajar'] ?? [];
 
         if (!is_array($assignments)) {
             continue;
@@ -89,6 +91,12 @@ if (
 
         foreach ($assignments as $assignment) {
             if (!is_array($assignment)) {
+                continue;
+            }
+
+            $sekolahId = $assignment['sekolahId'] ?? null;
+
+            if (!is_string($sekolahId) || trim($sekolahId) === '') {
                 continue;
             }
 
