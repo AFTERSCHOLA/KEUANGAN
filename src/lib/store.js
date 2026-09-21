@@ -98,11 +98,15 @@ function isWithinScope(key, record, ctx) {
     if (!ctx.trainerId) return false
     const trainer = readCollection('trainer').find(t => t.id === ctx.trainerId)
     const schoolIds = new Set(trainer?.sekolahIds || [])
+    // sppPayments: siswaId -> siswa.sekolahId (dua hop), sama pola yang
+    // dipakai admin_cabang di atas & trainerOwnsRecord() di server.
+    const studentIds = new Set(readCollection('siswa').filter(s => schoolIds.has(s.sekolahId)).map(s => s.id))
     switch (key) {
       case 'sekolah': return schoolIds.has(record.id)
       case 'trainer': return record.id === ctx.trainerId
       case 'absensi': return record.trainerId === ctx.trainerId && schoolIds.has(record.sekolahId)
       case 'siswa': return schoolIds.has(record.sekolahId)
+      case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId)
       case 'honorPayments': return record.trainerId === ctx.trainerId
       case 'invoices': return false
       default: return false
@@ -365,6 +369,7 @@ const WRITE_ENDPOINTS = {
   // the generator's grouping/sequence/carry-over logic — don't add a
   // call site for it.
   invoices: '/api/invoices.php',
+  honorPayments: '/api/honorPayments.php',
 }
 
 // MULTI_ACCOUNT_SYNC M-MAS1.1 — single owner of the per-entity `cabangId`
@@ -509,6 +514,37 @@ export async function deleteRemote(key, id) {
     // 'Invoice tidak ditemukan') still throw.
     if (key === 'invoices' && error instanceof ApiError && error.status === 422 && error.body?.error === 'Invoice sudah memiliki pembayaran dan tidak dapat dihapus') {
       return { status: 'guarded', message: error.message }
+    }
+    throw error
+  }
+}
+
+// Ledger honorPayments tidak pernah benar-benar dihapus (server tidak
+// punya action 'delete' untuk entity ini, hanya 'append'/'correct') —
+// desain sengaja, supaya histori pembayaran honor tetap jadi audit trail
+// utuh. "Menghapus" sebuah entry dari sisi UI berarti mengirim entry
+// koreksi ber-nominal negatif yang me-net-off entry asal ke nol,
+// direferensikan lewat correctionOf. honorPaidByTrainer() di finance.js
+// cuma sum(nominal) polos tanpa peduli correctionOf, jadi net-off ini
+// otomatis benar di semua laporan (FinanceReport, ExecutiveSummary, dst)
+// tanpa perlu ubah logic finance sama sekali.
+export async function correctLedgerEntry(key, originalRecord, correctionRecord) {
+  const url = WRITE_ENDPOINTS[key]
+  if (!url) throw new Error(`correctLedgerEntry: entitas "${key}" belum punya endpoint server`)
+
+  try {
+    const result = await apiRequest(url, {
+      method: 'POST',
+      body: { record: correctionRecord, correctionOf: originalRecord.id, action: 'correct' },
+    })
+    const records = readRaw(key)
+    records.push({ ...correctionRecord, ...result })
+    writeRaw(key, records)
+    notifyStoreChanged()
+    return { status: 'ok', id: result.id }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) {
+      return { status: 'forbidden', message: error.message }
     }
     throw error
   }

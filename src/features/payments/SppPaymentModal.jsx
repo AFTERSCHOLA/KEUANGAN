@@ -51,16 +51,17 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
       return
     }
     const payment = newSppPayment({
-      siswaId,
-      periode: periodeSelected,
-      nominal: Number(nominal),
-      tanggalBayar,
-      metode,
-      diterimaOleh,
-      bukti,
-      sumberDana,
-      cabangKode,
-    })
+  siswaId,
+  periode: periodeSelected,
+  nominal: Number(nominal),
+  tanggalBayar,
+  metode,
+  diterimaOleh,
+  bukti,
+  sumberDana,
+  cabangKode,
+  cabangId: sekolahSiswa?.cabangId,
+})
     addSppPayment(payment)
     recomputeSppLunasForSiswa(siswaId)
     if (onSaved) onSaved()

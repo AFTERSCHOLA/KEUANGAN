@@ -1,5 +1,11 @@
 import { useState, Fragment } from 'react'
-import { readCached, upsert, write, usePeriod } from '../../lib/store.js'
+import {
+  readCached,
+  usePeriod,
+  read,
+  getRoleContext,
+  correctLedgerEntry,
+} from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newHonorPayment } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
@@ -32,6 +38,11 @@ export default function PaymentTable() {
     return cabang.find(c => c.id === school?.cabangId)?.kode
   }
 
+  function cabangIdForTrainer(trainer) {
+    const school = sekolah.find(s => (trainer.sekolahIds || []).includes(s.id))
+    return school?.cabangId ?? null
+}
+
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
   const data = financialData({ sekolah, siswa: readCached('siswa'), trainer: trainers, absensi, honorPayments: payments, sppPayments: readCached('sppPayments'), periode })
@@ -52,7 +63,14 @@ export default function PaymentTable() {
     // hasil parsing tanggalBayar) — "Lunaskan" & pembayaran manual sama-sama
     // melunasi Beban Honor periode berjalan, terlepas kapan uangnya
     // secara fisik dibayarkan.
-    upsert('honorPayments', newHonorPayment({ trainerId: selectedTrainer.id, periode, nominal: Number(nominal), tanggalBayar: payForm.tanggalBayar, cabangKode: cabangKodeForTrainer(selectedTrainer) }))
+    upsert('honorPayments', newHonorPayment({
+  trainerId: selectedTrainer.id,
+  periode,
+  nominal: Number(nominal),
+  tanggalBayar: payForm.tanggalBayar,
+  cabangKode: cabangKodeForTrainer(selectedTrainer),
+  cabangId: cabangIdForTrainer(selectedTrainer),
+}))
     setModalOpen(false)
     refreshPayments()
   }
@@ -78,17 +96,41 @@ export default function PaymentTable() {
     setConfirmMsg(`Bayar sisa ${formatRupiah(sisa)} kepada ${trainer.nama} untuk ${bulanLabel}?`)
     setConfirmOnConfirm(() => () => {
       setSelectedTrainer(trainer)
-      upsert('honorPayments', newHonorPayment({ trainerId: trainer.id, periode, nominal: sisa, tanggalBayar: new Date().toISOString().slice(0, 10), cabangKode: cabangKodeForTrainer(trainer) }))
+      upsert('honorPayments', newHonorPayment({
+  trainerId: trainer.id,
+  periode,
+  nominal: sisa,
+  tanggalBayar: new Date().toISOString().slice(0, 10),
+  cabangKode: cabangKodeForTrainer(trainer),
+  cabangId: cabangIdForTrainer(trainer),
+}))
       refreshPayments()
     })
     setConfirmOpen(true)
   }
 
   function deletePayment(id) {
+    const original = payments.find(p => p.id === id)
+    if (!original) return
     setConfirmMsg('Hapus entri pembayaran ini? Sisa kewajiban akan dihitung ulang.')
-    const prevPayments = payments.filter(p => p.id !== id)
-    setConfirmOnConfirm(() => () => {
-      write('honorPayments', prevPayments)
+    setConfirmOnConfirm(() => async () => {
+      const trainer = trainers.find(t => t.id === original.trainerId)
+
+const correction = {
+  ...newHonorPayment({
+    trainerId: original.trainerId,
+    periode: original.periode,
+    nominal: -Number(original.nominal),
+    tanggalBayar: new Date().toISOString().slice(0, 10),
+    cabangKode: cabangKodeForTrainer(trainer),
+    cabangId: cabangIdForTrainer(trainer),
+  }),
+}
+      const result = await correctLedgerEntry('honorPayments', original, correction)
+      if (result.status === 'forbidden') {
+        setConfirmMsg(result.message || 'Akses tidak diizinkan.')
+        return
+      }
       refreshPayments()
     })
     setConfirmOpen(true)

@@ -272,6 +272,7 @@ export function newHonorPayment({
   nominal,
   tanggalBayar,
   cabangKode,
+  cabangId,
 }) {
   return {
     id: generateId('pay', cabangKode),
@@ -279,6 +280,7 @@ export function newHonorPayment({
     periode,
     nominal: Number(nominal),
     tanggalBayar,
+    cabangId,
   }
 }
 
@@ -299,11 +301,12 @@ export function newAbsensi({
   foto = '',
   konfirmasiTrainer = null,
   lastEditedAt = null,
+  cabangId,
 }) {
   return {
     id: id || `${tanggal}_${sekolahId}_${trainerId}`,
     tanggal,
-    periode: periodeFromDate(tanggal),
+    periode: tanggal ? tanggal.slice(0, 7) : '',
     sekolahId,
     trainerId,
     trainerNama,
@@ -318,6 +321,7 @@ export function newAbsensi({
     foto,
     konfirmasiTrainer,
     lastEditedAt,
+    cabangId,
   }
 }
 

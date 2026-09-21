@@ -105,6 +105,7 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
         siswaId: s.id,
         nama: s.nama,
         status: siswaStatus[s.id] === 'Hadir' ? 'Hadir' : 'Tidak Hadir',
+        cabangId: sekolah.find(s => s.id === sekolahId)?.cabangId,
       })),
       asistenId: asisten ? asisten.id : null,
       asistenNama: asisten ? asisten.nama : null,

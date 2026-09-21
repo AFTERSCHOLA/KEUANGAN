@@ -16,6 +16,7 @@ export function newSppPayment({
   invoiceId = null,
   sekolahId = null,
   cabangKode,
+  cabangId,
 }) {
   const payment = {
     id: generateId('spp', cabangKode),
@@ -28,9 +29,8 @@ export function newSppPayment({
     bukti,
     sudahDisetor,
     sumberDana,
+    cabangId,
   }
-  // SBF.2 (D-SB8) — optional invoice-level linkage. Omitted when unset so
-  // legacy per-siswa rows keep their exact shape (R-SB3).
   if (invoiceId) payment.invoiceId = invoiceId
   if (sekolahId) payment.sekolahId = sekolahId
   return payment
