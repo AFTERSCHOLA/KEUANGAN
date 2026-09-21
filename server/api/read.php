@@ -76,55 +76,66 @@ foreach ($entities as $name) {
 
     $config = entityConfig($name);
 
-    if ($user['role'] === 'superadmin') {
-        $rows = $pdo->query("SELECT payload, version FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
-    } elseif ($name === 'cabang') {
-        // cabang has no cabang_id column pointing at itself — its own `id`
-        // IS the branch id (see recordOwnsBranch() in authorize.php). Admin
-        // Cabang can only ever see their own branch record; Trainer has no
-        // branch-column to scope by here either, so this falls through to
-        // the same per-record authorize() check as everyone non-superadmin.
-        $rows = $pdo->query("SELECT payload, version FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
-    } else {
-        // cabang_id is a real column on the other tables — scope at the SQL
-        // level first (branch-level, coarse-grained) before any per-record
-        // authorize() check below. A caller with no branch context (should
-        // never happen post-login, but fail closed rather than assume) gets
-        // nothing instead of an unscoped query.
-        $cabangId = $user['cabangId'] ?? null;
-        if ($user['role'] === 'admin_cabang' && (!is_string($cabangId) || $cabangId === '')) {
-            $output[$name] = [];
-            continue;
-        }
-        if ($user['role'] === 'admin_cabang') {
-            $stmt = $pdo->prepare("SELECT payload, version FROM {$config['table']} WHERE cabang_id = :cabang_id ORDER BY created_at, id");
-            $stmt->execute([':cabang_id' => $cabangId]);
-            $rows = $stmt->fetchAll();
-        } else {
-            // Trainer: no reliable cabang_id column to pre-filter by (trainer
-            // assignment is school-based, not branch-based) — pull the full
-            // table and let the per-record authorize() check below do the
-            // filtering, same as before M4.1.
-            $rows = $pdo->query("SELECT payload, version FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
-        }
+$selectCols = $name === 'honorPayments'
+    ? 'payload, version, correction_of'
+    : 'payload, version';
+
+if ($user['role'] === 'superadmin') {
+    $rows = $pdo->query("SELECT {$selectCols} FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+} elseif ($name === 'cabang') {
+    // cabang has no cabang_id column pointing at itself
+    $rows = $pdo->query("SELECT {$selectCols} FROM {$config['table']} ORDER BY created_at, id")->fetchAll();
+} else {
+    $cabangId = $user['cabangId'] ?? null;
+
+    if ($user['role'] === 'admin_cabang' && (!is_string($cabangId) || $cabangId === '')) {
+        $output[$name] = [];
+        continue;
     }
 
+    if ($user['role'] === 'admin_cabang') {
+        $stmt = $pdo->prepare(
+            "SELECT {$selectCols} FROM {$config['table']}
+             WHERE cabang_id = :cabang_id
+             ORDER BY created_at, id"
+        );
+        $stmt->execute([':cabang_id' => $cabangId]);
+        $rows = $stmt->fetchAll();
+    } else {
+        $rows = $pdo->query(
+            "SELECT {$selectCols} FROM {$config['table']} ORDER BY created_at, id"
+        )->fetchAll();
+    }
+}
+
     $records = array_values(array_filter(array_map(
-        static function (array $row) use ($name): array {
-            $payload = json_decode($row['payload'], true);
-            if (!is_array($payload)) return ['__invalid' => true];
-            // M-MAS4.2: surface the SQL-side `version` column alongside the
-            // payload so subsequent writeRemote() UPDATE calls can echo it
-            // back to masterWrite(). masterWrite() (server/api/_master.php:111)
-            // returns 409 unless $clientVersion === $existing['version'].
-            // Without this echo the client only ever sends $clientVersion=null,
-            // so every edit against a cold-loaded record 409s even when there
-            // is no actual concurrent edit.
-            $payload['version'] = (int) $row['version'];
-            return $payload;
-        },
-        $rows
-    ), static fn (mixed $record): bool => is_array($record) && !($record['__invalid'] ?? false)));
+    static function (array $row) use ($name): array {
+        $payload = json_decode($row['payload'], true);
+
+        if (!is_array($payload)) {
+            return ['__invalid' => true];
+        }
+
+        $payload['version'] = (int) $row['version'];
+
+        // correction_of disimpan di kolom SQL terpisah,
+        // jadi harus dikembalikan ke bentuk correctionOf
+        // supaya frontend tahu bahwa record ini adalah koreksi
+        // dari entry pembayaran sebelumnya.
+        if (
+            $name === 'honorPayments'
+            && array_key_exists('correction_of', $row)
+            && $row['correction_of'] !== null
+        ) {
+            $payload['correctionOf'] = $row['correction_of'];
+        }
+
+        return $payload;
+    },
+    $rows
+), static fn (mixed $record): bool =>
+    is_array($record) && !($record['__invalid'] ?? false)
+));
 
     // Admin Cabang (non-cabang entities) and Superadmin are already fully
     // covered by the query above. Everyone else needs a per-record

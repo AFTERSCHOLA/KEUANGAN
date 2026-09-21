@@ -538,8 +538,12 @@ export async function correctLedgerEntry(key, originalRecord, correctionRecord) 
       body: { record: correctionRecord, correctionOf: originalRecord.id, action: 'correct' },
     })
     const records = readRaw(key)
-    records.push({ ...correctionRecord, ...result })
-    writeRaw(key, records)
+// correctionOf sebelumnya cuma dikirim di body request ke server, tidak
+// pernah ikut disimpan di local record — akibatnya UI tidak bisa
+// membedakan "entry koreksi" dari "entry pembayaran baru", dan tombol
+// hapus terlihat seperti menambah baris, bukan menghapus.
+records.push({ ...correctionRecord, correctionOf: originalRecord.id, ...result })
+writeRaw(key, records)
     notifyStoreChanged()
     return { status: 'ok', id: result.id }
   } catch (error) {

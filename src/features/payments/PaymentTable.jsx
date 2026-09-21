@@ -4,6 +4,7 @@ import {
   usePeriod,
   read,
   getRoleContext,
+  upsert,
   correctLedgerEntry,
 } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
@@ -182,7 +183,18 @@ const correction = {
               {trainers.map(t => {
                 const fin = financeByTrainerId[t.id] || { hadirSesi: 0, tarif: t.honor, bebanHonor: 0, dibayar: 0, sisaHonor: 0 }
                 const sekolahNama = (t.sekolahIds || []).map(id => sekolah.find(s => s.id === id)).filter(Boolean).map(s => s.nama).join(', ')
-                const history = payments.filter(p => p.trainerId === t.id && p.periode === periode)
+                // Pasangan entry asli + entry koreksinya (correctionOf) direpresentasikan
+// sebagai "dihapus" di UI, tapi tetap utuh di database sebagai audit trail
+// (ledger append-only — lihat honorPayments.php, tidak ada action delete).
+const correctedIds = new Set(
+  payments.filter(p => p.correctionOf).map(p => p.correctionOf)
+)
+const history = payments.filter(p =>
+  p.trainerId === t.id &&
+  p.periode === periode &&
+  !p.correctionOf &&
+  !correctedIds.has(p.id)
+)
                 const isExpanded = expandedTrainerId === t.id
                 return (
                   <Fragment key={t.id}>
