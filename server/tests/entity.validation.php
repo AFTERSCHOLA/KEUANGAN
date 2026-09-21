@@ -18,6 +18,26 @@ function hasError(array $errors, string $needle): bool {
     return false;
 }
 
+function assertSame(mixed $expected, mixed $actual, string $message = ''): void {
+    if ($expected !== $actual) {
+        throw new RuntimeException(
+            $message !== '' ? $message : 'assertSame failed'
+        );
+    }
+}
+
+function assertContains(string $needle, array $haystack, string $message = ''): void {
+    foreach ($haystack as $value) {
+        if (is_string($value) && stripos($value, $needle) !== false) {
+            return;
+        }
+    }
+
+    throw new RuntimeException(
+        $message !== '' ? $message : "assertContains failed: {$needle}"
+    );
+}
+
 $pdo = database();
 
 // Seed a real cabang + sekolah + trainer to validate references against.
@@ -50,6 +70,125 @@ $pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :cabang
     ':cabang_id' => $cabangId,
     ':payload' => json_encode(['id' => $trainerId, 'cabangId' => $cabangId], JSON_UNESCAPED_UNICODE),
 ]);
+
+// TA.A.1 — tipePengajar enum (D-TA1/D-TA2/D-TA3/D-TA5)
+// Field optional untuk menjaga backward compatibility dengan trainer lama.
+$trainerBase = [
+    'id' => 'trn-ta1-' . bin2hex(random_bytes(3)),
+    'cabangId' => $cabangId,
+    'honor' => 100,
+];
+
+$errors = validateTrainer($trainerBase + ['tipePengajar' => 'instruktur'], $pdo);
+fixtureCheck(
+    $errors === [],
+    'trainer with tipePengajar=instruktur should validate, got: ' . implode('; ', $errors)
+);
+
+$errors = validateTrainer($trainerBase + ['tipePengajar' => 'asisten'], $pdo);
+fixtureCheck(
+    $errors === [],
+    'trainer with tipePengajar=asisten should validate, got: ' . implode('; ', $errors)
+);
+
+$errors = validateTrainer($trainerBase + ['tipePengajar' => 'admin'], $pdo);
+fixtureCheck(
+    hasError($errors, 'tipePengajar'),
+    'trainer with invalid tipePengajar should be rejected'
+);
+
+// Backward compatibility: trainer lama tanpa tipePengajar tetap valid.
+$errors = validateTrainer($trainerBase, $pdo);
+fixtureCheck(
+    $errors === [],
+    'legacy trainer without tipePengajar should still validate, got: ' . implode('; ', $errors)
+);
+
+echo "TA.A.1 tipePengajar enum/backward-compatibility check passed\n";
+
+
+// TA.A.2 — trainer assignment schema
+// Gunakan fixture yang benar-benar sudah ada di database agar
+// pengecekan referensi sekolah/trainer ikut benar-benar teruji.
+
+$assistant1Id = 'trn-m32-assistant-1-' . bin2hex(random_bytes(3));
+$assistant2Id = 'trn-m32-assistant-2-' . bin2hex(random_bytes(3));
+
+foreach ([
+    [$assistant1Id, 'M3A1'],
+    [$assistant2Id, 'M3A2'],
+] as [$assistantId, $kodeSuffix]) {
+    $pdo->prepare(
+        'INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)'
+    )->execute([
+        ':id' => $assistantId,
+        ':cabang_id' => $cabangId,
+        ':payload' => json_encode([
+            'id' => $assistantId,
+            'cabangId' => $cabangId,
+            'tipePengajar' => 'asisten',
+        ], JSON_UNESCAPED_UNICODE),
+    ]);
+}
+
+$trainerWithAssignments = [
+    'id' => $trainerId,
+    'cabangId' => $cabangId,
+    'sekolahIds' => [$sekolahId],
+    'tipePengajar' => 'instruktur',
+    'penugasanPengajar' => [
+        [
+            'sekolahId' => $sekolahId,
+            'trainerId' => $trainerId,
+            'asistenId' => $assistant1Id,
+        ],
+        [
+            'sekolahId' => $sekolahId,
+            'trainerId' => $trainerId,
+            'asistenId' => $assistant2Id,
+        ],
+        [
+            'sekolahId' => $sekolahId,
+            'trainerId' => $trainerId,
+            'asistenId' => null,
+        ],
+    ],
+];
+
+assertSame(
+    [],
+    validateTrainer($trainerWithAssignments, $pdo),
+    'TA.A.2 multiple trainer assignments with nullable asistenId'
+);
+
+$invalidAssignmentSchool = $trainerWithAssignments;
+$invalidAssignmentSchool['penugasanPengajar'][0]['sekolahId'] = 'sekolah-does-not-exist';
+
+assertContains(
+    'sekolahId does not reference an existing sekolah',
+    validateTrainer($invalidAssignmentSchool, $pdo),
+    'TA.A.2 invalid sekolah reference must be rejected'
+);
+
+$invalidAssignmentTrainer = $trainerWithAssignments;
+$invalidAssignmentTrainer['penugasanPengajar'][0]['trainerId'] = 'trainer-does-not-exist';
+
+assertContains(
+    'trainerId does not reference an existing trainer',
+    validateTrainer($invalidAssignmentTrainer, $pdo),
+    'TA.A.2 invalid trainer reference must be rejected'
+);
+
+$invalidAssignmentAssistant = $trainerWithAssignments;
+$invalidAssignmentAssistant['penugasanPengajar'][0]['asistenId'] = 'trainer-does-not-exist';
+
+assertContains(
+    'asistenId does not reference an existing trainer',
+    validateTrainer($invalidAssignmentAssistant, $pdo),
+    'TA.A.2 invalid asisten reference must be rejected'
+);
+
+echo "TA.A.2 trainer assignment schema check passed\n";
 
 // SB.B.1 — seed a real siswa so validateSppPayment()'s siswaId reference
 // check has something valid to point at.

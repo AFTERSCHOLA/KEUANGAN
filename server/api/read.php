@@ -40,14 +40,74 @@ $output = [];
 // (siswa.sekolahId -> sekolah.trainerIds). Precompute once, only if a
 // trainer might need it (siswa is in scope AND role is trainer) — avoids
 // an unnecessary query for every other role/entity combination.
+/**
+ * TA.A.3 — assignment scope.
+ *
+ * Scope trainer/asisten tidak boleh dipercaya dari payload request.
+ * Ambil seluruh assignment dari trainer payload yang tersimpan di DB,
+ * lalu bentuk index:
+ *
+ *   sekolahId => [trainerId, asistenId, ...]
+ *
+ * Dengan begitu:
+ * - instruktur mendapat sekolah yang memang ditugaskan kepadanya;
+ * - asisten juga mendapat sekolah tempat dia ditugaskan;
+ * - ID trainer lain dari request tidak bisa dipakai untuk bypass scope.
+ */
 $sekolahTrainerIds = [];
-if ($user['role'] === 'trainer' && (in_array('siswa', $entities, true) || in_array('sppPayments', $entities, true))) {
-    $sekolahRows = $pdo->query('SELECT payload FROM sekolah ORDER BY created_at, id')->fetchAll();
+
+if (
+    $user['role'] === 'trainer'
+    && (
+        in_array('siswa', $entities, true)
+        || in_array('sekolah', $entities, true)
+        || in_array('sppPayments', $entities, true)
+    )
+) {
+    $sekolahRows = $pdo
+        ->query('SELECT payload FROM sekolah ORDER BY created_at, id')
+        ->fetchAll();
+
     foreach ($sekolahRows as $row) {
-        $sch = json_decode($row['payload'], true);
-        if (is_array($sch) && isset($sch['id'])) {
-            $sekolahTrainerIds[$sch['id']] = $sch['trainerIds'] ?? [];
+        $sekolahPayload = json_decode($row['payload'], true);
+
+        if (!is_array($sekolahPayload)) {
+            continue;
         }
+
+        $sekolahId = $sekolahPayload['id'] ?? null;
+
+        if (!is_string($sekolahId) || trim($sekolahId) === '') {
+            continue;
+        }
+
+        $assignments = $sekolahPayload['penugasanPengajar'] ?? [];
+
+        if (!is_array($assignments)) {
+            continue;
+        }
+
+        foreach ($assignments as $assignment) {
+            if (!is_array($assignment)) {
+                continue;
+            }
+
+            foreach (['trainerId', 'asistenId'] as $field) {
+                $assignedId = $assignment[$field] ?? null;
+
+                if (!is_string($assignedId) || trim($assignedId) === '') {
+                    continue;
+                }
+
+                $sekolahTrainerIds[$sekolahId][] = trim($assignedId);
+            }
+        }
+    }
+
+    foreach ($sekolahTrainerIds as $sekolahId => $trainerIds) {
+        $sekolahTrainerIds[$sekolahId] = array_values(
+            array_unique($trainerIds)
+        );
     }
 }
 
@@ -144,17 +204,50 @@ if ($user['role'] === 'superadmin') {
     // is assignment-based, not branch-based — e.g. absensi.trainerId must
     // match, sekolah.trainerIds must contain them, siswa needs the indirect
     // sekolah lookup precomputed above).
-    if ($user['role'] === 'trainer' || ($user['role'] === 'admin_cabang' && $name === 'cabang')) {
-    $records = array_values(array_filter($records, static function (array $record) use ($name, $user, $sekolahTrainerIds, $siswaSekolahId): bool {
-        if ($name === 'siswa') {
-            $record['_sekolahTrainerIds'] = $sekolahTrainerIds[$record['sekolahId'] ?? null] ?? [];
-        }
-        if ($name === 'sppPayments') {
-            $sekolahId = $siswaSekolahId[$record['siswaId'] ?? null] ?? null;
-            $record['_sekolahTrainerIds'] = $sekolahTrainerIds[$sekolahId] ?? [];
-        }
-        return authorize('read', $name, $record, $user);
-    }));
+    if (
+    $user['role'] === 'trainer'
+    || ($user['role'] === 'admin_cabang' && $name === 'cabang')
+) {
+    $records = array_values(array_filter(
+        $records,
+        static function (array $record) use (
+    $name,
+    $user,
+    $sekolahTrainerIds,
+    $siswaSekolahId
+): bool {
+    $authorizationRecord = $record;
+
+    if ($name === 'sekolah' && $user['role'] === 'trainer') {
+    $sekolahId = $record['id'] ?? null;
+
+    $authorizationRecord['_sekolahTrainerIds'] =
+        $sekolahTrainerIds[$sekolahId] ?? [];
+}
+
+    if ($name === 'siswa') {
+        $sekolahId = $record['sekolahId'] ?? null;
+
+        $authorizationRecord['_sekolahTrainerIds'] =
+            $sekolahTrainerIds[$sekolahId] ?? [];
+    }
+
+    if ($name === 'sppPayments') {
+        $sekolahId =
+            $siswaSekolahId[$record['siswaId'] ?? null] ?? null;
+
+        $authorizationRecord['_sekolahTrainerIds'] =
+            $sekolahTrainerIds[$sekolahId] ?? [];
+    }
+
+    return authorize(
+        'read',
+        $name,
+        $authorizationRecord,
+        $user
+    );
+}
+    ));
 }
 
     $output[$name] = $records;

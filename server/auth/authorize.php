@@ -39,22 +39,19 @@ function trainerOwnsAttendance(array $data, array $user): bool {
 }
 
 /**
- * Trainer-role read scoping (M3.1 gap 1). Trainer's canonical read entities
- * are 'sekolah', 'trainer', 'siswa', 'absensi' (roleCanReadEntity) but each
- * needs its own ownership check — trainer is assignment-based, not
- * branch-based (trainer has no cabangId of its own in most cases).
+ * Trainer-role read scoping.
  *
- *   - trainer:  own record only, matched by id.
- *   - sekolah:  record.trainerIds must contain this trainer's id
- *               (constants.js newSekolah() stores assignment there).
- *   - absensi:  record.trainerId must match (reuses trainerOwnsAttendance,
- *               same rule already enforced for write/certify).
- *   - siswa:    siswa has no trainerId of its own — assignment is indirect
- *               via siswa.sekolahId -> sekolah.trainerIds. authorize.php has
- *               no DB handle here, so the caller (read.php, M3.3) MUST look
- *               up the student's school and pass its trainerIds in under
- *               $data['_sekolahTrainerIds'] before calling authorize().
- *               Missing that key fails closed (returns false), not open.
+ * Trainer/asisten ownership is assignment-based, not branch-based.
+ * The assignment scope is derived server-side by read.php from the
+ * penugasanPengajar records stored in trainer payloads.
+ *
+ * - trainer: own trainer record only.
+ * - sekolah: trainer must appear as trainerId OR asistenId in an
+ *            assignment for that school.
+ * - siswa: scope follows the student's sekolah assignment.
+ * - absensi: own trainerId only.
+ *
+ * Missing enrichment data fails closed.
  */
 function trainerOwnsRecord(string $resource, array $data, array $user): bool {
     $trainerId = $user['trainerId'] ?? null;
@@ -66,7 +63,11 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
     }
 
     if ($resource === 'sekolah') {
-        return in_array($trainerId, $data['trainerIds'] ?? [], true);
+        // Scope sekolah harus berasal dari penugasan yang sudah
+        // di-enrich server-side oleh read.php.
+        $assignedTrainerIds = $data['_sekolahTrainerIds'] ?? [];
+        return is_array($assignedTrainerIds)
+            && in_array($trainerId, $assignedTrainerIds, true);
     }
 
     if ($resource === 'absensi') {
@@ -74,23 +75,15 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
     }
 
     if ($resource === 'siswa') {
-        // Assignment siswa mengikuti sekolahnya.
-        // read.php wajib mengisi _sekolahTrainerIds.
-        return in_array(
-            $trainerId,
-            $data['_sekolahTrainerIds'] ?? [],
-            true
-        );
+        // Siswa mengikuti scope sekolahnya.
+        // read.php mengisi _sekolahTrainerIds dari assignment
+        // yang tersimpan di DB, bukan dari request client.
+        return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
     }
 
     if ($resource === 'sppPayments') {
-    // Two-hop indirection: sppPayments punya siswaId, bukan sekolahId
-    // langsung — rantainya siswaId -> siswa.sekolahId -> sekolah.trainerIds[].
-    // Sama kayak kontrak siswa di atas: caller (read.php) WAJIB enrich
-    // $data['_sekolahTrainerIds'] sebelum manggil authorize(), fail closed
-    // (return false) kalau nggak di-enrich, bukan fail open.
-    return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
-}
+        return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
+    }
 
     return false;
 }

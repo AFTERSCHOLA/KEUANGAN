@@ -93,3 +93,13 @@ describe('newSekolah metodePembayaran (SB.A.1)', () => {
     expect(() => JSON.parse(JSON.stringify(legacy))).not.toThrow()
   })
 })
+
+describe('newTrainer', () => {
+  it('creates a trainer with instruktur as the default tipePengajar', () => {
+    const trainer = newTrainer('cbg-1', 'PST')
+
+    expect(trainer.tipePengajar).toBe('instruktur')
+    expect(trainer.honor).toBe(0)
+    expect(trainer.cabangId).toBe('cbg-1')
+  })
+})

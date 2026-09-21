@@ -68,7 +68,17 @@ export function newJadwalEntry(overrides = {}) {
 }
 
 export function newTrainer(cabangId, cabangKode) {
-  return { id: generateId('trn', cabangKode || cabangId), nama: '', wa: '', jadwal: '', sekolahIds: [], honor: 0, cabangId: cabangId || null }
+  return {
+    id: generateId('trn', cabangKode || cabangId),
+    nama: '',
+    wa: '',
+    jadwal: '',
+    sekolahIds: [],
+    honor: 0,
+    tipePengajar: 'instruktur',
+    cabangId: cabangId || null,
+    penugasanPengajar: [],
+  }
 }
 
 export function newSiswa(sekolahId, sekolahNama, cabangKode) {

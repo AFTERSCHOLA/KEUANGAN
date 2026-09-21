@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../auth/authorize.php';
+
 // ============================================================
 // M3.3 — Protect existing endpoints
 // Verifies the VERIFY line: anonymous 401, cross-scope 403, duplicate 409,
@@ -168,25 +171,42 @@ if (!$status['running'] && ($status['exitcode'] ?? 0) !== 0) {
     exit(1);
 }
 
-function req(string $method, string $url, ?array $body = null, ?string $cookie = null, ?string $csrfToken = null): array {
+function req(
+    string $method,
+    string $url,
+    ?array $body = null,
+    ?string $cookie = null,
+    ?string $csrfToken = null,
+    ?string $cookieJar = null
+): array {
     $ch = curl_init($url);
     $headers = ['Content-Type: application/json'];
-    if ($csrfToken !== null) $headers[] = 'X-CSRF-Token: ' . $csrfToken;
+
+    if ($csrfToken !== null) {
+        $headers[] = 'X-CSRF-Token: ' . $csrfToken;
+    }
+
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_HTTPHEADER => $headers,
-        // Fail fast instead of hanging forever if the server (or a
-        // leftover zombie process still bound to the port from a prior
-        // interrupted run) never responds.
         CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_TIMEOUT => 10,
     ]);
-    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    }
+
     if ($cookie) {
         curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
         curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
     }
+
+    if ($cookieJar !== null) {
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieJar);
+    }
+
     $raw = curl_exec($ch);
     if ($raw === false) {
         global $serverStdout, $serverStderr;
@@ -502,6 +522,248 @@ check('deleting already-deleted trainer -> 422', $status === 422, "got $status")
 // superadmin: read + update only, never create/delete trainer.
 // admin_cabang: full CRUD, cabangId always server-derived from session.
 echo "\n--- trainer.php (superadmin restrictions) ---\n";
+
+// ============================================================
+// TA.A.3 — assignment scope
+// ============================================================
+
+// Seed trainer fixtures for TA.A.3 assignment-scope tests.
+$trnA = ['id' => 'trn-ta-a-' . uniqid(), 'nama' => 'Trainer TA A'];
+$trnB = ['id' => 'trn-ta-b-' . uniqid(), 'nama' => 'Trainer TA B'];
+
+[$status, $body] = req(
+    'POST',
+    "$base/server/api/trainer.php",
+    $trnA,
+    $cookieAdminA,
+    $csrfAdminA
+);
+
+check(
+    'admin A creating trainer A for assignment-scope tests -> 201',
+    $status === 201,
+    "got $status"
+);
+
+[$status, $body] = req(
+    'POST',
+    "$base/server/api/trainer.php",
+    $trnB,
+    $cookieAdminA,
+    $csrfAdminA
+);
+
+check(
+    'admin A creating trainer B for assignment-scope tests -> 201',
+    $status === 201,
+    "got $status"
+);
+
+// Create login identity for trainer A used by TA.A.3 assignment-scope tests.
+$trainerUserId = 'usr-ta-a-' . uniqid();
+$trainerPasswordHash = password_hash('test_trainer_a', PASSWORD_DEFAULT);
+
+$pdo->prepare(
+    'DELETE FROM users WHERE username = :username'
+)->execute([
+    ':username' => 'test_trainer_a',
+]);
+
+$stmt = $pdo->prepare(
+    'INSERT INTO users
+        (id, username, display_name, password_hash, role, cabang_id, trainer_id, active, must_change_password)
+     VALUES
+        (:id, :username, :display_name, :password_hash, :role, :cabang_id, :trainer_id, 1, 0)'
+);
+
+$stmt->execute([
+    ':id' => $trainerUserId,
+    ':username' => 'test_trainer_a',
+    ':display_name' => 'Trainer TA A',
+    ':password_hash' => $trainerPasswordHash,
+    ':role' => 'trainer',
+    ':cabang_id' => $branchA,
+    ':trainer_id' => $trnA['id'],
+]);
+
+// Login as trainer A so read.php can exercise trainer assignment scope.
+$cookieTrainerA = tempnam(sys_get_temp_dir(), 'cookie_trainer_a_');
+
+[$status, $body] = req(
+    'POST',
+    "$base/server/api/auth/login.php",
+    [
+        'username' => 'test_trainer_a',
+        'password' => 'test_trainer_a',
+    ],
+    null,
+    null,
+    $cookieTrainerA
+);
+
+check(
+    'login as test_trainer_a',
+    $status === 200,
+    "got $status"
+);
+
+echo "\n--- TA.A.3 assignment scope ---\n";
+
+// Trainer A hanya boleh membaca sekolah yang assignment-nya
+// mencantumkan dirinya sebagai trainerId/asistenId.
+$assignmentSchoolA = 'skl-ta-a-' . uniqid();
+$assignmentSchoolB = 'skl-ta-b-' . uniqid();
+
+$pdo->prepare(
+    'INSERT INTO sekolah (id, cabang_id, payload)
+     VALUES (:id, :cabang_id, :payload)'
+)->execute([
+    ':id' => $assignmentSchoolA,
+    ':cabang_id' => $branchA,
+    ':payload' => json_encode([
+    'id' => $assignmentSchoolA,
+    'cabangId' => $branchA,
+    'penugasanPengajar' => [
+        [
+            'trainerId' => $trnA['id'],
+        ],
+    ],
+], JSON_UNESCAPED_UNICODE),
+]);
+
+$pdo->prepare(
+    'INSERT INTO sekolah (id, cabang_id, payload)
+     VALUES (:id, :cabang_id, :payload)'
+)->execute([
+    ':id' => $assignmentSchoolB,
+    ':cabang_id' => $branchA,
+    ':payload' => json_encode([
+    'id' => $assignmentSchoolB,
+    'cabangId' => $branchA,
+    'penugasanPengajar' => [
+        [
+            'trainerId' => $trnB['id'],
+        ],
+    ],
+], JSON_UNESCAPED_UNICODE),
+
+]);
+
+$assignmentA = [
+    'id' => 'assign-ta3-a-' . uniqid(),
+    'sekolahId' => $assignmentSchoolA,
+    'trainerId' => $trnA['id'],
+    'asistenId' => null,
+];
+
+$assignmentB = [
+    'id' => 'assign-ta3-b-' . uniqid(),
+    'sekolahId' => $assignmentSchoolB,
+    'trainerId' => $trnB['id'],
+    'asistenId' => null,
+];
+
+// Simpan assignment ke payload trainer A/B.
+$trainerPayloadA = [
+    'id' => $trnA['id'],
+    'cabangId' => $branchA,
+    'penugasanPengajar' => [$assignmentA],
+];
+
+$trainerPayloadB = [
+    'id' => $trnB['id'],
+    'cabangId' => $branchA,
+    'penugasanPengajar' => [$assignmentB],
+];
+
+$pdo->prepare(
+    'UPDATE trainer SET payload = :payload WHERE id = :id'
+)->execute([
+    ':payload' => json_encode($trainerPayloadA, JSON_UNESCAPED_UNICODE),
+    ':id' => $trnA['id'],
+]);
+
+$pdo->prepare(
+    'UPDATE trainer SET payload = :payload WHERE id = :id'
+)->execute([
+    ':payload' => json_encode($trainerPayloadB, JSON_UNESCAPED_UNICODE),
+    ':id' => $trnB['id'],
+]);
+
+[$status, $body] = req(
+    'GET',
+    "$base/server/api/read.php?entity=sekolah",
+    null,
+    $cookieTrainerA
+);
+
+check(
+    'trainer A read sekolah -> 200',
+    $status === 200,
+    "got $status"
+);
+
+check(
+    'trainer A sees assigned school',
+    is_array($body)
+        && count(array_filter(
+            $body,
+            static fn ($row) => ($row['id'] ?? null) === $assignmentSchoolA
+        )) === 1,
+    json_encode($body)
+);
+
+check(
+    'trainer A does NOT see another trainer assignment',
+    is_array($body)
+        && count(array_filter(
+            $body,
+            static fn ($row) => ($row['id'] ?? null) === $assignmentSchoolB
+        )) === 0,
+    json_encode($body)
+);
+
+// Bypass attempt: client cannot simply claim trainer B's ID.
+// authorize() must use the authenticated trainerId.
+check(
+    'trainer A cannot bypass assignment with another trainer ID',
+    !authorize(
+        'read',
+        'sekolah',
+        [
+            'id' => $assignmentSchoolB,
+            '_assignmentTrainerIds' => [$trnB['id']],
+        ],
+        [
+            'role' => 'trainer',
+            'trainerId' => $trnA['id'],
+        ]
+    ),
+    'trainer A was incorrectly granted trainer B assignment'
+);
+
+// Superadmin still sees everything.
+[$status, $body] = req(
+    'GET',
+    "$base/server/api/read.php?entity=sekolah",
+    null,
+    $cookieSuper
+);
+
+check(
+    'superadmin sees all assignment schools',
+    $status === 200
+        && is_array($body)
+        && count(array_filter(
+            $body,
+            static fn ($row) => in_array(
+                $row['id'] ?? null,
+                [$assignmentSchoolA, $assignmentSchoolB],
+                true
+            )
+        )) === 2,
+    json_encode($body)
+);
 
 // Seed a dedicated trainer via admin_cabang (legit path) so superadmin
 // tests don't interfere with any other version chain in this file.

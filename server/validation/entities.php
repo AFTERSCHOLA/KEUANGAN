@@ -41,6 +41,10 @@ const MAX_RECORD_PAYLOAD_BYTES = 200 * 1024; // 200KB per record — CONFIRMED, 
 const SISWA_STATUS_VALUES = ['Aktif', 'Trial', 'Berhenti'];
 
 const TRAINER_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
+
+const TRAINER_TIPE_PENGAJAR_VALUES = ['instruktur', 'asisten'];
+
+const SPP_PAYMENT_SUMBER_DANA_VALUES = ['sekolah', 'ortu'];
 // Confirmed from src/features/attendance/AttendanceForm.jsx (line ~232) —
 // the only three pill-button options the UI offers for trainer status.
 // No 'Sakit' value exists in the app today. finance.js only ever checks
@@ -49,7 +53,7 @@ const TRAINER_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
 // future client bug or a hand-crafted API call) from silently landing in
 // the database and rendering as-is in RiwayatAbsensi.jsx/TrainerHistory.jsx.
 
-const SPP_PAYMENT_SUMBER_DANA_VALUES = ['sekolah', 'ortu'];
+
 // SB.B.1 (D-SB12) — payment source, independent from `metode` (channel).
 // Optional field: legacy payloads without it still validate (R-SB3-style
 // non-destructive migration, mirrored from D-SB7 for sekolah). When
@@ -95,7 +99,11 @@ function validateSekolah(array $data, PDO $pdo): array {
 
 function validateTrainer(array $data, PDO $pdo): array {
     $errors = array_merge([], checkPayloadSize($data, 'trainer'));
-    if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'trainer: id is required';
+
+    if (!requireNonEmptyString($data['id'] ?? null)) {
+        $errors[] = 'trainer: id is required';
+    }
+
     $cabangId = $data['cabangId'] ?? null;
     if ($cabangId !== null) {
         if (!requireNonEmptyString($cabangId)) {
@@ -104,11 +112,111 @@ function validateTrainer(array $data, PDO $pdo): array {
             $errors[] = 'trainer: cabangId does not reference an existing cabang';
         }
     }
+
     foreach (($data['sekolahIds'] ?? []) as $sekolahId) {
         if (!is_string($sekolahId) || !rowExists($pdo, 'sekolah', $sekolahId)) {
             $errors[] = "trainer: sekolahIds references non-existent sekolah '{$sekolahId}'";
         }
     }
+
+        // TA.A.2 — assignment schema.
+    // Satu trainer/instruktur dapat memiliki banyak assignment,
+    // satu sekolah dapat memiliki banyak assignment, dan asistenId
+    // boleh null untuk assignment tanpa asisten.
+    if (array_key_exists('penugasanPengajar', $data)) {
+        if (!is_array($data['penugasanPengajar'])) {
+            $errors[] = 'trainer: penugasanPengajar must be an array';
+        } else {
+            foreach ($data['penugasanPengajar'] as $index => $assignment) {
+                if (!is_array($assignment)) {
+                    $errors[] = "trainer: penugasanPengajar[{$index}] must be an object";
+                    continue;
+                }
+
+                $sekolahId = $assignment['sekolahId'] ?? null;
+                if (
+                    !requireNonEmptyString($sekolahId) ||
+                    !rowExists($pdo, 'sekolah', $sekolahId)
+                ) {
+                    $errors[] = "trainer: penugasanPengajar[{$index}].sekolahId does not reference an existing sekolah";
+                }
+
+                $trainerId = $assignment['trainerId'] ?? null;
+if (
+    !requireNonEmptyString($trainerId) ||
+    !rowExists($pdo, 'trainer', $trainerId)
+) {
+    $errors[] = "trainer: penugasanPengajar[{$index}].trainerId does not reference an existing trainer";
+} elseif ($trainerId !== ($data['id'] ?? null)) {
+    $errors[] =
+        "trainer: penugasanPengajar[{$index}].trainerId must match the trainer record being validated";
+}
+
+                // asistenId memang boleh null.
+                $asistenId = $assignment['asistenId'] ?? null;
+                if ($asistenId !== null) {
+                    if (
+                        !requireNonEmptyString($asistenId) ||
+                        !rowExists($pdo, 'trainer', $asistenId)
+                    ) {
+                        $errors[] = "trainer: penugasanPengajar[{$index}].asistenId does not reference an existing trainer";
+                    }
+                }
+
+                $cabangId = $assignment['cabangId'] ?? null;
+
+if ($cabangId !== null) {
+    if (!requireNonEmptyString($cabangId)) {
+        $errors[] =
+            "trainer: penugasanPengajar[{$index}].cabangId must be a non-empty string";
+    } elseif (!rowExists($pdo, 'cabang', $cabangId)) {
+        $errors[] =
+            "trainer: penugasanPengajar[{$index}].cabangId does not reference an existing cabang";
+    } else {
+        $sekolahCabangId = cabangIdOf($pdo, 'sekolah', $sekolahId);
+
+        if (
+            $sekolahCabangId !== null
+            && $cabangId !== $sekolahCabangId
+        ) {
+            $errors[] =
+                "trainer: penugasanPengajar[{$index}].cabangId does not match the sekolah branch";
+        }
+
+        $trainerCabangId = cabangIdOf($pdo, 'trainer', $trainerId);
+
+        if (
+            $trainerCabangId !== null
+            && $cabangId !== $trainerCabangId
+        ) {
+            $errors[] =
+                "trainer: penugasanPengajar[{$index}].cabangId does not match the trainer branch";
+        }
+    }
+}
+            }
+        }
+    }
+
+    // TA.A.1 — tipePengajar bersifat optional untuk backward compatibility.
+    // Trainer lama yang belum punya field ini tetap valid.
+    if (array_key_exists('tipePengajar', $data)) {
+        if (!in_array($data['tipePengajar'], TRAINER_TIPE_PENGAJAR_VALUES, true)) {
+            $errors[] = "trainer: tipePengajar '" . var_export($data['tipePengajar'], true)
+                . "' is not one of " . implode(', ', TRAINER_TIPE_PENGAJAR_VALUES);
+        }
+    }
+
+    // Honor tetap dikonfigurasi per trainer oleh Admin Cabang.
+    // Tidak ada nominal yang di-hardcode di validator.
+    if (array_key_exists('honor', $data)) {
+        if (!is_int($data['honor']) && !is_float($data['honor'])) {
+            $errors[] = 'trainer: honor must be a number';
+        } elseif ($data['honor'] < 0) {
+            $errors[] = 'trainer: honor must be greater than or equal to 0';
+        }
+    }
+
     return $errors;
 }
 
