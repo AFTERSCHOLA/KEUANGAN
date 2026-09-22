@@ -16,6 +16,9 @@ import { usePeriod, getUiState, setUiState, getSettings, setSettings as persistS
 import { fetchLogoCurrent, loadPhotoDataUrl } from './lib/photoStorage.js'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
+import TrainerAttendanceForm from './features/attendance/TrainerAttendanceForm.jsx'
+// TA.B.4 — admin-side list + correction UI for `absensiPengajar`.
+import TrainerAttendanceAdmin from './features/attendance/TrainerAttendanceAdmin.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
 import { bootstrapAuth, getCurrentUser, logout, subscribeAuth } from './lib/auth.js'
 import LoginPage from './features/auth/LoginPage.jsx'
@@ -31,6 +34,12 @@ const TABS = [
   { id: 'trainer', label: 'Data Trainer', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   { id: 'absensi', label: 'Data Absensi', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   { id: 'riwayat', label: 'Riwayat Absensi', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+  // TA.B.4 — koreksi/manajemen absensi TENAGA PENGAJAR (entitas
+  // `absensiPengajar`), terpisah dari tab 'absensi'/'riwayat' di atas
+  // (yang baca entitas `absensi`/kegiatan lama). id sengaja BUKAN
+  // 'absensiPengajar' — id itu sudah dipakai tab trainer (self-attendance
+  // form, lihat ABSENSI_PENGAJAR_TAB di bawah).
+  { id: 'absensiPengajarAdmin', label: 'Absensi Tenaga Pengajar', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { id: 'pembayaran', label: 'Data Pembayaran', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'keuangan', label: 'Data Keuangan', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
    { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -42,6 +51,24 @@ const CABANG_TAB = {
   icon: 'M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21V13a1 1 0 011-1h4a1 1 0 011 1v8M9 9h1m-1 4h1m4-4h1m-1 4h1',
 }
 
+// TA.B.3 — tab baru khusus absensi TENAGA PENGAJAR (entitas absensiPengajar,
+// D-TA7), terpisah dari tab "Data Absensi"/"Riwayat Absensi" existing di
+// atas yang untuk absensi KEGIATAN/siswa lama (AttendanceTab/TrainerHistory
+// baca entitas `absensi`, bukan `absensiPengajar`). Per
+// TRAINER_ATTENDANCE_PLAN.md §8.1 menu seharusnya "Absensi Saya" / "Riwayat
+// Absensi" / "Rekap Saya" — TAPI label "Riwayat Absensi" akan bentrok nama
+// dengan tab id='riwayat' yang sudah ada di atas. Riwayat & rekap matriks
+// absensi-pengajar itu scope TA.C.1/TA.C.2 (belum dikerjakan), jadi belum
+// ditambahkan di sini — baru form input ("Absensi Saya") yang termasuk
+// scope TA.B.3. Penamaan final untuk tab riwayat pengajar perlu diputuskan
+// eksplisit saat TA.C.1 dikerjakan, supaya tidak duplikat label dengan tab
+// 'riwayat' yang sudah ada.
+const ABSENSI_PENGAJAR_TAB = {
+  id: 'absensiPengajar',
+  label: 'Absensi Saya',
+  icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+}
+
 // Trainer melihat 4 tab saja (M5.1.2): Absensi, Riwayat, Siswa read-only,
 // dan Rekap Saya sebagai landing view. Objek tab di-reuse dari TABS.
 const REKAP_TAB = {
@@ -49,7 +76,11 @@ const REKAP_TAB = {
   label: 'Rekap Saya',
   icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
 }
+// TA.B.3 — ABSENSI_PENGAJAR_TAB ditaruh di posisi paling awal supaya
+// nggak collision penamaan sama tab 'absensi'/'riwayat' existing di
+// bawahnya (label beda: "Absensi Saya" vs "Data Absensi").
 const TRAINER_TABS = [
+  ABSENSI_PENGAJAR_TAB,
   TABS.find(t => t.id === 'absensi'),
   TABS.find(t => t.id === 'riwayat'),
   TABS.find(t => t.id === 'siswa'),
@@ -289,12 +320,14 @@ if (currentUser?.mustChangePassword) {
 
         <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
           {role === 'trainer' && activeTab === 'rekap' && <TrainerDashboard trainerId={trainerId} />}
+          {role === 'trainer' && activeTab === 'absensiPengajar' && <TrainerAttendanceForm trainerId={trainerId} />}
           {activeTab === 'overview' && <OverviewCards />}
           {activeTab === 'sekolah' && <SchoolList />}
           {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'absensi' && <AttendanceTab />}
           {activeTab === 'riwayat' && (role === 'trainer' ? <TrainerHistory trainerId={trainerId} /> : <AttendanceTab initialView="riwayat" />)}
+          {activeTab === 'absensiPengajarAdmin' && <TrainerAttendanceAdmin />}
           {activeTab === 'pembayaran' && <PaymentTable />}
           {activeTab === 'keuangan' && <FinanceReport />}
           {activeTab === 'aging' && <AgingReport />}

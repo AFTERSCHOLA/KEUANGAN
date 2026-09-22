@@ -97,7 +97,7 @@ function database(): PDO {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-    $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");   // <-- baris baru
+    $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
     runMigrations($pdo);
     return $pdo;
 }
@@ -132,10 +132,6 @@ function runMigrations(PDO $pdo): void {
     try {
         $appliedVersions = array_column($pdo->query('SELECT version FROM migrations')->fetchAll(), 'version');
     } catch (PDOException $error) {
-        // migrations table not present yet (e.g. half-applied schema.sql).
-        // The schema.sql ships `migrations`, so this branch is unreachable on
-        // any properly bootstrapped DB; bail out silently rather than
-        // crashing every API call.
         $applied = true;
         return;
     }
@@ -149,30 +145,15 @@ function runMigrations(PDO $pdo): void {
         $pdo->beginTransaction();
         try {
             $rowCounts = [];
-            // Naive statement split: schema.sql and the migrations shipped
-            // here use ";\n" as a terminator and contain no string
-            // literals carrying one. If a future migration needs a literal
-            // semicolon it must either stay as a single statement or be
-            // restructured to use a delimiter override. CRLF is normalized
-            // to LF first so the split (and the per-statement SQL) stays
-            // byte-identical regardless of the checkout's autocrlf state —
-            // a CRLF file would otherwise leave a trailing "\r" glued to
-            // the next statement (D9.2's migration is the first
-            // multi-statement file to depend on this).
             $statements = array_filter(array_map('trim', explode(";\n", str_replace("\r\n", "\n", $sql))));
             foreach ($statements as $statement) {
                 if ($statement === '') continue;
                 $pdo->exec($statement);
-                // Capture the most-recently-touched table's row count for
-                // the migrations audit row — best-effort, not all migrations
-                // need it (audit_log inserts skip), but `siswa` UPDATEs leave
-                // a useful trace in the migrations table for M-AF5.4.
                 if (preg_match('/\b(UPDATE|INSERT INTO|DELETE FROM)\s+`?([A-Za-z_]+)`?/i', $statement, $m)) {
                     $tbl = $m[2];
                     try {
                         $rowCounts[$tbl] = (int) $pdo->query("SELECT COUNT(*) FROM `{$tbl}`")->fetchColumn();
                     } catch (PDOException $ignore) {
-                        // table may not exist for every migration; ignore.
                     }
                 }
             }
@@ -183,34 +164,38 @@ function runMigrations(PDO $pdo): void {
                     ':checksum' => $checksum,
                     ':row_counts' => $rowCounts ? json_encode($rowCounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 ]);
-            // DDL statements (e.g. ALTER TABLE) implicitly commit in
-            // MySQL/MariaDB, ending the transaction above — commit/rollBack
-            // unconditionally would fatal with "no active transaction" on
-            // the first apply of any DDL migration (LP.B.1).
             if ($pdo->inTransaction()) $pdo->commit();
             $appliedVersions[] = $version;
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            // Don't cache `applied=true` on failure — next call retries.
             return;
         }
     }
     $applied = true;
 }
 
+/**
+ * TA.B.4 — 'hasCorrectionOf' flag drives insertLedger()'s per-entity SQL
+ * shape below. Previously hardcoded to `$entity === 'honorPayments'`;
+ * generalized so any ledger entity whose table carries a correction_of
+ * column (currently honorPayments and absensiPengajar) gets the same
+ * insert-new-with-correction-pointer path without adding another
+ * special-cased entity name inside insertLedger() itself.
+ */
 function entityConfig(string $entity): array {
     $config = [
         'absensi' => ['table' => 'absensi', 'path' => 'absensi.php'],
+        'absensiPengajar' => ['table' => 'absensi_pengajar', 'path' => 'absensiPengajar.php', 'hasCorrectionOf' => true],
         'sppPayments' => ['table' => 'spp_payments', 'path' => 'sppPayments.php'],
-        'honorPayments' => ['table' => 'honor_payments', 'path' => 'honorPayments.php'],
-        
+        'honorPayments' => ['table' => 'honor_payments', 'path' => 'honorPayments.php', 'hasCorrectionOf' => true],
+
         'settings' => ['table' => 'settings', 'path' => 'settings.php'],
         'invoices' => ['table' => 'invoices', 'path' => 'invoices.php'],
         'sekolah' => ['table' => 'sekolah', 'path' => 'sekolah.php'],
         'trainer' => ['table' => 'trainer', 'path' => 'trainer.php'],
         'siswa' => ['table' => 'siswa', 'path' => 'siswa.php'],
         'cabang' => ['table' => 'cabang', 'path' => 'cabang.php'],
-        
+
     ];
     if (!isset($config[$entity])) jsonResponse(['error' => 'Entity tidak didukung'], 400);
     return $config[$entity];
@@ -238,7 +223,8 @@ function insertLedger(string $entity, array $record, ?string $correctionOf = nul
     $record = requireRecord($record);
     $config = entityConfig($entity);
     $pdo = database();
-    $sql = "INSERT INTO {$config['table']} (id, cabang_id, " . ($entity === 'honorPayments' ? 'correction_of, ' : '') . "payload) VALUES (:id, :cabang_id, " . ($entity === 'honorPayments' ? ':correction_of, ' : '') . ":payload)";
+    $hasCorrectionOf = $config['hasCorrectionOf'] ?? false;
+    $sql = "INSERT INTO {$config['table']} (id, cabang_id, " . ($hasCorrectionOf ? 'correction_of, ' : '') . "payload) VALUES (:id, :cabang_id, " . ($hasCorrectionOf ? ':correction_of, ' : '') . ":payload)";
     try {
         $stmt = $pdo->prepare($sql);
         $params = [
@@ -246,17 +232,12 @@ function insertLedger(string $entity, array $record, ?string $correctionOf = nul
             ':cabang_id' => recordBranchId($record),
             ':payload' => json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
-        if ($entity === 'honorPayments') $params[':correction_of'] = $correctionOf;
+        if ($hasCorrectionOf) $params[':correction_of'] = $correctionOf;
         $stmt->execute($params);
     } catch (PDOException $error) {
         if (isDuplicate($error)) jsonResponse(['error' => 'ID sudah tersimpan', 'id' => $record['id']], 409);
         jsonResponse(['error' => 'Gagal menyimpan record'], 500);
     }
-    // sessionUser() (not requireAuthenticatedUser()) — insertLedger() is
-    // only ever reached after the caller's own requireAuthorization()
-    // already succeeded, so a valid session is guaranteed here; this
-    // avoids a redundant second 401 short-circuit inside a helper that
-    // should only ever be recording, not gatekeeping.
     auditEvent($entity . '_recorded', sessionUser(), $entity, $record['id'], array_filter([
         'cabangId' => recordBranchId($record),
         'correctionOf' => $correctionOf,

@@ -783,6 +783,168 @@ check('superadmin deleting trainer -> 403', $status === 403, "got $status");
 [$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnSuperTarget['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
 check('admin A deleting the superadmin-test trainer (cleanup) -> 200', $status === 200, "got $status");
 
+
+// ============================================================
+// TA.B.2 — self-attendance write (R-TA6, R-TA8)
+// ============================================================
+echo "\n--- absensiPengajar.php (TA.B.2 self-attendance) ---\n";
+
+$b2SekolahValid = 'skl-tb2-valid-' . uniqid();
+$b2SekolahOutOfScope = 'skl-tb2-oos-' . uniqid();
+
+$pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $b2SekolahValid,
+    ':c' => $branchA,
+    ':p' => json_encode(['id' => $b2SekolahValid, 'cabangId' => $branchA], JSON_UNESCAPED_UNICODE),
+]);
+$pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $b2SekolahOutOfScope,
+    ':c' => $branchA,
+    ':p' => json_encode(['id' => $b2SekolahOutOfScope, 'cabangId' => $branchA], JSON_UNESCAPED_UNICODE),
+]);
+
+$assignmentB2 = [
+    'id' => 'assign-tb2-' . uniqid(),
+    'sekolahId' => $b2SekolahValid,
+    'trainerId' => $trnA['id'],
+    'asistenId' => null,
+    'aktif' => true,
+    'periodeMulai' => '2026-01-01',
+    'periodeSelesai' => '2026-12-31',
+];
+
+$trainerPayloadA_b2 = [
+    'id' => $trnA['id'],
+    'cabangId' => $branchA,
+    'penugasanPengajar' => [$assignmentA, $assignmentB2],
+];
+
+$pdo->prepare('UPDATE trainer SET payload = :payload WHERE id = :id')->execute([
+    ':payload' => json_encode($trainerPayloadA_b2, JSON_UNESCAPED_UNICODE),
+    ':id' => $trnA['id'],
+]);
+
+$csrfTrainerA = csrfFor($base, $cookieTrainerA, 'trainer_a');
+
+$absPengajarValid = [
+    'id' => 'absp-tb2-' . uniqid(),
+    'trainerId' => $trnA['id'],
+    'sekolahId' => $b2SekolahValid,
+    'tanggal' => '2026-06-15',
+    'status' => 'Hadir',
+    'cabangId' => $branchA,
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $absPengajarValid, $cookieTrainerA, $csrfTrainerA);
+check('trainer A create absensiPengajar for self, valid sekolah+tanggal -> 201', $status === 201, "got $status");
+
+$absPengajarOtherTrainer = [
+    'id' => 'absp-tb2-otr-' . uniqid(),
+    'trainerId' => $trnB['id'],
+    'sekolahId' => $b2SekolahValid,
+    'tanggal' => '2026-06-15',
+    'status' => 'Hadir',
+    'cabangId' => $branchA,
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $absPengajarOtherTrainer, $cookieTrainerA, $csrfTrainerA);
+check('trainer A create absensiPengajar for trainer B -> 403', $status === 403, "got $status");
+
+$absPengajarWrongSchool = [
+    'id' => 'absp-tb2-oos-' . uniqid(),
+    'trainerId' => $trnA['id'],
+    'sekolahId' => $b2SekolahOutOfScope,
+    'tanggal' => '2026-06-15',
+    'status' => 'Hadir',
+    'cabangId' => $branchA,
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $absPengajarWrongSchool, $cookieTrainerA, $csrfTrainerA);
+check('trainer A create absensiPengajar for out-of-assignment sekolah -> 403', $status === 403, "got $status");
+
+$absPengajarWrongDate = [
+    'id' => 'absp-tb2-oor-' . uniqid(),
+    'trainerId' => $trnA['id'],
+    'sekolahId' => $b2SekolahValid,
+    'tanggal' => '2025-01-01',
+    'status' => 'Hadir',
+    'cabangId' => $branchA,
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $absPengajarWrongDate, $cookieTrainerA, $csrfTrainerA);
+check('trainer A create absensiPengajar outside active assignment date range -> 403', $status === 403, "got $status");
+
+
+// ============================================================
+// TA.B.4 — admin correction (R-TA4, append + correction_of pattern)
+// ============================================================
+echo "\n--- absensiPengajar.php (TA.B.4 correction) ---\n";
+
+$b4OriginalId = 'absp-tb4-orig-' . uniqid();
+$pdo->prepare('INSERT INTO absensi_pengajar (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $b4OriginalId,
+    ':c' => $branchA,
+    ':p' => json_encode([
+        'id' => $b4OriginalId, 'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Izin', 'cabangId' => $branchA,
+    ], JSON_UNESCAPED_UNICODE),
+]);
+
+$b4CorrectPayloadA = [
+    'action' => 'correct',
+    'correctionOf' => $b4OriginalId,
+    'record' => [
+        'id' => 'absp-tb4-corr-' . uniqid(),
+        'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Hadir', 'cabangId' => $branchA,
+    ],
+];
+[$status, $body] = req('POST', "$base/server/api/absensiPengajar.php", $b4CorrectPayloadA, $cookieAdminA, $csrfAdminA);
+check('admin_cabang correcting own-branch absensiPengajar record -> 201', $status === 201, "got $status");
+
+$stmt = $pdo->prepare('SELECT correction_of, payload FROM absensi_pengajar WHERE id = :id');
+$stmt->execute([':id' => $b4CorrectPayloadA['record']['id']]);
+$b4Stored = $stmt->fetch();
+check('correction_of stored and matches original record id', $b4Stored && $b4Stored['correction_of'] === $b4OriginalId, json_encode($b4Stored));
+$b4StoredPayload = $b4Stored ? json_decode($b4Stored['payload'], true) : null;
+check('corrected record carries new status', ($b4StoredPayload['status'] ?? null) === 'Hadir', json_encode($b4StoredPayload));
+
+$b4CorrectPayloadCross = [
+    'action' => 'correct',
+    'correctionOf' => $b4OriginalId,
+    'record' => [
+        'id' => 'absp-tb4-corr-' . uniqid(),
+        'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Hadir', 'cabangId' => $branchA,
+    ],
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $b4CorrectPayloadCross, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin_cabang B correcting branch-A absensiPengajar record -> 403', $status === 403, "got $status");
+
+$b4CorrectPayloadSuper = [
+    'action' => 'correct',
+    'correctionOf' => $b4OriginalId,
+    'record' => [
+        'id' => 'absp-tb4-corr-' . uniqid(),
+        'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Izin', 'cabangId' => $branchA,
+    ],
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $b4CorrectPayloadSuper, $cookieSuper, $csrfSuper);
+check('superadmin correcting absensiPengajar record from any branch -> 201', $status === 201, "got $status");
+
+$b4CorrectPayloadTrainer = [
+    'action' => 'correct',
+    'correctionOf' => $b4OriginalId,
+    'record' => [
+        'id' => 'absp-tb4-corr-' . uniqid(),
+        'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Hadir', 'cabangId' => $branchA,
+    ],
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $b4CorrectPayloadTrainer, $cookieTrainerA, $csrfTrainerA);
+check('trainer using action=correct is rejected -> 403', $status === 403, "got $status");
+
+$row = auditRow($pdo, 'absensiPengajar_recorded', $b4CorrectPayloadA['record']['id']);
+check('absensiPengajar correction audit row exists', $row !== false);
+check('correction audit metadata carries correctionOf', $row && (json_decode((string) $row['metadata'], true)['correctionOf'] ?? null) === $b4OriginalId, json_encode($row));
+
 // --- cabang.php: superadmin-only CRUD -----------------------------------
 echo "\n--- cabang.php (create) ---\n";
 $cbgNew = ['id' => 'cbg-new-' . uniqid(), 'nama' => 'Cabang Baru', 'kode' => 'NEW' . substr(uniqid(), -4)];
@@ -831,10 +993,6 @@ echo "\n--- cabang.php (delete) ---\n";
 [$status] = req('POST', "$base/server/api/cabang.php", ['id' => $cbgNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
 check('admin_cabang deleting branch -> 403 (superadmin-only)', $status === 403, "got $status");
 
-// Literal must match DEFAULT_CABANG_ID in cabang.php / defaultCabang().id
-// in constants.js. The endpoint checks this by string match BEFORE
-// checking the row exists, so this assertion holds even if this exact
-// seed row isn't present in the test database.
 [$status] = req('POST', "$base/server/api/cabang.php", ['id' => 'cbg-PST-default', 'action' => 'delete'], $cookieSuper, $csrfSuper);
 check('deleting default seed branch -> 422', $status === 422, "got $status");
 
@@ -912,7 +1070,6 @@ check('created setting appears in list', is_array($body) && count(array_filter($
 
 [$status, $body] = req('GET', "$base/server/api/read.php", null, $cookieAdminA);
 check('admin_cabang bulk read -> settings key present but empty', $status === 200 && ($body['settings'] ?? null) === [], json_encode($body['settings'] ?? null));
-
 echo "\n--- settings.php (delete) ---\n";
 [$status] = req('POST', "$base/server/api/settings.php", ['id' => $setNew['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
 check('admin_cabang deleting setting -> 403 (superadmin-only)', $status === 403, "got $status");

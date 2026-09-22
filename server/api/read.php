@@ -14,7 +14,7 @@ $user = requireAuthenticatedUser();
 
 $entity = $_GET['entity'] ?? null;
 $allEntities = [
-    'absensi', 'sppPayments', 'honorPayments', 'settings', 'invoices',
+    'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'settings', 'invoices',
     'sekolah', 'trainer', 'siswa', 'cabang',
 ];
 
@@ -144,7 +144,7 @@ foreach ($entities as $name) {
 
     $config = entityConfig($name);
 
-$selectCols = $name === 'honorPayments'
+$selectCols = ($config['hasCorrectionOf'] ?? false)
     ? 'payload, version, correction_of'
     : 'payload, version';
 
@@ -177,7 +177,7 @@ if ($user['role'] === 'superadmin') {
 }
 
     $records = array_values(array_filter(array_map(
-    static function (array $row) use ($name): array {
+    static function (array $row) use ($name, $config): array {
         $payload = json_decode($row['payload'], true);
 
         if (!is_array($payload)) {
@@ -191,7 +191,7 @@ if ($user['role'] === 'superadmin') {
         // supaya frontend tahu bahwa record ini adalah koreksi
         // dari entry pembayaran sebelumnya.
         if (
-            $name === 'honorPayments'
+            ($config['hasCorrectionOf'] ?? false)
             && array_key_exists('correction_of', $row)
             && $row['correction_of'] !== null
         ) {

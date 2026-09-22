@@ -17,6 +17,12 @@ import { test, expect, loginViaApi } from './fixtures.js'
 // helper, never reference the deleted buttons, zero page errors".
 // The deeper multi-role flow remains a separate future work item
 // (see MULTI_ACCOUNT_SYNC.md and SCOPE_EXPANSION_PLAN.md).
+//
+// TA.B.3 update: trainer nav grew from 4 to 5 tabs with the addition
+// of "Absensi Saya" (absensiPengajar — TRAINER_ATTENDANCE_PLAN.md
+// D-TA7, TRAINER_ATTENDANCE_MILESTONES.md TA.B.3). This is an
+// intentional scope change to the M5.1.2 "4 tabs" contract, not a
+// regression — see TRAINER_ATTENDANCE_MILESTONES.md Gate TA.B.
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -52,9 +58,12 @@ test('flow simulation: trainer reaches the dashboard via loginViaApi', async ({ 
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
 
-  // Trainer landing is the 4-tab reduced surface, not the full admin nav.
+  // Trainer landing is the 5-tab reduced surface (Absensi Saya, Data
+  // Absensi, Riwayat Absensi, Data Siswa, Rekap Saya), not the full
+  // admin nav. Was 4 before TA.B.3 added "Absensi Saya"
+  // (absensiPengajar) — see header note.
   const nav = page.getByRole('navigation').getByRole('button')
-  await expect(nav).toHaveCount(4)
+  await expect(nav).toHaveCount(5)
 
   expect(pageErrors).toHaveLength(0)
 })

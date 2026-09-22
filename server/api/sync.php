@@ -29,7 +29,7 @@ foreach ($entries as $entry) {
     // 'sekolah' — synced only client-side until M3.4) but calling
     // entityConfig() on them below would jsonResponse(400) and kill the
     // WHOLE batch, not just this entry. Reject as a per-entry failure first.
-    if (!in_array($entity, ['absensi', 'sppPayments', 'honorPayments'], true)) {
+    if (!in_array($entity, ['absensi', 'absensiPengajar', 'sppPayments', 'honorPayments'], true)) {
         $failed[] = ['id' => $record['id'] ?? null, 'entity' => $entity, 'error' => 'Entity tidak didukung'];
         continue;
     }
