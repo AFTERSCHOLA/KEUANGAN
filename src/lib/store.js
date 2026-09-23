@@ -170,6 +170,14 @@ export function writeRaw(key, records) {
   localStorage.setItem(getKeys()[key], JSON.stringify(records))
 }
 
+export function clearSessionCache() {
+  for (const key of READABLE_SERVER_KEYS) {
+    localStorage.removeItem(getKeys()[key])
+  }
+
+  notifyStoreChanged()
+}
+
 export function getMigrationState() {
   try {
     const json = localStorage.getItem(getKeys().settings)
@@ -195,10 +203,18 @@ export function readCached(key) {
 export async function read(key) {
   const ctx = getRoleContext()
   if (!ctx.role) return []
+
   if (!READABLE_SERVER_KEYS.has(key)) return readCached(key)
+
   try {
-    const remote = await apiRequest(`/api/read.php?entity=${encodeURIComponent(key)}`, { method: 'GET' })
-if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
+    const remote = await apiRequest(
+      `/api/read.php?entity=${encodeURIComponent(key)}`,
+      { method: 'GET' }
+    )
+
+    if (!Array.isArray(remote)) {
+      throw new Error(`read ${key}: invalid response`)
+    }
 
     const pending = pendingRecordsForKey(key)
     const remoteById = new Map(remote.map(record => [record.id, record]))
@@ -207,16 +223,19 @@ if (!Array.isArray(remote)) throw new Error(`read ${key}: invalid response`)
       remoteById.set(record.id, record)
     }
 
-    writeRaw(key, [...remoteById.values()])
-    notifyStoreChanged()
-    return readCached(key)
+    const merged = [...remoteById.values()]
 
+    writeRaw(key, merged)
+    notifyStoreChanged()
+
+    return merged.filter(record => isWithinScope(key, record, ctx))
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       writeRaw(key, [])
       notifyStoreChanged()
       return []
     }
+
     return readCached(key)
   }
 }
@@ -499,13 +518,26 @@ export async function syncPending() {
 
 export async function pullRemote(key) {
   if (!READABLE_SERVER_KEYS.has(key)) return false
+
   try {
-    const remote = await apiRequest(`/api/read.php?entity=${encodeURIComponent(key)}`, { method: 'GET' })
+    const remote = await apiRequest(
+      `/api/read.php?entity=${encodeURIComponent(key)}`,
+      { method: 'GET' }
+    )
+
     if (!Array.isArray(remote)) return false
-    const local = readCached(key)
-    const localIds = new Set(local.map(r => r.id))
-    const merged = local.concat(remote.filter(r => !localIds.has(r.id)))
-    write(key, merged)
+
+    const pending = pendingRecordsForKey(key)
+    const remoteById = new Map(remote.map(record => [record.id, record]))
+
+    // Jangan hilangkan data lokal yang memang masih pending sync.
+    for (const record of pending) {
+      remoteById.set(record.id, record)
+    }
+
+    writeRaw(key, [...remoteById.values()])
+    notifyStoreChanged()
+
     return true
   } catch {
     return false

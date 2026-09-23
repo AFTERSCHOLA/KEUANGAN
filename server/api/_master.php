@@ -68,7 +68,10 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     if ($existing !== null) {
         $existingAuthData = $existing['payload'];
         $existingAuthData['id'] = $existing['id'];
-        if (!$isCabang) $existingAuthData['cabangId'] = $existing['cabangId'];
+        if (!$isCabang) {
+            $existingAuthData['cabangId'] = $existing['cabangId'];
+        }
+
         if (!authorize('write', $entity, $existingAuthData, $user)) {
             jsonResponse(['error' => 'Akses tidak diizinkan'], 403);
         }

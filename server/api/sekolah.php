@@ -156,19 +156,41 @@ if (($user['role'] ?? null) === 'admin_cabang') {
     if (array_key_exists('cabangId', $data)) {
         jsonResponse(['error' => 'cabangId tidak boleh dikirim'], 422);
     }
+
     $cabangId = $user['cabangId'] ?? null;
+
     if (!is_string($cabangId) || $cabangId === '') {
         jsonResponse(['error' => 'Sesi tidak memiliki cabang yang valid'], 422);
     }
+} elseif ($action === 'update') {
+    // Superadmin saat UPDATE tidak perlu mengirim/mengganti cabang.
+    // Pakai cabang yang memang sudah tersimpan pada record.
+    $stmt = $pdo->prepare('SELECT cabang_id FROM sekolah WHERE id = :id');
+    $stmt->execute([':id' => $data['id']]);
+    $existingBranch = $stmt->fetchColumn();
+
+    if (!is_string($existingBranch) || trim($existingBranch) === '') {
+        jsonResponse(['error' => 'Sekolah belum memiliki cabang'], 422);
+    }
+
+    $cabangId = $existingBranch;
 } else {
-    if (!isset($data['cabangId']) || !is_string($data['cabangId']) || trim($data['cabangId']) === '') {
+    // CREATE oleh superadmin tetap wajib menentukan cabang.
+    if (
+        !isset($data['cabangId'])
+        || !is_string($data['cabangId'])
+        || trim($data['cabangId']) === ''
+    ) {
         jsonResponse(['error' => 'Record membutuhkan cabangId'], 422);
     }
+
     $check = $pdo->prepare('SELECT 1 FROM cabang WHERE id = :id');
     $check->execute([':id' => $data['cabangId']]);
+
     if ($check->fetchColumn() === false) {
         jsonResponse(['error' => 'cabangId tidak ditemukan'], 422);
     }
+
     $cabangId = $data['cabangId'];
 }
 

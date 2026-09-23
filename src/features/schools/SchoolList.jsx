@@ -8,7 +8,15 @@ import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import InvoiceModal from '../reports/InvoiceModal.jsx'
 import InvoiceTemplate from '../reports/InvoiceTemplate.jsx'
 import PhotoSlot from '../../components/PhotoSlot.jsx'
-import { readCached, write, upsert, getRoleContext, writeRemote, deleteRemote, subscribeStore } from '../../lib/store.js'
+import {
+  readCached,
+  write,
+  upsert,
+  getRoleContext,
+  writeRemote,
+  deleteRemote,
+  subscribeStore
+} from '../../lib/store.js'
 import { loadPhotoDataUrl } from '../../lib/photoStorage.js'
 
 
@@ -46,26 +54,46 @@ export default function SchoolList() {
   // src/lib/store.js:589-609 (BranchProvider); no new state library is
   // introduced (taste: mirror existing idiom).
   useEffect(() => {
-    refresh()
-    const unsubscribe = subscribeStore(() => refresh())
-    const onStorage = (e) => {
-      if (!e.key || e.key.startsWith('afterschola_v4')) refresh()
+  let cancelled = false
+
+  async function loadInitialData() {
+    try {
+      await Promise.all([
+        pullRemote('sekolah'),
+        pullRemote('cabang'),
+      ])
+
+      if (!cancelled) refresh()
+    } catch {
+      if (!cancelled) refresh()
     }
-    window.addEventListener('storage', onStorage)
-    return () => {
-      unsubscribe()
-      window.removeEventListener('storage', onStorage)
-    }
-  }, [])
+  }
+
+  loadInitialData()
+
+  const unsubscribe = subscribeStore(() => refresh())
+
+  const onStorage = (e) => {
+    if (!e.key || e.key.startsWith('afterschola_v4')) refresh()
+  }
+
+  window.addEventListener('storage', onStorage)
+
+  return () => {
+    cancelled = true
+    unsubscribe()
+    window.removeEventListener('storage', onStorage)
+  }
+}, [])
 
   const role = getRoleContext().role
   const visibleSekolah = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah
 
   function refresh() {
-    setSekolah(readCached('sekolah'))
-    const nextCabang = readCached('cabang')
-    if (nextCabang.length) setCabang(nextCabang)
-  }
+  setSekolah(readCached('sekolah'))
+  const nextCabang = readCached('cabang')
+  if (nextCabang.length) setCabang(nextCabang)
+}
 
   function openAdd() {
     const first = cabang[0] || defaultCabang()
@@ -77,10 +105,9 @@ export default function SchoolList() {
   const nextForm = {
     jadwalList: [],
     ...sch,
+    cabangId: sch.cabangId,
   }
 
-  // Legacy school yang belum punya metodePembayaran
-  // tetap aman dibuka dengan default UI.
   if (!Object.prototype.hasOwnProperty.call(sch, 'metodePembayaran')) {
     nextForm.metodePembayaran = {
       basis: 'siswa',
@@ -102,21 +129,18 @@ async function save() {
     setAlertOpen(true)
     return
   }
-  // AUDIT_FOLLOWUP M-AF3.1 — pre-submit cabangId sanity check. The
-  // form's <select> only renders real branch options, but a devtools
-  // override of the React form state (or a stale `cabang` cache
-  // after a delete) can set form.cabangId to an id that no longer
-  // resolves. Reject early with the exact Indonesian copy the plan
-  // pins so a) the user sees a localized explanation rather than
-  // the generic 422 from sekolah.php:47-49, and b) no /api/sekolah.php
-  // request is fired (the school-form-validation spec asserts no
-  // network traffic — it's the only way to prove the early-return
-  // happened before writeRemote).
-  if (!form.cabangId || !cabang.some(c => c.id === form.cabangId)) {
-    setAlertMsg('Cabang tidak valid')
-    setAlertOpen(true)
-    return
-  }
+
+ // M-AF3.1 — Superadmin wajib punya cabangId.
+// Validasi keberadaan cabang dilakukan oleh server.
+// Jangan bergantung pada state `cabang` di sini karena data cabang
+// bisa belum selesai tersinkron saat edit data lama.
+const role = getRoleContext().role
+
+if (role === 'superadmin' && !form.cabangId) {
+  setAlertMsg('Cabang wajib dipilih')
+  return
+}
+  
   // TEAM_FEEDBACK D2 (G3.2) — end must be after start. A missing endTime
   // (legacy row) is blocked with the same pinned copy so the first save
   // upgrades the record instead of persisting a half-range (R6).
@@ -129,17 +153,38 @@ async function save() {
   const prev = sekolah.find(s => s.id === form.id)
   const oldTrainerIds = prev ? prev.trainerIds : []
 
-  const result = await writeRemote('sekolah', form)
-  if (result.status === 'forbidden') {
-    setAlertMsg(result.message || 'Kamu tidak punya izin untuk menyimpan sekolah ini.')
-    setAlertOpen(true)
-    return
+let result
+try {
+  const payload = { ...form }
+
+  // Admin cabang tidak boleh mengirim cabangId dari client.
+  // Server mengambil cabangId dari session admin_cabang.
+  if (role === 'admin_cabang') {
+    delete payload.cabangId
   }
-  if (result.status === 'conflict') {
-    setAlertMsg('Data sekolah ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
-    setAlertOpen(true)
-    return
-  }
+
+  result = await writeRemote('sekolah', payload)
+ } catch (error) {
+   // Sebelumnya error selain 409/403 (mis. 422 validasi server) tidak
+   // pernah tertangani di sini — writeRemote() me-re-throw, dan tanpa
+   // try/catch ini jadi unhandled rejection: user tidak lihat pesan
+   // apa pun, cuma silent fail. Sekarang pesan asli dari server
+   // ditampilkan, supaya kalau ini muncul lagi, akar masalahnya
+   // langsung kelihatan dari teks pesan (bukan generik).
+   setAlertMsg(error?.message || 'Gagal menyimpan sekolah. Coba lagi.')
+   setAlertOpen(true)
+   return
+ }
+ if (result.status === 'forbidden') {
+   setAlertMsg(result.message || 'Kamu tidak punya izin untuk menyimpan sekolah ini.')
+   setAlertOpen(true)
+   return
+ }
+ if (result.status === 'conflict') {
+   setAlertMsg('Data sekolah ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
+   setAlertOpen(true)
+   return
+ }
 
   const trainerList = readCached('trainer')
   for (const tId of oldTrainerIds) {
@@ -411,7 +456,12 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Cabang</label>
         <select
-          value={form.cabangId || cabang[0]?.id || defaultCabang().id}
+          value={
+  form.cabangId ||
+  (getRoleContext().role === 'admin_cabang'
+    ? getRoleContext().cabangId
+    : cabang[0]?.id || defaultCabang().id)
+}
           onChange={e => {
             const next =
               cabang.find(c => c.id === e.target.value) ||

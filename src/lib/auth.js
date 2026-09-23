@@ -135,16 +135,26 @@ export async function login(username, password) {
 
 export async function logout() {
   // M4.1 fix: bersihkan state lokal DULU, baru beritahu server.
-  // Kalau request logout ke server gagal (network/sesi sudah habis
-  // duluan), user tetap dianggap logout di client — tidak "keliatan
-  // masih login" menunggu response yang mungkin tidak pernah datang.
+  // Cache data akun sebelumnya juga dibersihkan supaya saat akun lain
+  // login di browser yang sama, data tidak tercampur dengan sesi lama.
   const hadUser = Boolean(currentUser)
+
   currentUser = null
   clearCsrfToken()
+
+  // Hindari static import karena store.js sudah mengimpor auth.js.
+  // Dynamic import mencegah circular dependency.
+  const store = await import('./store.js')
+  store.clearSessionCache()
+
   notify()
+
   if (hadUser) {
     try {
-      await apiRequest('/api/auth/logout.php', { method: 'POST', skipUnauthorizedHandler: true })
+      await apiRequest('/api/auth/logout.php', {
+        method: 'POST',
+        skipUnauthorizedHandler: true,
+      })
     } catch {
       // Best-effort — state lokal sudah bersih di atas.
     }
