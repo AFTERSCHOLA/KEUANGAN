@@ -17,8 +17,11 @@ import { fetchLogoCurrent, loadPhotoDataUrl } from './lib/photoStorage.js'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
 import TrainerAttendanceForm from './features/attendance/TrainerAttendanceForm.jsx'
+// TA.C.1 — ringkasan absensiPengajar milik sendiri (D-TA13, R-TA6).
+import TrainerAttendanceSummary from './features/attendance/TrainerAttendanceSummary.jsx'
 // TA.B.4 — admin-side list + correction UI for `absensiPengajar`.
-import TrainerAttendanceAdmin from './features/attendance/TrainerAttendanceAdmin.jsx'
+// TA.C.2 — wrapped with the monthly-matrix view (Daftar/Rekap Matriks toggle).
+import TrainerAttendanceAdminView from './features/attendance/TrainerAttendanceAdminView.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
 import { bootstrapAuth, getCurrentUser, logout, subscribeAuth } from './lib/auth.js'
 import LoginPage from './features/auth/LoginPage.jsx'
@@ -76,11 +79,22 @@ const REKAP_TAB = {
   label: 'Rekap Saya',
   icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
 }
+// TA.C.1 — Concrete pick: tab id 'ringkasanPengajar' label 'Ringkasan
+// Saya'. Label 'Riwayat Absensi'/'Rekap Saya' already taken by legacy
+// tabs (TrainerHistory/TrainerDashboard on the `absensi` entity), so a
+// distinct label avoids duplicate-label nav confusion. Renders
+// TrainerAttendanceSummary (absensiPengajar, own rows only per R-TA6).
+const RINGKASAN_PENGAJAR_TAB = {
+  id: 'ringkasanPengajar',
+  label: 'Ringkasan Saya',
+  icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+}
 // TA.B.3 — ABSENSI_PENGAJAR_TAB ditaruh di posisi paling awal supaya
 // nggak collision penamaan sama tab 'absensi'/'riwayat' existing di
 // bawahnya (label beda: "Absensi Saya" vs "Data Absensi").
 const TRAINER_TABS = [
   ABSENSI_PENGAJAR_TAB,
+  RINGKASAN_PENGAJAR_TAB,
   TABS.find(t => t.id === 'absensi'),
   TABS.find(t => t.id === 'riwayat'),
   TABS.find(t => t.id === 'siswa'),
@@ -321,13 +335,14 @@ if (currentUser?.mustChangePassword) {
         <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6">
           {role === 'trainer' && activeTab === 'rekap' && <TrainerDashboard trainerId={trainerId} />}
           {role === 'trainer' && activeTab === 'absensiPengajar' && <TrainerAttendanceForm trainerId={trainerId} />}
+          {role === 'trainer' && activeTab === 'ringkasanPengajar' && <TrainerAttendanceSummary trainerId={trainerId} />}
           {activeTab === 'overview' && <OverviewCards />}
           {activeTab === 'sekolah' && <SchoolList />}
           {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'absensi' && <AttendanceTab />}
           {activeTab === 'riwayat' && (role === 'trainer' ? <TrainerHistory trainerId={trainerId} /> : <AttendanceTab initialView="riwayat" />)}
-          {activeTab === 'absensiPengajarAdmin' && <TrainerAttendanceAdmin />}
+          {activeTab === 'absensiPengajarAdmin' && <TrainerAttendanceAdminView />}
           {activeTab === 'pembayaran' && <PaymentTable />}
           {activeTab === 'keuangan' && <FinanceReport />}
           {activeTab === 'aging' && <AgingReport />}

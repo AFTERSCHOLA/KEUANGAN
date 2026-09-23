@@ -86,6 +86,9 @@ export default function FinanceReport() {
   const siswa = readCached('siswa')
   const trainer = readCached('trainer')
   const absensi = readCached('absensi')
+  // TA.C.3 (D-TA14 Locked berpindah) — Gate C honor source for all
+  // financialData() calls below.
+  const absensiPengajar = readCached('absensiPengajar')
   const honorPayments = readCached('honorPayments')
   const sppPayments = readCached('sppPayments')
 
@@ -93,9 +96,9 @@ export default function FinanceReport() {
   const periodePrevBulan = shiftPeriode(periode, -1)
   const periodePrevTahun = shiftPeriode(periode, -12)
 
-  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode })
-  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: periodePrevBulan })
-  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: periodePrevTahun })
+  const data = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode })
+  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: periodePrevBulan })
+  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: periodePrevTahun })
 
   const comparisonRows = [
     { label: 'Potensi SPP', key: 'potensiSpp', tag: 'Memo' },
@@ -125,7 +128,7 @@ export default function FinanceReport() {
   }
 
   const rangeDataByPeriode = Object.fromEntries(
-    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode: p })])
+    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: p })])
   )
   const rangeTotals = Object.fromEntries(
     RANGE_ROWS.map(row => [row.key, rangePeriods.reduce((sum, p) => sum + rangeDataByPeriode[p][row.key], 0)])

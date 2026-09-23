@@ -23,6 +23,10 @@ import { test, expect, loginViaApi } from './fixtures.js'
 // D-TA7, TRAINER_ATTENDANCE_MILESTONES.md TA.B.3). This is an
 // intentional scope change to the M5.1.2 "4 tabs" contract, not a
 // regression — see TRAINER_ATTENDANCE_MILESTONES.md Gate TA.B.
+//
+// TA.C.1 update: trainer nav grew from 5 to 6 tabs with "Ringkasan
+// Saya" (personal absensiPengajar summary — D-TA13, TA.C.1). Same
+// intentional scope change, not a regression.
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -58,12 +62,14 @@ test('flow simulation: trainer reaches the dashboard via loginViaApi', async ({ 
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
 
-  // Trainer landing is the 5-tab reduced surface (Absensi Saya, Data
-  // Absensi, Riwayat Absensi, Data Siswa, Rekap Saya), not the full
-  // admin nav. Was 4 before TA.B.3 added "Absensi Saya"
-  // (absensiPengajar) — see header note.
+  // Trainer landing is the 6-tab reduced surface (Absensi Saya,
+  // Ringkasan Saya, Data Absensi, Riwayat Absensi, Data Siswa, Rekap
+  // Saya), not the full admin nav. Was 4 before TA.B.3 added "Absensi
+  // Saya", 5 before TA.C.1 added "Ringkasan Saya" (absensiPengajar) —
+  // see header note.
   const nav = page.getByRole('navigation').getByRole('button')
-  await expect(nav).toHaveCount(5)
+  await expect(nav).toHaveCount(6)
+  await expect(page.getByRole('navigation').getByRole('button', { name: 'Ringkasan Saya', exact: true })).toBeVisible()
 
   expect(pageErrors).toHaveLength(0)
 })

@@ -14,6 +14,11 @@ export function filterEntitiesByBranch(entities, selectedCabangId) {
     siswa,
     trainer,
     absensi: entities.absensi.filter(a => sekolahIds.has(a.sekolahId)),
+    // TA.C.3 — Gate C source scoped by the same sekolahId rule as legacy
+    // absensi, so a branch-filtered Overview never mixes other-cabang
+    // beban into the memo rows. Tolerates entities without the key
+    // (legacy callers) via (entities.absensiPengajar || []).
+    absensiPengajar: (entities.absensiPengajar || []).filter(a => sekolahIds.has(a.sekolahId)),
     honorPayments: entities.honorPayments.filter(p => trainerIds.has(p.trainerId)),
     sppPayments: entities.sppPayments.filter(p => siswaIds.has(p.siswaId)),
     invoices: entities.invoices.filter(i => sekolahIds.has(i.sekolahId)),

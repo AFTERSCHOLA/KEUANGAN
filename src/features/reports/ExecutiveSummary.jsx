@@ -50,8 +50,10 @@ function findOldestTunggakan(siswa, sekolah, elapsed, sppPayments) {
 export default function ExecutiveSummary({ entities }) {
   const period = usePeriod()
   const periode = period.periodeKey()
-  const { sekolah, siswa, trainer, absensi, honorPayments, sppPayments } = entities
-  const data = financialData({ sekolah, siswa, trainer, absensi, honorPayments, sppPayments, periode })
+  const { sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments } = entities
+  // TA.C.3 (D-TA14 Locked berpindah) — Gate C honor source; absensiPengajar
+  // may be absent on legacy entity maps (branchScope tolerates it too).
+  const data = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar: absensiPengajar || null, honorPayments, sppPayments, periode })
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
 
   const collectionRate = data.potensiSpp > 0 ? (data.pemasukanSpp / data.potensiSpp) * 100 : null

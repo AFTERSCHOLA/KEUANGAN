@@ -383,7 +383,10 @@ test.describe('#4 Rename integrity', () => {
     await openTab(page, 'Riwayat Absensi')
     await expect(page.getByText(TRAINER, { exact: true }).first()).toBeVisible()
 
-    // Honor math unchanged: 1 Hadir session Ã— 50k = Rp 50.000 Beban.
+    // TA.C.3 (D-TA14 Locked berpindah): honor beban now sources from
+    // `absensiPengajar` (Absensi Saya), NOT legacy Data Absensi sessions.
+    // This legacy-only session yields Rp 0 Beban — the rename itself
+    // still changes nothing (rename invariance holds under both sources).
     await openTab(page, 'Data Pembayaran')
     const beban = await page
       .locator('tr', { hasText: 'Budi Wijaya' })
@@ -391,11 +394,11 @@ test.describe('#4 Rename integrity', () => {
       .locator('td')
       .nth(4)
       .textContent()
-    expect(beban.replace(/\u00a0/g, ' ').trim()).toBe('Rp 50.000')
+    expect(beban.replace(/\u00a0/g, ' ').trim()).toBe('Rp 0')
 
-    // Keuangan totals unchanged by the rename.
+    // Keuangan Beban Honor memo is likewise Rp 0 with no absensiPengajar rows.
     await openTab(page, 'Data Keuangan')
-    await expect(page.getByText('Rp 50.000').first()).toBeVisible()
+    await expect(page.getByText('Rp 0').first()).toBeVisible()
 
     expect(pageErrors).toHaveLength(0)
   })

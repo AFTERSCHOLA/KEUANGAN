@@ -32,6 +32,9 @@ export default function PaymentTable() {
   const sekolah = readCached('sekolah')
   const cabang = readCached('cabang')
   const absensi = readCached('absensi')
+  // TA.C.3 (D-TA14 Locked berpindah) — Beban/Dibayar/Sisa beban comes
+  // from the Gate C source; payments ledger itself unchanged (TA.C.4).
+  const absensiPengajar = readCached('absensiPengajar')
   const periode = period.periodeKey()
 
   function cabangKodeForTrainer(trainer) {
@@ -46,7 +49,7 @@ export default function PaymentTable() {
 
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
-  const data = financialData({ sekolah, siswa: readCached('siswa'), trainer: trainers, absensi, honorPayments: payments, sppPayments: readCached('sppPayments'), periode })
+  const data = financialData({ sekolah, siswa: readCached('siswa'), trainer: trainers, absensi, absensiPengajar, honorPayments: payments, sppPayments: readCached('sppPayments'), periode })
   const financeByTrainerId = Object.fromEntries(data.trainerFinance.map(t => [t.id, t]))
 
   function refreshPayments() {

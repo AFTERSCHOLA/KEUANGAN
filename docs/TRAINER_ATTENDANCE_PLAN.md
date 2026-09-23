@@ -98,7 +98,7 @@
 | D-TA11 | Tenaga pengajar mengisi absensi sendiri dari dashboard masing-masing. | Locked |
 | D-TA12 | Admin Cabang mengelola/koreksi absensi di cabangnya; Superadmin dapat mengelola/koreksi semua cabang. | Locked |
 | D-TA13 | Tenaga pengajar hanya melihat ringkasan absensinya sendiri. | Locked |
-| D-TA14 | Perhitungan honor dari absensi baru **boleh** masuk Gate C — tetapi apakah `finance.js`/honor benar-benar berpindah sumber ke `absensiPengajar` (vs tetap dari absensi kegiatan lama) **belum diputuskan**. Keputusan ini menunggu hasil validasi TA.C.2b (data absensi tenaga pengajar vs pencatatan manual September). | **Pending** |
+| D-TA14 | Perhitungan honor dari absensi baru berpindah sumber ke `absensiPengajar`: `honor = Hadir × trainer.honor` (checkpoint TA.C.2b disetujui 2026-09-23, lihat `docs/TA_C2B_VALIDATION.md`). | **Locked (berpindah)** |
 | D-TA15 | Matriks bulanan dibangun dari record absensi dan dapat menampilkan beberapa pengajar dalam satu sel. | Locked |
 | D-TA16 | Rekap matriks historis mengambil label `I`/`A` dari `trainer.tipePengajar` saat ini (bukan snapshot per record). Jika tipe pengajar seseorang berubah, label pada rekap lama ikut berubah mengikuti tipe terbaru. Ini risiko yang disadari, bukan bug — dievaluasi ulang bila perubahan tipe pengajar mulai sering terjadi. | Locked |
 

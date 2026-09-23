@@ -5,7 +5,9 @@ Memecah implementasi Absensi Tenaga Pengajar menjadi microtask yang berurutan. S
 
 **Source of truth:** `TRAINER_ATTENDANCE_PLAN.md` §3 (F-TA1–F-TA9), §4 (D-TA1–D-TA16), dan §10 (R-TA1–R-TA14).
 
-**Catatan status:** D-TA14 (sumber perhitungan honor) berstatus **Pending** sampai microtask TA.C.2b disetujui secara eksplisit — lihat Gate TA.C di bawah.
+**Catatan status:** D-TA14 (sumber perhitungan honor) **Locked (berpindah)**
+sejak 2026-09-23 — checkpoint TA.C.2b disetujui eksplisit, lihat
+`docs/TA_C2B_VALIDATION.md` — TA.C.3/TA.C.4 dieksekusi.
 
 ---
 

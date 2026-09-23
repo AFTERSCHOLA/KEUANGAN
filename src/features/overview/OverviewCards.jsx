@@ -24,6 +24,10 @@ export default function OverviewCards() {
     siswa: readCached('siswa'),
     trainer: readCached('trainer'),
     absensi: readCached('absensi'),
+    // TA.C.3 (D-TA14 Locked berpindah) — Gate C honor source, branch
+    // filtering for it lives in filterEntitiesByBranch (same sekolahId
+    // rule as legacy absensi).
+    absensiPengajar: readCached('absensiPengajar'),
     honorPayments: readCached('honorPayments'),
     sppPayments: readCached('sppPayments'),
     invoices: readCached('invoices'),

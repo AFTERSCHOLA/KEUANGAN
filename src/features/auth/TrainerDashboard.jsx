@@ -20,11 +20,14 @@ export default function TrainerDashboard({ trainerId }) {
   const sekolah = readCached('sekolah')
   const siswa = readCached('siswa')
   const absensi = readCached('absensi')
+  // TA.C.3 (D-TA14 Locked berpindah) — Honor Saya beban comes from the
+  // Gate C source; legacy absensi still feeds the schedule/done badges.
+  const absensiPengajar = readCached('absensiPengajar')
   const honorPayments = readCached('honorPayments')
   const sppPayments = readCached('sppPayments')
   const finance = useMemo(
-    () => financialData({ sekolah, siswa, trainer: trainers, absensi, honorPayments, sppPayments, periode }),
-    [sekolah, siswa, trainers, absensi, honorPayments, sppPayments, periode]
+    () => financialData({ sekolah, siswa, trainer: trainers, absensi, absensiPengajar, honorPayments, sppPayments, periode }),
+    [sekolah, siswa, trainers, absensi, absensiPengajar, honorPayments, sppPayments, periode]
   )
   const trainerFinance = finance.trainerFinance.find(t => t.id === trainerId) || {
     hadirSesi: 0,

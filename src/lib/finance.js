@@ -43,9 +43,45 @@ export function honorPaidByTrainer(honorPayments = [], periode) {
   return result
 }
 
-export function financialData({ sekolah = [], siswa = [], trainer = [], absensi = [], honorPayments = [], sppPayments = [], periode }) {
+// TA.C.3 (F-TA6, F-TA9; D-TA4, D-TA5, D-TA14 Locked berpindah; R-TA3,
+// R-TA11, R-TA12) — beban honor dari `absensiPengajar`.
+// `honor = jumlah Hadir × trainer.honor`: nominal selalu dibaca dari
+// field honor orangnya (R-TA3, tidak ada hardcode 100k/75k/50k);
+// Izin/Alpa = 0; keterangan EXPO/Pengganti tidak mengubah nominal
+// (PLAN §9, TA_C2B_VALIDATION.md §3). Correction records supersede
+// via latest-wins on `correctionOf` (R-TA4, same rule as the matrix).
+export function pengajarHonorStats(absensiPengajar = [], periode) {
+  const latestByOriginal = new Map()
+  ;(absensiPengajar || [])
+    .filter(r => r.periode === periode)
+    .forEach(r => {
+      const key = r.correctionOf || r.id
+      const existing = latestByOriginal.get(key)
+      if (!existing || (r.correctionOf && !existing.correctionOf) || r.id > existing.id) {
+        latestByOriginal.set(key, r)
+      }
+    })
+  const hadirByTrainer = {}
+  const hadirBySekolah = {}
+  const hadirRecords = []
+  ;[...latestByOriginal.values()].forEach(r => {
+    if (r.status !== 'Hadir' || !r.trainerId) return
+    hadirByTrainer[r.trainerId] = (hadirByTrainer[r.trainerId] || 0) + 1
+    if (r.sekolahId) hadirBySekolah[r.sekolahId] = (hadirBySekolah[r.sekolahId] || 0) + 1
+    hadirRecords.push(r)
+  })
+  return { hadirByTrainer, hadirBySekolah, hadirRecords }
+}
+
+export function financialData({ sekolah = [], siswa = [], trainer = [], absensi = [], honorPayments = [], sppPayments = [], periode, absensiPengajar = null }) {
   const stats = attendanceStats(absensi, periode)
   const dibayarByTrainer = honorPaidByTrainer(honorPayments, periode)
+  // TA.C.3 — Concrete pick: `absensiPengajar` null/absent = legacy
+  // `absensi` source (every existing caller and test stays byte-identical,
+  // R-TA12); an array (even empty) switches honor beban to the Gate C
+  // source. SPP math never reads either attendance entity.
+  const pengajarStats = Array.isArray(absensiPengajar) ? pengajarHonorStats(absensiPengajar, periode) : null
+  const trainerSessionCount = pengajarStats ? pengajarStats.hadirByTrainer : stats.trainerSessionCount
 
   let potensiSpp = 0
   let pemasukanSpp = 0
@@ -69,9 +105,14 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
       .filter(Boolean)
       .join(', ') || 'Belum Ditugaskan'
 
-    const sesiHadir = absensi.filter(
-      a => a.sekolahId === sch.id && a.periode === periode && a.trainerStatus === 'Hadir'
-    )
+    // TA.C.3: with the Gate C source, beban per sekolah = Σ Hadir rows
+    // in absensiPengajar × each row owner's trainer.honor (R-TA3).
+    // hadirRecords is already latest-wins deduped (R-TA4).
+    const sesiHadir = pengajarStats
+      ? pengajarStats.hadirRecords.filter(a => a.sekolahId === sch.id)
+      : absensi.filter(
+        a => a.sekolahId === sch.id && a.periode === periode && a.trainerStatus === 'Hadir'
+      )
     const bebanHonor = sesiHadir.reduce((sum, a) => {
       const tr = trainer.find(t => t.id === a.trainerId)
       return sum + (tr ? tr.honor : 0)
@@ -92,7 +133,7 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
 
   let totalBebanHonor = 0
   const trainerFinance = trainer.map(t => {
-    const hadirSesi = stats.trainerSessionCount[t.id] || 0
+    const hadirSesi = trainerSessionCount[t.id] || 0
     const bebanHonor = hadirSesi * t.honor
     totalBebanHonor += bebanHonor
     const dibayar = dibayarByTrainer[t.id] || 0
