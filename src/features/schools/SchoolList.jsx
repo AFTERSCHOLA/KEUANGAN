@@ -15,6 +15,7 @@ import {
   getRoleContext,
   writeRemote,
   deleteRemote,
+  pullRemote,
   subscribeStore
 } from '../../lib/store.js'
 import { loadPhotoDataUrl } from '../../lib/photoStorage.js'
@@ -138,6 +139,7 @@ const role = getRoleContext().role
 
 if (role === 'superadmin' && !form.cabangId) {
   setAlertMsg('Cabang wajib dipilih')
+  setAlertOpen(true)
   return
 }
   
