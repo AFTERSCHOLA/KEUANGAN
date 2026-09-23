@@ -268,6 +268,46 @@ function validateAbsensi(array $data, PDO $pdo): array {
     return $errors;
 }
 
+const ABSENSI_PENGAJAR_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
+const ABSENSI_PENGAJAR_KETERANGAN_VALUES = ['EXPO', 'Pengganti', 'Lainnya'];
+
+function validateAbsensiPengajar(array $data, PDO $pdo): array {
+    $errors = array_merge([], checkPayloadSize($data, 'absensiPengajar'));
+
+    if (!requireNonEmptyString($data['id'] ?? null)) {
+        $errors[] = 'absensiPengajar: id is required';
+    }
+    if (!requireNonEmptyString($data['trainerId'] ?? null) || !rowExists($pdo, 'trainer', $data['trainerId'])) {
+        $errors[] = 'absensiPengajar: trainerId does not reference an existing trainer';
+    }
+    if (!requireNonEmptyString($data['sekolahId'] ?? null) || !rowExists($pdo, 'sekolah', $data['sekolahId'])) {
+        $errors[] = 'absensiPengajar: sekolahId does not reference an existing sekolah';
+    }
+    if (!requireNonEmptyString($data['tanggal'] ?? null)) {
+        $errors[] = 'absensiPengajar: tanggal is required';
+    }
+
+    $status = $data['status'] ?? null;
+    if (!in_array($status, ABSENSI_PENGAJAR_STATUS_VALUES, true)) {
+        $errors[] = "absensiPengajar: status '" . var_export($status, true)
+            . "' is not one of " . implode(', ', ABSENSI_PENGAJAR_STATUS_VALUES);
+    }
+
+    $keterangan = $data['keterangan'] ?? null;
+    if ($keterangan !== null && !in_array($keterangan, ABSENSI_PENGAJAR_KETERANGAN_VALUES, true)) {
+        $errors[] = "absensiPengajar: keterangan '" . var_export($keterangan, true)
+            . "' is not one of " . implode(', ', ABSENSI_PENGAJAR_KETERANGAN_VALUES);
+    }
+
+    if (!requireNonEmptyString($data['cabangId'] ?? null)) {
+        $errors[] = 'absensiPengajar: cabangId is required (ownership)';
+    } elseif (!rowExists($pdo, 'cabang', $data['cabangId'])) {
+        $errors[] = 'absensiPengajar: cabangId does not reference an existing cabang';
+    }
+
+    return $errors;
+}
+
 function validateHonorPayment(array $data, PDO $pdo): array {
     $errors = array_merge([], checkPayloadSize($data, 'honorPayments'));
     if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'honorPayments: id is required';
@@ -335,6 +375,7 @@ function validateRecord(string $entity, array $data, PDO $pdo): array {
         'trainer' => validateTrainer($data, $pdo),
         'siswa' => validateSiswa($data, $pdo),
         'absensi' => validateAbsensi($data, $pdo),
+        'absensiPengajar' => validateAbsensiPengajar($data, $pdo),
         'honorPayments' => validateHonorPayment($data, $pdo),
         'sppPayments' => validateSppPayment($data, $pdo),
         'invoices' => validateInvoice($data, $pdo),

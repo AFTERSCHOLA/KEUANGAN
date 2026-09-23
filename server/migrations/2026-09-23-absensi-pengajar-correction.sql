@@ -1,0 +1,31 @@
+-- TA.B.4 / F-TA7 / D-TA12 / R-TA4 — correction support for
+-- absensi_pengajar, mirroring honor_payments' correction_of column
+-- (schema.sql idx_honor_correction). Investigation during TA.B.4 found
+-- that the overwrite-by-id pattern used by legacy `absensi`
+-- (AttendanceForm.jsx re-submitting with the same id) silently fails at
+-- the server: insertLedger()/sync.php both do a raw INSERT, so a
+-- duplicate id lands in `alreadyApplied` (sync.php) or a 409
+-- (insertLedger) — the correction is never actually persisted server-
+-- side, only in the client's local cache. honor_payments' insert-new-
+-- with-correction_of pattern is the only correction path in this
+-- codebase proven to round-trip through insertLedger() correctly, so
+-- absensiPengajar corrections (Admin Cabang/Superadmin, TA.B.4) follow
+-- that pattern instead of the broken one.
+--
+-- Idempotence (taste #35): a single ALTER ... ADD COLUMN, guarded by
+-- the `migrations` table row that server/bootstrap.php::runMigrations()
+-- records on success, so the file runs exactly once per database —
+-- same pattern as 2026-09-12-logo-nullable-cabang.sql. No
+-- information_schema / PREPARE-EXECUTE guard needed; that construct was
+-- tried first and caused "Cannot execute queries while other unbuffered
+-- queries are active" under this project's PDO config
+-- (EMULATE_PREPARES => false) — removed in favor of the simpler,
+-- proven pattern already used elsewhere in this directory.
+--
+-- Reference-preserving: existing absensi_pengajar rows are untouched;
+-- correction_of defaults to NULL for all of them (not a correction).
+--
+-- Naming: applies after 2026-09-22-absensi-pengajar-schema.sql, which
+-- creates the table this migration alters.
+
+ALTER TABLE absensi_pengajar ADD COLUMN correction_of VARCHAR(191) NULL, ADD INDEX idx_absensi_pengajar_correction (correction_of);

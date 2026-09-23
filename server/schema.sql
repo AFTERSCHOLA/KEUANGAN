@@ -69,6 +69,19 @@ CREATE TABLE IF NOT EXISTS absensi (
     INDEX idx_absensi_updated (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS absensi_pengajar (
+    id VARCHAR(191) NOT NULL PRIMARY KEY,
+    cabang_id VARCHAR(191) NOT NULL,
+    correction_of VARCHAR(191) NULL,
+    version INT UNSIGNED NOT NULL DEFAULT 1,
+    payload JSON NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_absensi_pengajar_cabang_created (cabang_id, created_at),
+    INDEX idx_absensi_pengajar_updated (updated_at),
+    INDEX idx_absensi_pengajar_correction (correction_of)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS spp_payments (
     id VARCHAR(191) NOT NULL PRIMARY KEY,
     cabang_id VARCHAR(191) NULL,
@@ -179,3 +192,4 @@ CREATE TABLE IF NOT EXISTS photo_uploads (
     INDEX idx_photos_owner_created (owner_user_id, created_at),
     INDEX idx_photos_branch_created (cabang_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+

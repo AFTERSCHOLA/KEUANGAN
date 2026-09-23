@@ -319,6 +319,70 @@ try {
     fixtureCheck($errors === [], 'invoice-level sppPayments with matching sekolahId should validate, got: ' . implode('; ', $errors));
 
     echo "SBF.2 invoice-level payment check passed\n";
+
+    // ================= TA.B.1 — absensiPengajar schema (D-TA7, D-TA8, D-TA9, D-TA10) =================
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-ta-' . bin2hex(random_bytes(3)),
+        'trainerId' => $trainerId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-21',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+    ], $pdo);
+    fixtureCheck($errors === [], 'valid absensiPengajar should validate, got: ' . implode('; ', $errors));
+
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-ta-' . bin2hex(random_bytes(3)),
+        'trainerId' => $trainerId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-21',
+        'cabangId' => $cabangId,
+        'status' => 'Sakit',
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'status'), 'absensiPengajar with invalid status should be rejected');
+
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-ta-' . bin2hex(random_bytes(3)),
+        'trainerId' => $trainerId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-21',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+        'keterangan' => 'EXPO',
+    ], $pdo);
+    fixtureCheck($errors === [], 'absensiPengajar with valid keterangan should validate, got: ' . implode('; ', $errors));
+
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-ta-' . bin2hex(random_bytes(3)),
+        'trainerId' => $trainerId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-21',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+        'keterangan' => 'Sakit Demam',
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'keterangan'), 'absensiPengajar with free-text keterangan outside enum should be rejected');
+
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-ta-' . bin2hex(random_bytes(3)),
+        'trainerId' => 'trainer-does-not-exist',
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-21',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'trainerId'), 'absensiPengajar with invalid trainerId reference should be rejected');
+
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-ta-' . bin2hex(random_bytes(3)),
+        'trainerId' => $trainerId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-21',
+        'status' => 'Hadir',
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'cabangId is required'), 'absensiPengajar without cabangId should be rejected (unlike legacy absensi)');
+
+    echo "TA.B.1 absensiPengajar schema check passed\n";
 } finally {
     $pdo->prepare('DELETE FROM invoices WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM siswa WHERE cabang_id = :c')->execute([':c' => $cabangId]);

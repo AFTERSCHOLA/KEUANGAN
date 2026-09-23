@@ -13,9 +13,9 @@ function roleCanReadEntity(string $role, string $entity): bool {
         // 'settings' intentionally excluded — global settings/tariffs are
         // Superadmin-only per PRODUCTION_PLAN.md section 5 (decision: kept
         // closed entirely, not filtered).
-        'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
+        'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
     ], true);
-    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'sppPayments'], true);
+    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments'], true);
     return false;
 }
 
@@ -36,6 +36,61 @@ function trainerOwnsAttendance(array $data, array $user): bool {
     return ($user['role'] ?? null) === 'trainer'
         && is_string($data['trainerId'] ?? null)
         && $data['trainerId'] === ($user['trainerId'] ?? null);
+}
+
+/**
+ * TA.B.2 (R-TA8) — cek apakah $trainerId (sebagai instruktur ATAU asisten)
+ * mempunyai penugasan untuk $sekolahId yang `aktif = true` dan rentang
+ * tanggalnya (periodeMulai..periodeSelesai) mencakup $tanggal.
+ *
+ * Keputusan eksplisit: periodeSelesai = null diperlakukan sebagai
+ * penugasan ongoing/tanpa batas atas, BUKAN "tidak valid sampai diisi".
+ * Ini konsisten dengan field optional lain di codebase ini (honor,
+ * keterangan) yang permisif selama tidak diisi, bukan fail-closed karena
+ * kosong. Kalau kebutuhan bisnis berubah (mis. penugasan tanpa
+ * periodeSelesai harus dianggap invalid), ini titik satu-satunya yang
+ * perlu diubah.
+ *
+ * Fails closed: assignment dengan data tanggal/aktif yang malformed
+ * dilewati (skip), bukan dianggap match.
+ */
+function trainerHasActiveAssignment(string $trainerId, string $sekolahId, string $tanggal, PDO $pdo): bool {
+    $trainerRows = $pdo->query('SELECT payload FROM trainer ORDER BY created_at, id')->fetchAll();
+
+    foreach ($trainerRows as $row) {
+        $trainerPayload = json_decode($row['payload'], true);
+        if (!is_array($trainerPayload)) continue;
+
+        $assignments = $trainerPayload['penugasanPengajar'] ?? [];
+        if (!is_array($assignments)) continue;
+
+        foreach ($assignments as $assignment) {
+            if (!is_array($assignment)) continue;
+
+            $assignedSekolahId = $assignment['sekolahId'] ?? null;
+            if ($assignedSekolahId !== $sekolahId) continue;
+
+            $matchesTrainer = ($assignment['trainerId'] ?? null) === $trainerId
+                || ($assignment['asistenId'] ?? null) === $trainerId;
+            if (!$matchesTrainer) continue;
+
+            if (($assignment['aktif'] ?? null) !== true) continue;
+
+            $periodeMulai = $assignment['periodeMulai'] ?? null;
+            if (!is_string($periodeMulai) || $periodeMulai === '') continue;
+            if ($tanggal < $periodeMulai) continue;
+
+            $periodeSelesai = $assignment['periodeSelesai'] ?? null;
+            if ($periodeSelesai !== null) {
+                if (!is_string($periodeSelesai) || $periodeSelesai === '') continue;
+                if ($tanggal > $periodeSelesai) continue;
+            }
+
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -71,6 +126,10 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
     }
 
     if ($resource === 'absensi') {
+        return trainerOwnsAttendance($data, $user);
+    }
+
+    if ($resource === 'absensiPengajar') {
         return trainerOwnsAttendance($data, $user);
     }
 
@@ -116,9 +175,14 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         if (in_array($resource, ['honorPayments', 'invoices', 'audit_log'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
             return false;
         }
-        
+
         if ($action === 'read') return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
-        if (in_array($action, ['create', 'update', 'delete', 'write', 'verify'], true)) {
+        // TA.B.4 — 'correct' ditambahkan ke daftar action bervalidasi
+        // branch-scope yang sama dengan create/update/delete/write/verify.
+        // Tanpa ini, admin_cabang.absensiPengajar correction selalu jatuh
+        // ke `return false;` di akhir fungsi (403 bahkan untuk cabang
+        // sendiri), karena tidak ada cabang lain yang menangani 'correct'.
+        if (in_array($action, ['create', 'update', 'delete', 'write', 'verify', 'correct'], true)) {
             return roleCanReadEntity($role, $resource) && recordOwnsBranch($resource, $data, $user);
         }
         return false;
@@ -128,6 +192,23 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         if ($action === 'read') return roleCanReadEntity($role, $resource) && trainerOwnsRecord($resource, $data, $user);
         if ($resource === 'absensi' && $action === 'write') return trainerOwnsAttendance($data, $user);
         if ($resource === 'absensi' && $action === 'certify') return trainerOwnsAttendance($data, $user);
+        if ($resource === 'absensiPengajar' && $action === 'write') {
+            if (!trainerOwnsAttendance($data, $user)) {
+                return false;
+            }
+            $sekolahId = $data['sekolahId'] ?? null;
+            $tanggal = $data['tanggal'] ?? null;
+            if (!is_string($sekolahId) || !is_string($tanggal)) {
+                return false;
+            }
+            return trainerHasActiveAssignment($data['trainerId'], $sekolahId, $tanggal, database());
+        }
+        // Trainer sengaja TIDAK punya jalur 'correct' di sini — koreksi
+        // absensiPengajar adalah scope Admin Cabang/Superadmin saja
+        // (TA.B.4). Trainer yang mengirim action=correct jatuh ke `return
+        // false;` di bawah -> 403, bukan diam-diam diizinkan lewat cek
+        // trainerOwnsAttendance/trainerHasActiveAssignment yang hanya
+        // menjaga jalur 'write'.
         return false;
     }
 

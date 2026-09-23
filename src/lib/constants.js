@@ -335,6 +335,36 @@ export function newAbsensi({
   }
 }
 
+// TA.B.1 (D-TA7, D-TA8, D-TA9, D-TA10) — trainer attendance factory.
+// Separate entity from newAbsensi() per D-TA7/R-TA1 (do not merge, even
+// though status enums match today). cabangId is REQUIRED — the writer
+// (TA.B.2, absensiPengajar.php) goes through insertLedger(), whose
+// requireRecord() hard-rejects a missing/blank cabangId before the DB
+// write happens. Caller must always supply it (typically derived from
+// the trainer's own cabangId, mirroring how sekolah/siswa derive theirs).
+export function newAbsensiPengajar({
+  id,
+  trainerId,
+  sekolahId,
+  tanggal,
+  status = 'Hadir',
+  keterangan = null,
+  catatan = '',
+  cabangId,
+}) {
+  return {
+    id: id || `${tanggal}_${sekolahId}_${trainerId}_pengajar`,
+    tanggal,
+    periode: tanggal ? tanggal.slice(0, 7) : '',
+    trainerId,
+    sekolahId,
+    status,
+    keterangan,
+    catatan,
+    cabangId,
+  }
+}
+
 // ============================================
 // ACADEMIC YEAR ENGINE
 // ============================================
