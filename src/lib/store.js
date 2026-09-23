@@ -77,7 +77,7 @@ function trainerHasActiveAssignmentClient(trainerId, sekolahId, tanggal) {
   return false
 }
 
-function trainerHasAnyActiveAssignmentToSekolahClient(trainerId, sekolahId) {
+export function trainerHasAnyActiveAssignmentToSekolahClient(trainerId, sekolahId) {
   const trainers = readCollection('trainer')
   for (const t of trainers) {
     const assignments = Array.isArray(t.penugasanPengajar) ? t.penugasanPengajar : []
@@ -123,9 +123,9 @@ function isWithinScope(key, record, ctx) {
     switch (key) {
       case 'sekolah': return schoolIds.has(record.id) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.id)
       case 'trainer': return record.id === ctx.trainerId
-      case 'absensi': return record.trainerId === ctx.trainerId && schoolIds.has(record.sekolahId)
+      case 'absensi': return record.trainerId === ctx.trainerId && (schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId))
       case 'siswa': return schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
-      case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId)
+      case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
       case 'honorPayments': return record.trainerId === ctx.trainerId
       case 'invoices': return false
       case 'absensiPengajar': return record.trainerId === ctx.trainerId && trainerHasActiveAssignmentClient(ctx.trainerId, record.sekolahId, record.tanggal)

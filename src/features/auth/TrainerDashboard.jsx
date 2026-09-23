@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { readCached, usePeriod } from '../../lib/store.js'
+import { readCached, usePeriod, trainerHasAnyActiveAssignmentToSekolahClient } from '../../lib/store.js'
 import { financialData } from '../../lib/finance.js'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 
@@ -49,7 +49,7 @@ export default function TrainerDashboard({ trainerId }) {
   const assignedSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
     return sekolah
-      .filter(s => schoolIds.has(s.id) && scheduleIncludesToday(s, todayName))
+      .filter(s => (schoolIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, todayName))
       .map(s => ({
         ...s,
         done: absensi.some(a => a.tanggal === today && a.sekolahId === s.id && a.trainerId === trainerId),

@@ -113,7 +113,7 @@ export default function TrainerAttendanceForm({ trainerId }) {
             {validSekolahForDate.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
           </select>
           {validSekolahForDate.length === 0 && (
-            <p className="text-[11px] text-rose-500 mt-1">Tidak ada penugasan aktif untuk tanggal ini.</p>
+            <p className="text-[11px] text-rose-500 mt-1">Tidak ada penugasan aktif untuk tanggal ini. Minta Admin Cabang membuat penugasan.</p>
           )}
         </div>
 

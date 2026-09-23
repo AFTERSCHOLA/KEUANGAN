@@ -96,4 +96,29 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     const store = await freshStore()
     expect(store.readCached('siswa').map(s => s.id)).not.toContain('sw-2')
   })
+
+  it('G3a: assignment-only trainer sees own legacy absensi rows for the assigned school', async () => {
+    seedAssignmentOnlyTrainer()
+    localStorage.setItem('afterschola_v4_absensi', JSON.stringify([
+      { id: 'abs-1', sekolahId: 'sch-A', trainerId: 'trn-self', periode: '2026-09', tanggal: '2026-09-10' },
+      { id: 'abs-2', sekolahId: 'sch-B', trainerId: 'trn-self', periode: '2026-09', tanggal: '2026-09-10' },
+      { id: 'abs-3', sekolahId: 'sch-A', trainerId: 'trn-other', periode: '2026-09', tanggal: '2026-09-10' },
+    ]))
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    // Own row for the assigned school: visible. Own row for the
+    // unassigned school: still hidden. Another trainer's row: hidden.
+    expect(store.readCached('absensi').map(a => a.id)).toEqual(['abs-1'])
+  })
+
+  it('G3b: assignment-only trainer sees sppPayments rows for the assigned school', async () => {
+    seedAssignmentOnlyTrainer()
+    localStorage.setItem('afterschola_v4_sppPayments', JSON.stringify([
+      { id: 'spp-1', siswaId: 'sw-1', sekolahId: 'sch-A', periode: '2026-09', nominal: 150000 },
+      { id: 'spp-2', siswaId: 'sw-2', sekolahId: 'sch-B', periode: '2026-09', nominal: 150000 },
+    ]))
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    expect(store.readCached('sppPayments').map(p => p.id)).toEqual(['spp-1'])
+  })
 })
