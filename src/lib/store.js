@@ -124,7 +124,7 @@ function isWithinScope(key, record, ctx) {
       case 'sekolah': return schoolIds.has(record.id) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.id)
       case 'trainer': return record.id === ctx.trainerId
       case 'absensi': return record.trainerId === ctx.trainerId && schoolIds.has(record.sekolahId)
-      case 'siswa': return schoolIds.has(record.sekolahId)
+      case 'siswa': return schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
       case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId)
       case 'honorPayments': return record.trainerId === ctx.trainerId
       case 'invoices': return false
