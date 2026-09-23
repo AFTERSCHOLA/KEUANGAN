@@ -5,9 +5,7 @@ Memecah implementasi Absensi Tenaga Pengajar menjadi microtask yang berurutan. S
 
 **Source of truth:** `TRAINER_ATTENDANCE_PLAN.md` §3 (F-TA1–F-TA9), §4 (D-TA1–D-TA16), dan §10 (R-TA1–R-TA14).
 
-**Catatan status:** D-TA14 (sumber perhitungan honor) **Locked (berpindah)**
-sejak 2026-09-23 — checkpoint TA.C.2b disetujui eksplisit, lihat
-`docs/TA_C2B_VALIDATION.md` — TA.C.3/TA.C.4 dieksekusi.
+**Catatan status:** D-TA14 (sumber perhitungan honor) **Locked (berpindah)** — checkpoint TA.C.2b disetujui 2026-09-23, lihat `docs/TA_C2B_VALIDATION.md`. Seluruh chain TA.A–TA.D.1 **DONE**; TA.D.2 (dokumen ini) menutup write-back.
 
 ---
 
@@ -60,6 +58,9 @@ VERIFY: npm test -- constants
         trainer lama tetap valid.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.A.1 → Verified: php server/tests/entity.validation.php -> "TA.A.1 tipePengajar enum/backward-compatibility check passed"
+
 ```
 
 ### TA.A.2 Add assignment schema
@@ -88,6 +89,9 @@ VERIFY: test assignment:
         -> referensi sekolah/trainer yang tidak ada ditolak.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.A.2 → Verified: php server/tests/entity.validation.php -> "TA.A.2 trainer assignment schema check passed"
+
 ```
 
 ### TA.A.3 Enforce assignment scope
@@ -114,6 +118,8 @@ VERIFY: php server/tests/endpoint.protection.php
         -> trainer tidak dapat memakai ID orang lain untuk bypass scope.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.A.3 → Verified: php server/tests/endpoint.protection.php -> section "TA.A.3 assignment scope" (12 checks, 0 failed) — termasuk fix read.php membaca penugasanPengajar dari trainer.payload (bukan sekolah.payload), diverifikasi ulang setelah fixture endpoint.protection.php dikoreksi untuk tidak lagi menduplikasi assignment ke sekolah.payload.
 ```
 
 ---
@@ -145,6 +151,9 @@ VERIFY: php server/tests/entity.validation.php
         -> trainerId/sekolahId/cabangId wajib valid.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.B.1 → Verified: php server/tests/entity.validation.php -> "TA.B.1 absensiPengajar schema check passed"
+
 ```
 
 ### TA.B.2 Add self-attendance write
@@ -174,6 +183,9 @@ VERIFY: endpoint test:
            (atau penugasan aktif=false) = 403.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.B.2 → Verified: php server/tests/endpoint.protection.php -> section "absensiPengajar.php (TA.B.2 self-attendance)" (4 checks, 0 failed)
+
 ```
 
 ### TA.B.3 Build trainer attendance form
@@ -201,6 +213,8 @@ VERIFY: npx playwright test tests/trainer-attendance-form.spec.js --workers=1
         -> EXPO/Pengganti/Lainnya tersimpan.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.B.3 → Verified: npx playwright test tests/trainer-attendance-form.spec.js --workers=1 -> 4/4 passed
 ```
 
 ### TA.B.4 Build admin attendance management
@@ -227,6 +241,8 @@ VERIFY: npx playwright test tests/trainer-attendance-admin.spec.js --workers=1
         -> koreksi tersimpan dan terbaca kembali.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.B.4 → Verified: php server/tests/endpoint.protection.php -> section "absensiPengajar.php (TA.B.4 correction)" (8 checks, 0 failed); npx playwright test tests/trainer-attendance-admin.spec.js --workers=1 -> 2/2 passed
 ```
 
 ---
@@ -256,6 +272,8 @@ VERIFY: npx playwright test tests/trainer-attendance-summary.spec.js --workers=1
         -> filter periode mengubah data sesuai periode.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.C.1 → Verified: npx playwright test tests/trainer-attendance-summary.spec.js --workers=1 -> 3/3 passed
 ```
 
 ### TA.C.2 Build monthly attendance matrix
@@ -286,6 +304,8 @@ VERIFY: fixture September 2026:
         -> urutan tanggal mengikuti periode.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.C.2 → Verified: npx playwright test tests/trainer-attendance-recap.spec.js --workers=1 -> 2/2 passed
 ```
 
 ### TA.C.2b Business decision checkpoint — validasi & sign-off sumber honor
@@ -322,6 +342,8 @@ VERIFY: document inspection:
 DONE-IF: verify passes; jika keputusan = "tidak berpindah", maka
          TA.C.3 dan TA.C.4 di bawah ini dianggap tidak diperlukan
          dan chain dapat ditutup dari TA.C.2b langsung ke TA.D.1.
+
+TA.C.2b → Verified: document inspection -> docs/TA_C2B_VALIDATION.md, DISETUJUI 2026-09-23, keputusan A (berpindah ke absensiPengajar); D-TA14 di TRAINER_ATTENDANCE_PLAN.md diupdate ke Locked.
 ```
 
 ### TA.C.3 Integrate attendance into honor calculation
@@ -353,6 +375,8 @@ VERIFY: npm test -- finance/honor
         -> regression test jalur honorPayments tetap hijau.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.C.3 → Verified: npm test -- finance-pengajar-honor -> 4/4 passed (trainer senior 100000×2=200000; trainer baru 75000×2=150000; asisten 50000×3=150000 termasuk 1 Hadir-EXPO; Izin/Alpa=0; no hardcode nominal)
 ```
 
 ### TA.C.4 Verify honor/payment boundary
@@ -378,6 +402,8 @@ VERIFY: npm test
         -> PaymentTable tetap menampilkan Beban/Dibayar/Sisa dengan benar.
 
 DONE-IF: verify passes; only intended files changed
+
+TA.C.4 → Verified: npm test -- finance-pengajar-honor -> "honorPayments stay the payment source (no double-counting)" passed — bebanHonor dari absensi, dibayar/sisaHonor tetap dari honorPayments ledger
 ```
 
 ---
@@ -407,6 +433,8 @@ VERIFY: php server/tests/entity.validation.php
         + npx playwright test tests/trainer-attendance*.spec.js --workers=1
 
 DONE-IF: verify passes; only intended files changed
+
+TA.D.1 → Verified: php server/tests/entity.validation.php (green) + php server/tests/endpoint.protection.php (228 checks, 0 failed) + npm test (123 tests, 25 files, all passed) + npx playwright test tests/trainer-attendance*.spec.js --workers=1 (11/11 passed). R-TA12 dibuktikan eksplisit oleh finance-pengajar-honor.test.js "legacy path is byte-identical when absensiPengajar is absent (R-TA12)".
 ```
 
 ### TA.D.2 Record completion and update source docs

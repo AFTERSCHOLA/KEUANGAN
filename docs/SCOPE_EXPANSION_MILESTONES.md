@@ -308,4 +308,67 @@ Verified: `D:\Games and Apps\xampp\php\php.exe server/tests/entity.validation.ph
 
 ---
 
+## Gate TA — Absensi Tenaga Pengajar (Instruktur & Asisten)
+
+**Status: DONE (TA.A.1–TA.D.1, 2026-09-23).**
+
+Chain lengkap ada di `docs/TRAINER_ATTENDANCE_PLAN.md` dan
+`docs/TRAINER_ATTENDANCE_MILESTONES.md`. Ringkasan: entitas tenaga
+pengajar diperluas dengan `tipePengajar` (instruktur/asisten) dan
+relasi penugasan eksplisit (`trainer.penugasanPengajar[]`); absensi
+tenaga pengajar dibuat sebagai entitas terpisah (`absensiPengajar`)
+dengan status Hadir/Izin/Alpa dan keterangan EXPO/Pengganti/Lainnya;
+rekap matriks bulanan (sekolah × tanggal) dan ringkasan pribadi trainer
+dibangun di atasnya; checkpoint bisnis TA.C.2b (`docs/TA_C2B_VALIDATION.md`,
+disetujui 2026-09-23) memutuskan honor berpindah sumber ke
+`absensiPengajar` (`Hadir × trainer.honor`) tanpa mengubah jalur
+pembayaran `honorPayments` yang sudah ada (R-TA12, dibuktikan eksplisit
+oleh `finance-pengajar-honor.test.js`).
+
+Verified: `php server/tests/entity.validation.php` + `php server/tests/endpoint.protection.php`
+(228 checks, 0 failed) + `npm test` (123 tests) +
+`npx playwright test tests/trainer-attendance*.spec.js --workers=1` (11/11).
+
+Changed: `src/lib/constants.js` (`tipePengajar`, `penugasanPengajar`,
+`newAbsensiPengajar`), `server/validation/entities.php`
+(`validateTrainer` assignment schema, `validateAbsensiPengajar`),
+`server/bootstrap.php` (`entityConfig` entry `absensiPengajar`),
+`server/api/absensiPengajar.php` (baru), `server/api/read.php`
+(assignment-scope enrichment dibaca dari `trainer.payload`, dikoreksi
+selama TA.D.1), `server/auth/authorize.php` (`trainerOwnsRecord` untuk
+`absensiPengajar`/`sekolah` assignment-based), `src/lib/finance.js`
+(`pengajarHonorStats`, integrasi opt-in ke `financialData()` lewat
+parameter `absensiPengajar`), `src/features/.../TrainerAttendance*.jsx`
+(form, admin management, rekap matriks, ringkasan pribadi), migration
+SQL tabel `absensi_pengajar`, test baru di `server/tests/*`,
+`src/lib/__tests__/*`, `tests/trainer-attendance-*.spec.js`.
+
+
+---
+
+## Gate TA — Closure Summary
+
+**Status: DONE (TA.A.1–TA.D.1, 2026-09-23).**
+
+Verified: seluruh 15 microtask TA.A.1–TA.D.1 lolos VERIFY masing-masing
+(lihat baris Verified per microtask di atas). Regression penuh:
+`php server/tests/entity.validation.php` + `php server/tests/endpoint.protection.php`
+(228 checks, 0 failed) + `npm test` (123 tests, 25 file) +
+`npx playwright test tests/trainer-attendance*.spec.js --workers=1` (11/11).
+
+Sign-off decisions: (1) D-TA14 — checkpoint TA.C.2b disetujui 2026-09-23,
+honor berpindah sumber ke `absensiPengajar` (`Hadir × trainer.honor`),
+lihat `docs/TA_C2B_VALIDATION.md`; (2) `penugasanPengajar` disimpan di
+`trainer.payload` (bukan `sekolah.payload`) — dikoreksi di `read.php`
+selama TA.D.1 setelah gap antara validasi (`validateTrainer()`) dan
+pembacaan (`read.php`) ditemukan; fixture `endpoint.protection.php`
+turut dikoreksi agar tidak menutupi gap ini lewat data ganda;
+(3) TA.D.1 menemukan `cbg-test-pusat` seed branch sempat hilang dari
+test DB lokal (root cause lama, sudah dikenal dari HY.5, lihat
+`docs/SCOPE_EXPANSION_MILESTONES.md`) — solusi jangka panjang (otomatisasi
+re-seed) dicatat sebagai item terpisah, di luar scope TA.D.1.
+
+TA.D.2 (dokumen ini + PLAN.md + PRODUCTION_MILESTONES.md +
+SCOPE_EXPANSION_MILESTONES.md) menutup chain.
+
 **End of Microtask Chains**

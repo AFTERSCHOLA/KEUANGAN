@@ -1,6 +1,6 @@
 # Absensi Tenaga Pengajar Plan — Instruktur & Asisten
 
-**Status:** DRAFT — 2026-09-21  
+**Status:** DONE — Gate TA.A–TA.D.1 selesai 2026-09-23 (lihat `docs/TRAINER_ATTENDANCE_MILESTONES.md` untuk bukti Verified per microtask) 
 **Position:** Rantai implementasi khusus untuk fitur Absensi Tenaga Pengajar. Dokumen ini menjadi sumber keputusan untuk skema data, relasi penugasan, alur pengisian absensi, hak akses, rekap, dan integrasi honor.  
 **Scope:** Absensi Tenaga Pengajar (Instruktur + Asisten). Perhitungan honor baru diaktifkan pada Gate C dan tidak boleh mengubah jalur `honorPayments` yang sudah berjalan sebelum Gate C.
 
@@ -320,7 +320,7 @@ Sebelum Gate C:
 - jangan mengubah `financialData()`/`honorPayments`;
 - jangan membuat nominal honor baru dari hardcode tipe.
 
-**Gate C tidak otomatis berarti "honor pasti dipindah ke absensi tenaga pengajar".** Sebelum TA.C.3 (integrasi honor) dieksekusi, harus ada checkpoint validasi eksplisit (lihat TA.C.2b pada dokumen milestone): data absensi tenaga pengajar dibandingkan dengan pencatatan manual September 2026, dan baru setelah itu diputuskan apakah sumber perhitungan honor benar-benar berpindah, atau tetap memakai absensi kegiatan lama. D-TA14 berstatus **Pending** sampai checkpoint ini disetujui.
+**Gate C tidak otomatis berarti "honor pasti dipindah ke absensi tenaga pengajar".** Checkpoint TA.C.2b (lihat `docs/TA_C2B_VALIDATION.md`) sudah disetujui 2026-09-23 dengan keputusan **A. Berpindah ke `absensiPengajar`** — data absensi tenaga pengajar dibandingkan dengan pencatatan manual September 2026 dan hasilnya match. D-TA14 kini **Locked (berpindah)**; Gate C menghitung `honor = Hadir × trainer.honor` sesuai §9 di bawah.
 
 Jika checkpoint disetujui, pada Gate C:
 

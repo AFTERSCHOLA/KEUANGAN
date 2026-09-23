@@ -565,3 +565,10 @@ Follow-ups outside this milestone's scope (taste #53): (1) `server/tests/users.e
 - Test ownership covers unit, PHP integration, Playwright, build, security, and source-hygiene checks.
 
 The project is not production-ready until soft-login is development-only, PHP sessions and password hashes are used, 401/403/409/422 are tested, server RBAC and branch isolation pass crafted API tests, CSRF/rate limits/expiry/headers/uploads pass, audits/backups/restore/migration/reconciliation pass, offline writes remain visibly pending until acknowledgement, existing product gates remain green, staging passes, and rollback is rehearsed with retained artifact and backup.
+
+
++ **Absensi Tenaga Pengajar (Gate TA, DONE 2026-09-23):** fitur absensi
++ instruktur/asisten terpisah dari absensi kegiatan M3.4, dengan integrasi
++ honor opt-in (`Hadir × trainer.honor`) yang tidak mengubah jalur
++ `honorPayments` — lihat `docs/TRAINER_ATTENDANCE_PLAN.md` dan Gate TA di
++ `docs/SCOPE_EXPANSION_MILESTONES.md` untuk detail dan bukti Verified.
