@@ -97,6 +97,8 @@ MICROTASK: Add timetable CSV export
   OUTCOME: Unduh CSV downloads a file whose rows equal the visible table.
   VERIFY:  npx playwright test tests/penugasan-export.spec.js --workers=1 -> download event fires, filename matches picked date, parsed CSV rows equal table cell text (comma names stay quoted, Excel BOM present); zero pageerror
   DONE-IF: verify passes; only intended files changed
+
+  PG.C.1 → Verified: npx playwright test tests/penugasan-export.spec.js --workers=1 -> 1 passed (17.7s), zero pageerror; filename Jadwal_Penugasan_YYYY-MM-DD, headers pinned, comma-name quoting + BOM proven, file equals visible row
 ```
 
 ### PG.C.2 Add print path

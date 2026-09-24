@@ -117,3 +117,20 @@ export function exportAgingCSV(agingRows, periode) {
   ])
   downloadCSV(headers, rows, 'Laporan_Piutang_Aging', periode)
 }
+
+// ============================================
+// PG.C.1 (F-PG3; D-PG6) — export tabel Jadwal Penugasan harian.
+// displayRows: [{ sekolah, trainer, asisten, waktu }] — baris tampil yang
+// sudah difilter scope (export tidak pernah lebih dari yang terlihat di
+// tabel, D-PG7). tanggal: "YYYY-MM-DD" pilihan user (bukan periode
+// bulanan — D-PG5), menjadi kolom Tanggal + suffix nama file:
+// Jadwal_Penugasan_2026-09-24.csv. BOM + quoting via downloadCSV
+// (Excel-ready, sama seperti 6 export existing).
+// ============================================
+export function exportJadwalPenugasanCSV(displayRows, tanggal) {
+  const headers = ["Sekolah", "Trainer", "Asisten", "Waktu", "Tanggal"]
+  const rows = (displayRows || []).map(r => [
+    r.sekolah, r.trainer, r.asisten, r.waktu, tanggal,
+  ])
+  downloadCSV(headers, rows, 'Jadwal_Penugasan', tanggal)
+}

@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { readCached, getRoleContext, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
 import { buildDailyTimetable, dayNameForTanggal } from '../../lib/penugasan.js'
+import { exportJadwalPenugasanCSV } from '../../lib/csv.js'
 
 // PG.B.1 (F-PG2; D-PG4, D-PG5, D-PG7, D-PG8) — date-driven daily timetable.
 // Read-only derived view over trainer.penugasanPengajar[] ×
@@ -34,6 +35,20 @@ export default function PenugasanTimetable() {
 
   const hari = dayNameForTanggal(tanggal)
 
+  // PG.C.1 (D-PG6, D-PG7) — export payload mirrors the visible table
+  // exactly (same filtered array + same name resolution); scope filtered
+  // upstream, so the file can never contain rows the table hides.
+  const displayRows = useMemo(() => rows.map(r => ({
+    sekolah: r.sekolahNama,
+    trainer: trainerById.get(r.trainerId)?.nama || 'Trainer tidak ditemukan',
+    asisten: r.asistenId ? (trainerById.get(r.asistenId)?.nama || 'Trainer tidak ditemukan') : '—',
+    waktu: r.waktu,
+  })), [rows, trainerById])
+
+  function handleExportCSV() {
+    exportJadwalPenugasanCSV(displayRows, tanggal)
+  }
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
@@ -41,14 +56,22 @@ export default function PenugasanTimetable() {
           <h2 className="text-xl font-bold text-slate-800">Jadwal Penugasan</h2>
           <p className="text-xs text-slate-500">Tanggal: <b>{tanggal}</b>{hari ? ` · ${hari}` : ''}</p>
         </div>
-        <div>
-          <label className="text-xs font-bold text-slate-400 uppercase">Tanggal</label>
-          <input
-            type="date"
-            value={tanggal}
-            onChange={e => setTanggal(e.target.value)}
-            className="block mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-          />
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase">Tanggal</label>
+            <input
+              type="date"
+              value={tanggal}
+              onChange={e => setTanggal(e.target.value)}
+              className="block mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
+          <button
+            onClick={handleExportCSV}
+            className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
+          >
+            Unduh CSV
+          </button>
         </div>
       </div>
 
