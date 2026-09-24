@@ -77,6 +77,8 @@ MICROTASK: Build daily timetable view
   OUTCOME: picking a date lists exactly Sekolah | Trainer | Asisten | Waktu for that weekday.
   VERIFY:  npm test -- penugasan-timetable + npx playwright test tests/penugasan-timetable.spec.js --workers=1 -> seeded school with 2 same-day slots expands to 2 rows with Waktu text equal to formatJadwalList per slot; Thursday pick hides Wednesday rows; empty date shows Belum ada jadwal penugasan untuk tanggal ini.; zero pageerror
   DONE-IF: verify passes; only intended files changed
+
+  PG.B.1 → Verified: npx vitest run src/lib/__tests__/penugasan-timetable.test.js (4/4) + npx playwright test tests/penugasan-timetable.spec.js --workers=1 -> 1 passed (13.9s), zero pageerror; 2-slot expansion + other-date empty state proven. Deviations (one line each): unit run used explicit vitest paths (filtered `npm test -- x` also matches tests/*.spec.js under vitest — pre-existing); App.jsx tab wiring added beyond the 3 listed files (required for the UI VERIFY); getByLabel unused for the dateless-label picker (app-wide missing htmlFor/id pattern) — structural `main input[type=date]` + native-setter input event instead.
 ```
 
 ---

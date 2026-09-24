@@ -1,4 +1,5 @@
 import { generateId, localDateString } from './constants.js'
+import { formatJadwalList } from './format.js'
 
 // PG.A.1 (F-PG1; D-PG1, D-PG2, D-PG3) — pure assignment constructors.
 // No store/API access here: the manager UI composes these, then persists
@@ -44,4 +45,58 @@ export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSe
     return 'Tanggal selesai harus setelah tanggal mulai.'
   }
   return null
+}
+
+// Day names match TrainerDashboard.jsx DAY_NAMES (user-local calendar).
+const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+
+// Local parse only — never new Date("YYYY-MM-DD") (UTC-shift trap,
+// TrainerDashboard.jsx:38-45). Returns '' for malformed input.
+export function dayNameForTanggal(tanggal) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(tanggal || ''))
+  if (!m) return ''
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (Number.isNaN(d.getTime())) return ''
+  return DAY_NAMES[d.getDay()]
+}
+
+// PG.B.1 (F-PG2; D-PG4, D-PG5) — pure daily join: one row per
+// (assignment valid that date × school slot matching that weekday).
+// Date predicate mirrors trainerHasActiveAssignmentClient() (store.js)
+// and trainerHasActiveAssignment() (authorize.php); weekday match mirrors
+// scheduleIncludesToday() (TrainerDashboard.jsx). Schools with no slot
+// that weekday produce zero rows (D-PG4). Deterministic order:
+// sekolahNama → waktu → trainerId (CSV equality depends on it).
+export function buildDailyTimetable({ trainers = [], sekolah = [], tanggal = '' } = {}) {
+  const hari = dayNameForTanggal(tanggal)
+  if (!hari) return []
+  const schoolById = new Map((sekolah || []).map(s => [s && s.id, s]))
+  const out = []
+  ;(trainers || []).forEach(t => {
+    const assignments = Array.isArray(t && t.penugasanPengajar) ? t.penugasanPengajar : []
+    assignments.forEach(a => {
+      if (!a || typeof a !== 'object' || !a.sekolahId) return
+      if (a.aktif !== true) return
+      if (!a.periodeMulai || typeof a.periodeMulai !== 'string' || tanggal < a.periodeMulai) return
+      if (a.periodeSelesai != null && String(a.periodeSelesai).trim() !== '' && tanggal > String(a.periodeSelesai)) return
+      const sch = schoolById.get(a.sekolahId)
+      if (!sch) return
+      const slots = (sch.jadwalList || []).filter(e => e && e.dayOfWeek === hari)
+      slots.forEach(slot => {
+        out.push({
+          assignmentId: a.id || null,
+          sekolahId: sch.id,
+          sekolahNama: sch.nama || '',
+          trainerId: a.trainerId || null,
+          asistenId: a.asistenId || null,
+          hari,
+          waktu: formatJadwalList([slot]),
+        })
+      })
+    })
+  })
+  return out.sort((x, y) =>
+    String(x.sekolahNama).localeCompare(String(y.sekolahNama), 'id')
+    || String(x.waktu).localeCompare(String(y.waktu), 'id')
+    || String(x.trainerId || '').localeCompare(String(y.trainerId || ''), 'id'))
 }
