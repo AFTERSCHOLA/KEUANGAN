@@ -129,6 +129,8 @@ MICROTASK: Harden penugasan chain and write back
   OUTCOME: the chain is regression-pinned and the source docs reflect what actually shipped.
   VERIFY:  npm test -> green; npx playwright test tests/penugasan*.spec.js tests/trainer-attendance*.spec.js --workers=1 -> green zero pageerror; npm run build -> green; node -e ID check -> every F-PG/D-PG/R-PG cited below exists in PENUGASAN_PLAN.md
   DONE-IF: verify passes; only intended files changed
+
+  PG.C.3 → Verified: npm test -> 42 files / 198 passed; joint npx playwright test tests/penugasan*.spec.js tests/trainer-attendance*.spec.js --workers=1 -> 16/16 passed zero pageerror (PG.A.2 unblock leg re-run inside the loop per taste #10); npm run build -> green; node -e ID check -> defined 19 / cited 19 / missing none; rg console.log on touched src files -> clean; no zz- debug specs left; SCOPE_EXPANSION_MILESTONES.md Gate PG closure row appended (no renumbering)
 ```
 
 ---

@@ -371,4 +371,26 @@ re-seed) dicatat sebagai item terpisah, di luar scope TA.D.1.
 TA.D.2 (dokumen ini + PLAN.md + PRODUCTION_MILESTONES.md +
 SCOPE_EXPANSION_MILESTONES.md) menutup chain.
 
+---
+
+## Gate PG — Penugasan Pengajar Closure Summary (taste #40 temporary gate)
+
+**Status: DONE (PG.A.1–PG.C.2, 2026-09-24).** Chain lengkap ada di
+`docs/PENUGASAN_PLAN.md` + `docs/PENUGASAN_MILESTONES.md` (tidak ada
+renumbering rantai di dokumen ini — pair tersebut adalah gate doc
+sementara per taste #40).
+
+Verified: `npm test` (42 files / 198 passed) + joint
+`npx playwright test tests/penugasan*.spec.js tests/trainer-attendance*.spec.js --workers=1`
+(16/16 passed, zero pageerror — termasuk PG.A.2 unblock leg yang
+membuktikan Bug A tertutup lewat UI, bukan seed API) + `npm run build` green.
+
+Changed: `src/lib/penugasan.js` (+ `newPenugasanRow`/`validateRowDates`/
+`buildDailyTimetable`), `src/features/penugasan/PenugasanManager.jsx` +
+`PenugasanTimetable.jsx` (baru), `src/App.jsx` (tab `Penugasan Pengajar` +
+`Jadwal Penugasan`), `src/lib/csv.js` (+ `exportJadwalPenugasanCSV`),
+regression `tests/penugasan-*.spec.js` (persisted). Bug D tertutup sebagai
+konsekuensi PG.A (beban honor Gate C kini punya sumber data); Bug B/C
+tetap deferred dengan owner di `PENUGASAN_PLAN.md §10`.
+
 **End of Microtask Chains**

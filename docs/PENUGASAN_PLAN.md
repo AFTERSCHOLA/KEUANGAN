@@ -1,6 +1,6 @@
 # Penugasan Pengajar Plan — Assignment Write + Daily Timetable + Export
 
-**Status:** DRAFT 2026-09-24 — Gates PG.A–PG.C open (see `docs/PENUGASAN_MILESTONES.md` for the ordered chain).
+**Status:** DONE 2026-09-24 — Gates PG.A–PG.C closed (Verified per microtask in `docs/PENUGASAN_MILESTONES.md`; joint regression 16/16 + `npm test` 42/198 + `npm run build` green; closure row appended to `SCOPE_EXPANSION_MILESTONES.md` Gate PG).
 **Position:** Temporary scope-expansion chain per taste #40. It does **not** replace `IMPLEMENTATION_PLAN.md`, `SCOPE_EXPANSION_PLAN.md`, `SCOPE_EXPANSION_PRIVILEGES.md`, or `TRAINER_ATTENDANCE_PLAN.md` / `TRAINER_ATTENDANCE_MILESTONES.md`. When Gate PG.C closes, §11 records completion back on the source docs.
 **Contract order:** `docs/UNIVERSAL.md` (primary contract, read first) → `docs/IMPLEMENTATION_PLAN.md` Part 2 → `docs/SCOPE_EXPANSION_PLAN.md` + `docs/SCOPE_EXPANSION_PRIVILEGES.md` (scope-expansion first-reads) → `docs/TRAINER_ATTENDANCE_PLAN.md` §5.2/§8 + `docs/TRAINER_ATTENDANCE_MILESTONES.md` (assignment contract) → this file.
 
