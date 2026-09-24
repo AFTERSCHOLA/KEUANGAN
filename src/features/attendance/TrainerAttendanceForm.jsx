@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { readCached, upsert, getRoleContext } from '../../lib/store.js'
-import { newAbsensiPengajar } from '../../lib/constants.js'
+import { newAbsensiPengajar, localDateString } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 
 const STATUS_OPTIONS = ['Hadir', 'Izin', 'Alpa']
@@ -14,7 +14,7 @@ const KETERANGAN_OPTIONS = ['EXPO', 'Pengganti', 'Lainnya']
 // trainerHasActiveAssignment() di server/auth/authorize.php.
 export default function TrainerAttendanceForm({ trainerId }) {
   const [dataRev, setDataRev] = useState(0)
-  const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10))
+  const [tanggal, setTanggal] = useState(localDateString())
   const [sekolahId, setSekolahId] = useState('')
   const [status, setStatus] = useState('Hadir')
   const [keterangan, setKeterangan] = useState('')

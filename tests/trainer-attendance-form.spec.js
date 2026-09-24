@@ -47,7 +47,11 @@ async function seedActiveAssignmentAsSuperadmin(page, namaSekolah) {
   await loginViaApi(page, 'superadmin')
   const csrf = await primeCsrf(page)
 
-  const today = new Date().toISOString().slice(0, 10)
+  // The attendance forms stamp LOCAL calendar date (localDateString() in
+  // src/lib/constants.js) — never UTC. `today` must use the same convention
+  // or exact-tanggal assertions miss during UTC+X evenings (2026-09-24).
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const yearAhead = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 

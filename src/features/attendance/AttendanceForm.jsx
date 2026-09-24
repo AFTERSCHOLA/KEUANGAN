@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { readCached, upsert } from '../../lib/store.js'
-import { newAbsensi } from '../../lib/constants.js'
+import { newAbsensi, localDateString } from '../../lib/constants.js'
 import { findIssuedInvoiceForPeriod } from '../../lib/invoices.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -10,7 +10,7 @@ import PhotoSlot from '../../components/PhotoSlot.jsx'
 
 export default function AttendanceForm({ editingRecord, onSaved }) {
   const [dataRev, setDataRev] = useState(0)
-  const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10))
+  const [tanggal, setTanggal] = useState(localDateString())
   const [sekolahId, setSekolahId] = useState('')
   const [trainerId, setTrainerId] = useState('')
   const [trainerStatus, setTrainerStatus] = useState('Hadir')
@@ -116,6 +116,12 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
       konfirmasiTrainer: editingRecord?.konfirmasiTrainer || null,
       sesiKe: editingRecord?.sesiKe || 1,
       lastEditedAt: editingRecord ? new Date().toISOString() : null,
+      // requireRecord() (server/bootstrap.php:208) hard-rejects any sync
+      // entry without a top-level cabangId with 422, which fails the whole
+      // /api/sync.php batch. The school is authoritative for branch scope
+      // (same source the siswaList items below already use); fall back to
+      // the loaded record's cabangId when correcting.
+      cabangId: selectedSekolah?.cabangId ?? editingRecord?.cabangId ?? null,
     })
 
   if (issuedInvoice) {

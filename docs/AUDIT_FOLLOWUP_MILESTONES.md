@@ -97,6 +97,8 @@ MICROTASK: Pre-submit cabangId sanity check
   DONE-IF: verify passes; only intended files changed
 ```
 
+SUPERSEDED 2026-09-24 — HEAD `b8b57b7` replaced the no-network contract above with server-authoritative validation (an unknown-but-present `cabangId` now reaches the server and 422s); the `Cabang tidak valid` copy no longer exists in `src/`. G1 follow-ups restored the mount pull (`pullRemote` import in `SchoolList.jsx`) and the silent superadmin guard (`setAlertOpen(true)`). Spec rewritten as `tests/school-form-validation.spec.js` cases M-AF3.1r A (empty `cabangId` → `Cabang wajib dipilih`, no POST) + B (bogus id → POST fires, server 422s); live green 2/2 with zero pageerror against MariaDB `afterschola_t3_test`. Original M-AF3.1 text kept as history.
+
 ## Gate AF-A4 — Multi-account CRUD sync (cross-feature)
 
 Findings AF12–AF16 came out of the round-trip + CRUD audit. They are owned

@@ -391,6 +391,14 @@ export function periodeFromDate(tanggal) {
   return tanggal.slice(0, 7)
 }
 
+// Local-calendar "YYYY-MM-DD" for date-input defaults. Unlike
+// `new Date().toISOString().slice(0, 10)` (UTC), this keeps the user's own
+// calendar day during UTC+X evenings — an attendance form opened at 04:00
+// WIB must default to today, not UTC-yesterday.
+export function localDateString(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function shiftPeriode(periode, monthsDelta) {
   const [y, m] = periode.split('-').map(Number)
   const d = new Date(y, m - 1 + monthsDelta, 1)

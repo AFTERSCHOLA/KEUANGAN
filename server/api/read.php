@@ -112,6 +112,35 @@ if (
         }
     }
 
+    // Legacy links: trainers assigned via `sekolahIds[]` (pre-penugasan
+    // records and UI paths that maintain both arrays) scope reads exactly
+    // like penugasan links. The client already accepts both relations
+    // (`isWithinScope()` trainer branch, Rekap filter), so the server
+    // must not withhold rows the client would display — otherwise a
+    // legacy-linked trainer's school never reaches their cache no matter
+    // what the UI does. No cross-branch effect: entries only ever add
+    // the trainer's own id under explicitly linked school ids.
+    foreach ($trainerRows as $row) {
+        $trainerPayload = json_decode($row['payload'], true);
+        if (!is_array($trainerPayload)) {
+            continue;
+        }
+        $selfId = $trainerPayload['id'] ?? null;
+        if (!is_string($selfId) || trim($selfId) === '') {
+            continue;
+        }
+        $legacyIds = $trainerPayload['sekolahIds'] ?? [];
+        if (!is_array($legacyIds)) {
+            continue;
+        }
+        foreach ($legacyIds as $sekolahId) {
+            if (!is_string($sekolahId) || trim($sekolahId) === '') {
+                continue;
+            }
+            $sekolahTrainerIds[$sekolahId][] = trim($selfId);
+        }
+    }
+
     foreach ($sekolahTrainerIds as $sekolahId => $trainerIds) {
         $sekolahTrainerIds[$sekolahId] = array_values(
             array_unique($trainerIds)

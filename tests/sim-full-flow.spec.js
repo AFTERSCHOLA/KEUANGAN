@@ -27,11 +27,21 @@ function fieldTextarea(page, label) {
   return page.locator(`div:has(> label:text-is("${label}"))`).first().locator('textarea').first()
 }
 
-async function waitForHydration(page) {
-  // PROBE 2026-09-22: on a wiped DB the cabang cache hydrates as `[]`
-  // (key exists, length 0). Wait for key EXISTENCE, not non-empty —
-  // requiring length>0 times out forever on empty DB and hung the first run.
-  await page.waitForFunction(() => localStorage.getItem('afterschola_v4_cabang') !== null, { timeout: 15000 })
+async function waitForHydration(page, entity = 'cabang') {
+  // NOTE (2026-09-24): two fixes in one helper.
+  // (1) waitForFunction(pageFunction, arg, options) — the options object must
+  // be the THIRD arg. Passing { timeout } as the second arg silently sets it
+  // as `arg` and polls forever (this hung Step 7 for the full 480s budget).
+  // (2) Trainers cannot read the 'cabang' entity (server/auth/authorize.php:18
+  // roleCanReadEntity excludes it), so the cabang cache key stays null for
+  // the whole trainer session by design. Caller passes a trainer-readable
+  // entity (e.g. 'sekolah') for trainer steps.
+  const key = `afterschola_v4_${entity}`
+  await page.waitForFunction(
+    (k) => localStorage.getItem(k) !== null,
+    key,
+    { timeout: 15000 },
+  )
 }
 
 async function clearOverlays(page) {
@@ -60,15 +70,39 @@ async function uiLogin(page, username, password) {
     await page.waitForLoadState('domcontentloaded')
   }
   await userField.waitFor({ timeout: 15000 })
+  // Settle window: the goto('/') above boots the app, whose bootstrapAuth()
+  // fires cookie-less GETs to /api/auth/me.php + /api/auth/csrf.php. PHP mints
+  // a fresh *visitor* session per response — if such a Set-Cookie lands AFTER
+  // our login POST below, it overwrites the authenticated session cookie in
+  // the shared jar (same 859ea75 family fixed for loginViaApi in fixtures.js)
+  // and we land back on the login form with no error. A short settle lets
+  // those boot-time round-trips land before the login POST.
+  await page.waitForTimeout(1500)
   await userField.fill(username)
   await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  const masukBtn = page.getByRole('button', { name: 'Masuk', exact: true })
+  await masukBtn.click()
+  // Flake guard (2026-09-24): if the visitor-cookie race still bit, we are
+  // still on the login form with no error shown — submit once more now that
+  // every boot-time round-trip has settled. Wrong credentials still fail
+  // loudly on the second attempt (fail-fast, no silent pass).
+  await page.waitForTimeout(3000)
+  if (await masukBtn.count() && await masukBtn.first().isVisible().catch(() => false)) {
+    console.log('## RETRY: still on login form after first submit, retrying once...')
+    await userField.fill(username)
+    await page.getByLabel('Password').fill(password)
+    await masukBtn.first().click()
+    await expect(masukBtn).toBeHidden({ timeout: 15000 })
+  }
 }
 
 async function completeMustChange(page, currentPass, newPass) {
   await expect(page.getByRole('heading', { name: 'Ubah Kata Sandi' })).toBeVisible({ timeout: 15000 })
   await page.getByLabel('Kata Sandi Saat Ini').fill(currentPass)
-  await page.getByLabel('Kata Sandi Baru').fill(newPass)
+  // NOTE (2026-09-24): 'Kata Sandi Baru' is a substring of 'Konfirmasi Kata
+  // Sandi Baru', so a non-exact getByLabel matches 2 inputs and fill throws
+  // a strict-mode violation. exact:true pins the intended field.
+  await page.getByLabel('Kata Sandi Baru', { exact: true }).fill(newPass)
   await page.getByLabel('Konfirmasi Kata Sandi Baru').fill(newPass)
   await page.getByRole('button', { name: 'Simpan Kata Sandi' }).click()
 }
@@ -145,20 +179,24 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
   await fieldInput(page, 'Nama Admin Cabang').fill(ADMIN_NAME)
   await fieldInput(page, 'Username Login Admin').fill(ADMIN_USER)
   await page.getByRole('button', { name: 'Simpan' }).click()
-  // initial-password dialog: two readonly inputs (username, password)
+  // initial-password dialog: two readonly inputs (username, password).
+  // NOTE: the save is two sequential POSTs (cabang, then users) — wait
+  // explicitly instead of count() with zero wait (race fixed 2026-09-24:
+  // count() returned 0 while the POSTs were still in flight).
   const pwdDialog = page.getByRole('heading', { name: 'Akun Admin Cabang Berhasil Dibuat' })
-  if (await pwdDialog.count()) {
+  try {
+    await expect(pwdDialog).toBeVisible({ timeout: 15000 })
     const readonlyInputs = page.locator('.fixed.inset-0 input[readonly]')
     adminInitPass = await readonlyInputs.nth(1).inputValue()
     console.log(`admin account created: ${ADMIN_USER} / init-pass len=${adminInitPass?.length}`)
     await page.getByRole('button', { name: 'Saya sudah catat, tutup' }).click()
-  } else {
+  } catch {
     const alert = page.locator('.fixed.inset-0 h4')
     if (await alert.count()) {
       logFinding(`Cabang+admin save blocked by alert: "${await alert.textContent()}" (src/features/admin/BranchManager.jsx:95-175).`)
       await clearOverlays(page)
     } else {
-      logFinding('Akun Admin Cabang dialog did not appear and no alert — save may have failed silently (BranchManager.jsx:170-175).')
+      logFinding('Akun Admin Cabang dialog did not appear within 15s and no alert — save may have failed silently (BranchManager.jsx:170-175).')
     }
   }
   await expect(page.getByText(CABANG_NAMA).first()).toBeVisible({ timeout: 15000 })
@@ -170,7 +208,7 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
     if (row) { cabangId = row.id; console.log(`OK step2 backend: cabang row id=${cabangId}`) }
     else logFinding('Cabang visible in UI but NOT returned by GET /api/read.php?entity=cabang — cache/server drift (src/lib/store.js).')
   } catch (e) { logFinding(`Step2 backend check failed: ${e.message}`) }
-  if (!adminInitPass) logFinding('Admin initial password was not captured — cannot continue trainer-login steps without it.')
+  if (!adminInitPass) throw new Error('FATAL Step2: admin initial password was not captured — aborting before Step3 login instead of cascading with undefined credentials.')
 
   // ---- STEP 3: Logout + login as new Admin Cabang (incl. must-change-password) ----
   console.log('=== STEP 3: Logout superadmin, login Admin Cabang ===')
@@ -203,8 +241,12 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
   await schedRows.nth(1).getByLabel('Jam selesai').fill('10:30')
   await page.locator('div:has(> label:text-is("SPP Bulanan"))').first().locator('input').fill('150000')
   await page.getByRole('button', { name: 'Simpan' }).click()
-  if (await page.getByText(SEKOLAH_NAMA).count()) console.log('OK step4: school card visible.')
-  else logFinding('School save gave no visible card — check SchoolList.jsx:99-120 validation guards (Nama/Cabang/Jadwal).')
+  try {
+    await expect(page.getByText(SEKOLAH_NAMA).first()).toBeVisible({ timeout: 15000 })
+    console.log('OK step4: school card visible.')
+  } catch {
+    logFinding('School save gave no visible card within 15s — check SchoolList.jsx:99-120 validation guards (Nama/Cabang/Jadwal).')
+  }
   try {
     const csrf = await primeCsrf(page)
     const schools = await readViaApi(page, 'sekolah', csrf)
@@ -252,13 +294,14 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
   await fieldInput(page, 'Username Login').fill(TRAINER_USER)
   await page.getByRole('button', { name: 'Simpan' }).click()
   const trainerDlg = page.getByRole('heading', { name: 'Akun Trainer Berhasil Dibuat' })
-  if (await trainerDlg.count()) {
+  try {
+    await expect(trainerDlg).toBeVisible({ timeout: 15000 })
     trainerInitPass = await page.locator('.fixed.inset-0 input[readonly]').nth(1).inputValue()
     console.log(`trainer account created: ${TRAINER_USER} / init-pass len=${trainerInitPass?.length}`)
     await page.getByRole('button', { name: 'Saya sudah catat, tutup' }).click()
-  } else {
+  } catch {
     const alert = page.locator('.fixed.inset-0 h4')
-    logFinding(`Trainer+account dialog missing${await alert.count() ? `; alert: "${await alert.textContent()}"` : ''} (TrainerList.jsx:92-154).`)
+    logFinding(`Trainer+account dialog missing within 15s${await alert.count() ? `; alert: "${await alert.textContent()}"` : ''} (TrainerList.jsx:92-154).`)
     await clearOverlays(page)
   }
   if (await page.getByText(TRAINER_NAME).count()) console.log('OK step6: trainer card visible.')
@@ -272,6 +315,7 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
 
   // ---- STEP 7+8: Login as Trainer, attendance + surrounding scenarios ----
   console.log('=== STEP 7: Logout admin, login Trainer ===')
+  if (!trainerInitPass) throw new Error('FATAL Step6: trainer initial password was not captured — aborting before Step7 login instead of cascading with undefined credentials.')
   await clearOverlays(page)
   await uiLogout(page)
   await uiLogin(page, TRAINER_USER, trainerInitPass)
@@ -279,7 +323,7 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
     await completeMustChange(page, trainerInitPass, TRAINER_NEW_PASS)
   } catch { logFinding('MustChangePasswordPage did not appear for fresh trainer (MustChangePasswordPage.jsx).') }
   await expect(page.getByRole('heading', { name: 'Rekap Saya' })).toBeVisible({ timeout: 20000 })
-  await waitForHydration(page)
+  await waitForHydration(page, 'sekolah')
   const rekapHit = await page.getByText(SEKOLAH_NAMA).count()
   console.log(`rekap today-school hits: ${rekapHit} (today=${todayName})`)
   if (!rekapHit) logFinding(`Rekap Saya shows no "${SEKOLAH_NAMA}" though jadwalList includes ${todayName} (TrainerDashboard.jsx:8-13 scheduleIncludesToday).`)
@@ -310,12 +354,32 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
   await page.getByRole('button', { name: 'Ya, Simpan' }).click()
   await page.waitForTimeout(800)
   await clearOverlays(page)
+  // Pre-sync backend state: attendance is local-first by design
+  // (upsert + outbox, src/lib/store.js:292-308 + LEDGER_KEYS:11) — the server
+  // row only exists after manual Sinkronisasi. Document both states.
   try {
     const csrf = await primeCsrf(page)
     const abs = await readViaApi(page, 'absensi', csrf)
     const hit = abs.filter(a => a.sekolahId === sekolahId && (a.tanggal || '').slice(0, 10) === localToday)
-    console.log(`OK step8 backend: ${hit.length} absensi row(s) today for Sim school; siswaList len=${hit[0]?.siswaList?.length ?? 'n/a'}`)
-    if (!hit.length) logFinding('Absensi saved in UI but no matching row via GET /api/read.php?entity=absensi for today+sekolah.')
+    console.log(`pre-sync backend: ${hit.length} absensi row(s) today for Sim school (expected 0 — local-first).`)
+  } catch (e) { logFinding(`Step8 pre-sync backend check failed: ${e.message}`) }
+  // Drive the sync step like a real trainer: Akun menu -> Sinkronisasi (N).
+  await page.getByLabel('Akun').first().click()
+  const syncItem = page.getByRole('menuitem', { name: /Sinkronisasi/ })
+  if (await syncItem.count()) {
+    console.log('sync menu label:', await syncItem.textContent())
+    await syncItem.click()
+    await page.waitForTimeout(2500)
+    console.log('OK step8: Sinkronisasi clicked, checking server rows post-sync.')
+  } else {
+    logFinding('Sinkronisasi menu item missing for trainer — attendance stays local-only (AccountMenu.jsx:70-79).')
+  }
+  try {
+    const csrf = await primeCsrf(page)
+    const abs = await readViaApi(page, 'absensi', csrf)
+    const hit = abs.filter(a => a.sekolahId === sekolahId && (a.tanggal || '').slice(0, 10) === localToday)
+    console.log(`OK step8 backend post-sync: ${hit.length} absensi row(s) today for Sim school; siswaList len=${hit[0]?.siswaList?.length ?? 'n/a'}`)
+    if (!hit.length) logFinding('Absensi saved + synced in UI but no matching row via GET /api/read.php?entity=absensi for today+sekolah.')
   } catch (e) { logFinding(`Step8 backend check failed: ${e.message}`) }
 
   // Riwayat + weekly certification probe

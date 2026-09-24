@@ -105,6 +105,7 @@ export default function SchoolList() {
   function openEdit(sch) {
   const nextForm = {
     jadwalList: [],
+    trainerIds: [],
     ...sch,
     cabangId: sch.cabangId,
   }
@@ -153,7 +154,10 @@ if (role === 'superadmin' && !form.cabangId) {
     return
   }
   const prev = sekolah.find(s => s.id === form.id)
-  const oldTrainerIds = prev ? prev.trainerIds : []
+  // Legacy rows may predate `trainerIds` — default to [] so the
+  // inverse-array sync below iterates instead of throwing
+  // "oldTrainerIds is not iterable" (the save dies silently otherwise).
+  const oldTrainerIds = prev?.trainerIds || []
 
 let result
 try {
