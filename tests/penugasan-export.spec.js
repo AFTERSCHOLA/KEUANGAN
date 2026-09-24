@@ -133,3 +133,96 @@ test('PG.C.1: Unduh CSV downloads date-named file equal to visible rows', async 
     })
   }
 })
+
+// ============================================================
+// PG.C.2 — Timetable print path (Cetak Laporan).
+//
+// VERIFY (docs/PENUGASAN_MILESTONES.md PG.C.2, testing taste #29):
+// -> window.print intercepted and called once; printable document
+//    contains the picked Tanggal + visible Waktu; toolbar chrome
+//    (picker, Unduh CSV, Cetak Laporan) hidden under print media.
+// ============================================================
+
+test('PG.C.2: Cetak Laporan prints picked Tanggal + rows without toolbar', async ({ page, pageErrors }) => {
+  test.setTimeout(120_000)
+  const suffix = String(Date.now()).slice(-6)
+  const now = new Date()
+  const today = localYMD(now)
+  const todayName = DAY_NAMES[now.getDay()]
+  const namaSekolah = `SD PGC Print ${suffix}`
+  const sekolahId = `skl-PGCP-${Date.now()}`
+  const yearAgo = localYMD(new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000))
+  const yearAhead = localYMD(new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000))
+
+  await loginViaApi(page, 'superadmin')
+  const csrf = await primeCsrf(page)
+  const sekolahRes = await page.request.post('/api/sekolah.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: {
+      id: sekolahId, nama: namaSekolah, spp: 500000, cabangId: CABANG_ID, action: 'create',
+      jadwalList: [{ dayOfWeek: todayName, time: '09:00', endTime: '10:00' }],
+    },
+  })
+  if (!sekolahRes.ok()) throw new Error(`seed sekolah failed: ${sekolahRes.status()} ${await sekolahRes.text()}`)
+
+  const trainerListRes = await page.request.get('/api/read.php?entity=trainer')
+  const currentTrainer = (await trainerListRes.json()).find(t => t.id === TRAINER_ID)
+  const { cabangId: _omit, ...trainerWithoutCabang } = currentTrainer
+  const trainerUpdateRes = await page.request.post('/api/trainer.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: {
+      ...trainerWithoutCabang, id: TRAINER_ID, action: 'update',
+      penugasanPengajar: [...(currentTrainer.penugasanPengajar || []), {
+        id: `pgs-PGCP-${Date.now()}`, sekolahId, trainerId: TRAINER_ID, asistenId: null,
+        cabangId: CABANG_ID, periodeMulai: yearAgo, periodeSelesai: yearAhead, aktif: true,
+      }],
+    },
+  })
+  if (!trainerUpdateRes.ok()) throw new Error(`seed penugasan failed: ${trainerUpdateRes.status()} ${await trainerUpdateRes.text()}`)
+
+  try {
+    await gotoApp(page)
+    await openTab(page, 'Jadwal Penugasan')
+    const row = page.getByRole('row').filter({ hasText: suffix }).filter({ hasText: '09:00' })
+    await expect(row).toBeVisible({ timeout: 15000 })
+
+    // window.print intercepted (no real dialog in headless).
+    await page.evaluate(() => { window.__printCalls = 0; window.print = () => { window.__printCalls += 1 } })
+    await page.getByRole('button', { name: 'Cetak Laporan', exact: true }).click()
+    expect(await page.evaluate(() => window.__printCalls)).toBe(1)
+
+    // Printable document carries the picked Tanggal + visible Waktu.
+    const printableText = await page.locator('.printable-report').innerText()
+    expect(printableText).toContain(today)
+    expect(printableText).toContain(`${todayName} 09:00–10:00`)
+    expect(printableText).toContain(namaSekolah)
+
+    // Under print media the toolbar chrome disappears (print.css no-print).
+    await page.emulateMedia({ media: 'print' })
+    await expect(page.getByRole('button', { name: 'Unduh CSV', exact: true })).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Cetak Laporan', exact: true })).toBeHidden()
+    await expect(page.locator('main input[type="date"]')).toBeHidden()
+    // ...while content stays visible.
+    await expect(page.getByRole('row').filter({ hasText: suffix }).first()).toBeVisible()
+    await page.emulateMedia({ media: 'screen' })
+
+    expect(pageErrors).toEqual([])
+  } finally {
+    const listRes = await page.request.get('/api/read.php?entity=trainer')
+    if (listRes.ok()) {
+      const current = (await listRes.json()).find(t => t.id === TRAINER_ID)
+      if (current) {
+        const next = (current.penugasanPengajar || []).filter(a => a && a.sekolahId !== sekolahId)
+        const { cabangId: _o2, ...rest } = current
+        await page.request.post('/api/trainer.php', {
+          headers: { 'X-CSRF-Token': csrf },
+          data: { ...rest, id: TRAINER_ID, action: 'update', penugasanPengajar: next },
+        })
+      }
+    }
+    await page.request.post('/api/sekolah.php', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { id: sekolahId, action: 'delete' },
+    })
+  }
+})

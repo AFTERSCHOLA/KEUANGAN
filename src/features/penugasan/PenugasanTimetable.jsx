@@ -3,6 +3,7 @@ import { readCached, getRoleContext, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
 import { buildDailyTimetable, dayNameForTanggal } from '../../lib/penugasan.js'
 import { exportJadwalPenugasanCSV } from '../../lib/csv.js'
+import PrintButton from '../../components/PrintButton.jsx'
 
 // PG.B.1 (F-PG2; D-PG4, D-PG5, D-PG7, D-PG8) — date-driven daily timetable.
 // Read-only derived view over trainer.penugasanPengajar[] ×
@@ -50,13 +51,15 @@ export default function PenugasanTimetable() {
   }
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    // PG.C.2 (D-PG6): printable-report root + no-print toolbar (print.css).
+    // Title + Tanggal + table print; picker + export/print buttons don't.
+    <div className="space-y-6 animate-fadeIn printable-report">
       <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Jadwal Penugasan</h2>
           <p className="text-xs text-slate-500">Tanggal: <b>{tanggal}</b>{hari ? ` · ${hari}` : ''}</p>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 no-print">
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase">Tanggal</label>
             <input
@@ -72,6 +75,7 @@ export default function PenugasanTimetable() {
           >
             Unduh CSV
           </button>
+          <PrintButton />
         </div>
       </div>
 

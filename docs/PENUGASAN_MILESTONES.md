@@ -112,6 +112,8 @@ MICROTASK: Add timetable print path
   OUTCOME: Cetak Laporan prints the same rows the screen shows, without buttons.
   VERIFY:  npx playwright test tests/penugasan-export.spec.js --workers=1 (print leg, window.print intercepted per testing taste #29) -> print called once, printable document contains picked Tanggal + all visible Waktu values, no toolbar text in print DOM
   DONE-IF: verify passes; only intended files changed
+
+  PG.C.2 → Verified: npx playwright test tests/penugasan-export.spec.js --workers=1 -> 2 passed (CSV leg 18.3s + print leg 15.1s), zero pageerror; print intercepted once, Tanggal + Waktu in printable DOM, picker/Unduh/Cetak hidden under print media
 ```
 
 ### PG.C.3 Harden and write back
