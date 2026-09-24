@@ -190,6 +190,103 @@ assertContains(
 
 echo "TA.A.2 trainer assignment schema check passed\n";
 
+// PS.A.1 — slot-scope triple (D-PS2/D-PS3/D-PS5)
+// Dedicated school with a known slot vocabulary; cleaned by the finally
+// block below (same cabangId).
+$slotSekolahId = 'skl-ps1-' . bin2hex(random_bytes(4));
+$slotJadwal = [
+    ['dayOfWeek' => 'Rabu', 'time' => '14:15', 'endTime' => '15:15'],
+    ['dayOfWeek' => 'Rabu', 'time' => '16:00', 'endTime' => '17:00'],
+    ['dayOfWeek' => 'Kamis', 'time' => '10:00', 'endTime' => '11:00'],
+];
+$pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)')->execute([
+    ':id' => $slotSekolahId,
+    ':cabang_id' => $cabangId,
+    ':payload' => json_encode(['id' => $slotSekolahId, 'cabangId' => $cabangId, 'jadwalList' => $slotJadwal], JSON_UNESCAPED_UNICODE),
+]);
+
+$slotBase = [
+    'id' => $trainerId,
+    'cabangId' => $cabangId,
+    'penugasanPengajar' => [],
+];
+
+$scopedValid = $slotBase;
+$scopedValid['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+    'hari' => 'Rabu',
+    'jamMulai' => '14:15',
+    'jamSelesai' => '15:15',
+]];
+assertSame([], validateTrainer($scopedValid, $pdo), 'PS.A.1 scoped Rabu 14:15-15:15 should validate');
+
+$hariOnlyValid = $slotBase;
+$hariOnlyValid['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+    'hari' => 'Kamis',
+    'jamMulai' => null,
+    'jamSelesai' => null,
+]];
+assertSame([], validateTrainer($hariOnlyValid, $pdo), 'PS.A.1 hari-only Kamis should validate');
+
+$legacyRow = $slotBase;
+$legacyRow['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+]];
+assertSame([], validateTrainer($legacyRow, $pdo), 'PS.A.1 legacy row without hari/jam keys stays valid (unscoped)');
+
+$outOfVocab = $slotBase;
+$outOfVocab['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+    'hari' => 'Rabu',
+    'jamMulai' => '14:15',
+    'jamSelesai' => '16:00',
+]];
+assertContains('merujuk pada jadwal', validateTrainer($outOfVocab, $pdo), 'PS.A.1 out-of-vocabulary time must be rejected with pinned copy');
+
+$badOrder = $slotBase;
+$badOrder['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+    'hari' => 'Rabu',
+    'jamMulai' => '15:15',
+    'jamSelesai' => '14:15',
+]];
+assertContains('jamSelesai', validateTrainer($badOrder, $pdo), 'PS.A.1 selesai<=mulai must be rejected');
+
+$timesWithoutHari = $slotBase;
+$timesWithoutHari['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+    'hari' => null,
+    'jamMulai' => '14:15',
+    'jamSelesai' => '15:15',
+]];
+assertContains('merujuk pada jadwal', validateTrainer($timesWithoutHari, $pdo), 'PS.A.1 times without hari must be rejected');
+
+$badHari = $slotBase;
+$badHari['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $trainerId,
+    'asistenId' => null,
+    'hari' => 'Jumat',
+    'jamMulai' => null,
+    'jamSelesai' => null,
+]];
+assertContains('merujuk pada jadwal', validateTrainer($badHari, $pdo), 'PS.A.1 hari with no school slot must be rejected');
+
+echo "PS.A.1 slot-scope schema check passed\n";
+
 // SB.B.1 — seed a real siswa so validateSppPayment()'s siswaId reference
 // check has something valid to point at.
 $siswaId = 'sw-sb1-' . bin2hex(random_bytes(4));

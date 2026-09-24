@@ -6,6 +6,14 @@ import { formatJadwalList } from './format.js'
 // via the existing trainer.php update path (full-array replace).
 // Shape mirrors server/validation/entities.php:126-199 + the seed in
 // tests/trainer-attendance-form.spec.js:98-107.
+// PS.A.1 (F-PS2/F-PS3; D-PS2/D-PS3/D-PS5) — nullable slot scope.
+// hari/jamMulai/jamSelesai filter which school slots this assignment covers;
+// null = unscoped (all slots, legacy behavior). School jadwalList stays the
+// sole owner of time definitions (D-PS3); the assignment only filters.
+export const PENUGASAN_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
 export function newPenugasanRow({
   sekolahId = '',
   trainerId = '',
@@ -14,6 +22,9 @@ export function newPenugasanRow({
   periodeMulai = localDateString(),
   periodeSelesai = null,
   aktif = true,
+  hari = null,
+  jamMulai = null,
+  jamSelesai = null,
 } = {}) {
   return {
     id: generateId('pgs'),
@@ -24,6 +35,9 @@ export function newPenugasanRow({
     periodeMulai,
     periodeSelesai: periodeSelesai || null,
     aktif,
+    hari: hari || null,
+    jamMulai: jamMulai || null,
+    jamSelesai: jamSelesai || null,
   }
 }
 
@@ -31,7 +45,10 @@ export function newPenugasanRow({
 // Mirrors the server gates the UI must satisfy before writeRemote:
 // sekolahId + trainerId required (entities.php:136-153), dates ordered,
 // and the authorize date predicate needs a non-empty periodeMulai.
-export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSelesai } = {}) {
+// Slot triple (PS.A.1; D-PS2/D-PS3/D-PS5): missing keys read as null
+// (unscoped, legacy rows stay valid); hari null forces times null; when set,
+// the triple must match the picked school's jadwalList vocabulary.
+export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSelesai, hari, jamMulai, jamSelesai, sekolahJadwalList } = {}) {
   if (!sekolahId || typeof sekolahId !== 'string' || !sekolahId.trim()) {
     return 'Sekolah wajib dipilih.'
   }
@@ -43,6 +60,39 @@ export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSe
   }
   if (periodeSelesai != null && String(periodeSelesai).trim() !== '' && String(periodeSelesai) < String(periodeMulai)) {
     return 'Tanggal selesai harus setelah tanggal mulai.'
+  }
+  const hariNorm = hari || null
+  const jamMulaiNorm = jamMulai || null
+  const jamSelesaiNorm = jamSelesai || null
+  if (hariNorm == null) {
+    if (jamMulaiNorm != null || jamSelesaiNorm != null) {
+      return 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.'
+    }
+    return null
+  }
+  if (!PENUGASAN_HARI.includes(hariNorm)) {
+    return 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.'
+  }
+  if ((jamMulaiNorm == null) !== (jamSelesaiNorm == null)) {
+    return 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.'
+  }
+  if (jamMulaiNorm == null && jamSelesaiNorm == null) {
+    if (Array.isArray(sekolahJadwalList) && !(sekolahJadwalList || []).some(e => e && e.dayOfWeek === hariNorm)) {
+      return 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.'
+    }
+    return null
+  }
+  if (!TIME_RE.test(String(jamMulaiNorm)) || !TIME_RE.test(String(jamSelesaiNorm))) {
+    return 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.'
+  }
+  if (String(jamSelesaiNorm) <= String(jamMulaiNorm)) {
+    return 'Jam selesai harus setelah jam mulai.'
+  }
+  if (Array.isArray(sekolahJadwalList)) {
+    const match = (sekolahJadwalList || []).some(e => e && e.dayOfWeek === hariNorm && e.time === jamMulaiNorm && (e.endTime || '') === jamSelesaiNorm)
+    if (!match) {
+      return 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.'
+    }
   }
   return null
 }

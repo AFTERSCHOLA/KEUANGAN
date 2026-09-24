@@ -44,6 +44,8 @@ const TRAINER_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
 
 const TRAINER_TIPE_PENGAJAR_VALUES = ['instruktur', 'asisten'];
 
+const PENUGASAN_HARI_VALUES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
 const SPP_PAYMENT_SUMBER_DANA_VALUES = ['sekolah', 'ortu'];
 // Confirmed from src/features/attendance/AttendanceForm.jsx (line ~232) —
 // the only three pill-button options the UI offers for trainer status.
@@ -84,6 +86,26 @@ function cabangIdOf(PDO $pdo, string $table, string $id): ?string {
     $stmt->execute([':id' => $id]);
     $value = $stmt->fetchColumn();
     return is_string($value) ? $value : null;
+}
+
+// PS.A.1 (F-PS2/F-PS3; D-PS2/D-PS3/D-PS5) — school slot vocabulary.
+// Returns null when the sekolah row is missing (caller already errors on
+// sekolahId); otherwise the decoded jadwalList array (possibly empty).
+function sekolahJadwalList(PDO $pdo, mixed $sekolahId): ?array {
+    if (!is_string($sekolahId) || trim($sekolahId) === '') return null;
+    $stmt = $pdo->prepare("SELECT payload FROM `sekolah` WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $sekolahId]);
+    $raw = $stmt->fetchColumn();
+    if (!is_string($raw)) return null;
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) return null;
+    $list = $decoded['jadwalList'] ?? null;
+    if (!is_array($list)) return [];
+    return $list;
+}
+
+function isValidTimeHM(mixed $value): bool {
+    return is_string($value) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value) === 1;
 }
 
 function validateSekolah(array $data, PDO $pdo): array {
@@ -194,6 +216,60 @@ if ($cabangId !== null) {
         }
     }
 }
+
+                // PS.A.1 — nullable slot scope (D-PS2/D-PS3/D-PS5).
+                // Missing keys read as null (unscoped, legacy rows stay valid).
+                // Non-null triple must match the sekolah jadwalList vocabulary.
+                $hari = $assignment['hari'] ?? null;
+                $jamMulai = $assignment['jamMulai'] ?? null;
+                $jamSelesai = $assignment['jamSelesai'] ?? null;
+                if ($hari === '') $hari = null;
+                if ($jamMulai === '') $jamMulai = null;
+                if ($jamSelesai === '') $jamSelesai = null;
+                $vocabErr = "trainer: penugasanPengajar[{$index}].hari/jamMulai/jamSelesai harus merujuk pada jadwal sekolah yang dipilih";
+
+                if ($hari === null) {
+                    if ($jamMulai !== null || $jamSelesai !== null) {
+                        $errors[] = $vocabErr;
+                    }
+                } elseif (!in_array($hari, PENUGASAN_HARI_VALUES, true)) {
+                    $errors[] = $vocabErr;
+                } elseif (($jamMulai === null) !== ($jamSelesai === null)) {
+                    $errors[] = $vocabErr;
+                } elseif ($jamMulai !== null) {
+                    if (!isValidTimeHM($jamMulai) || !isValidTimeHM($jamSelesai)) {
+                        $errors[] = $vocabErr;
+                    } elseif (strcmp((string)$jamSelesai, (string)$jamMulai) <= 0) {
+                        $errors[] = "trainer: penugasanPengajar[{$index}].jamSelesai harus setelah jamMulai";
+                    } else {
+                        $slots = sekolahJadwalList($pdo, $sekolahId);
+                        if (is_array($slots)) {
+                            $match = false;
+                            foreach ($slots as $slot) {
+                                if (!is_array($slot)) continue;
+                                if (($slot['dayOfWeek'] ?? null) === $hari
+                                    && ($slot['time'] ?? null) === $jamMulai
+                                    && (($slot['endTime'] ?? '') === $jamSelesai)) {
+                                    $match = true;
+                                    break;
+                                }
+                            }
+                            if (!$match) $errors[] = $vocabErr;
+                        }
+                    }
+                } else {
+                    $slots = sekolahJadwalList($pdo, $sekolahId);
+                    if (is_array($slots)) {
+                        $match = false;
+                        foreach ($slots as $slot) {
+                            if (is_array($slot) && ($slot['dayOfWeek'] ?? null) === $hari) {
+                                $match = true;
+                                break;
+                            }
+                        }
+                        if (!$match) $errors[] = $vocabErr;
+                    }
+                }
             }
         }
     }
