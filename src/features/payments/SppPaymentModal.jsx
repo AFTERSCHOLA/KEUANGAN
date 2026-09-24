@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { readCached } from '../../lib/store.js'
 import { formatRupiah, MONTHS, periodeKey } from '../../lib/format.js'
 import { newSppPayment, addSppPayment, recomputeSppLunasForSiswa } from '../../lib/sppPayments.js'
+import { localDateString } from '../../lib/constants.js'
 import Modal from '../../components/Modal.jsx'
 import PhotoSlot from '../../components/PhotoSlot.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
@@ -21,7 +22,7 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
 
   const [periodeSelected, setPeriodeSelected] = useState(period?.periodeKey ? period.periodeKey() : '')
   const [nominal, setNominal] = useState(defaultNominal)
-  const [tanggalBayar, setTanggalBayar] = useState(new Date().toISOString().slice(0, 10))
+  const [tanggalBayar, setTanggalBayar] = useState(localDateString())
   const [metode, setMetode] = useState(METODE_OPTIONS[0])
   const [sumberDana, setSumberDana] = useState('sekolah')
   const [diterimaOleh, setDiterimaOleh] = useState('')
@@ -33,7 +34,7 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
     if (!open || !siswa) return
     setPeriodeSelected(period?.periodeKey ? period.periodeKey() : '')
     setNominal(defaultNominal)
-    setTanggalBayar(new Date().toISOString().slice(0, 10))
+    setTanggalBayar(localDateString())
     setMetode(METODE_OPTIONS[0])
     setSumberDana('sekolah')
     setDiterimaOleh('')

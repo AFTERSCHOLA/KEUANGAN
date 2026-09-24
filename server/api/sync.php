@@ -45,7 +45,16 @@ foreach ($entries as $entry) {
     }
 
     try {
-        $record = requireRecord($record);
+        // Per-entry shape check (mirrors requireRecord() in bootstrap.php
+        // but WITHOUT its whole-request jsonResponse exit): one malformed
+        // entry (e.g. a legacy client record without cabangId) must fail
+        // just itself, not 422 the entire batch with its valid entries —
+        // same philosophy as the authorize() check above.
+        if (!isset($record['id']) || !is_string($record['id']) || trim($record['id']) === ''
+            || !isset($record['cabangId']) || !is_string($record['cabangId']) || trim($record['cabangId']) === '') {
+            $failed[] = ['id' => $record['id'] ?? null, 'entity' => $entity, 'error' => 'Record membutuhkan id dan cabangId'];
+            continue;
+        }
         $config = entityConfig($entity);
         $pdo->beginTransaction();
         $sql = "INSERT INTO {$config['table']} (id, cabang_id, " . ($entity === 'honorPayments' ? 'correction_of, ' : '') . "payload) VALUES (:id, :cabang_id, " . ($entity === 'honorPayments' ? ':correction_of, ' : '') . ":payload)";

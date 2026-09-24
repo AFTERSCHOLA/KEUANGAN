@@ -22,6 +22,7 @@ import TrainerAttendanceSummary from './features/attendance/TrainerAttendanceSum
 // TA.B.4 — admin-side list + correction UI for `absensiPengajar`.
 // TA.C.2 — wrapped with the monthly-matrix view (Daftar/Rekap Matriks toggle).
 import TrainerAttendanceAdminView from './features/attendance/TrainerAttendanceAdminView.jsx'
+import PenugasanManager from './features/penugasan/PenugasanManager.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
 import { bootstrapAuth, getCurrentUser, logout, subscribeAuth } from './lib/auth.js'
 import LoginPage from './features/auth/LoginPage.jsx'
@@ -35,6 +36,9 @@ const TABS = [
   { id: 'sekolah', label: 'Data Sekolah', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
   { id: 'siswa', label: 'Data Siswa', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z' },
   { id: 'trainer', label: 'Data Trainer', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  // PG.A.1 — explicit assignment management (F-PG1; D-PG2): writes
+  // trainer.penugasanPengajar[] so Absensi Saya becomes selectable.
+  { id: 'penugasan', label: 'Penugasan Pengajar', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { id: 'absensi', label: 'Data Absensi', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   { id: 'riwayat', label: 'Riwayat Absensi', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   // TA.B.4 — koreksi/manajemen absensi TENAGA PENGAJAR (entitas
@@ -340,6 +344,7 @@ if (currentUser?.mustChangePassword) {
           {activeTab === 'sekolah' && <SchoolList />}
           {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
           {activeTab === 'trainer' && <TrainerList />}
+          {activeTab === 'penugasan' && <PenugasanManager />}
           {activeTab === 'absensi' && <AttendanceTab />}
           {activeTab === 'riwayat' && (role === 'trainer' ? <TrainerHistory trainerId={trainerId} /> : <AttendanceTab initialView="riwayat" />)}
           {activeTab === 'absensiPengajarAdmin' && <TrainerAttendanceAdminView />}

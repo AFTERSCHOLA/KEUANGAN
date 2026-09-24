@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote, readRaw, writeRaw } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
-import { newSiswa, defaultCabang } from '../../lib/constants.js'
+import { newSiswa, defaultCabang, localDateString } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
 import { elapsedPeriods, isTunggakan, sppPaidForPeriode, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
@@ -623,7 +623,7 @@ function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
                     trialMulai:
                       opt === 'Trial'
                         ? form.trialMulai ||
-                          new Date().toISOString().slice(0, 10)
+                          localDateString()
                         : null,
                   })
                 }

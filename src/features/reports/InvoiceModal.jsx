@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import { formatRupiah, MONTHS, periodeKey } from '../../lib/format.js'
+import { localDateString } from '../../lib/constants.js'
 import { readCached, usePeriod, read } from '../../lib/store.js'
 import {
   invoicesForSekolah,
@@ -74,7 +75,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
         id: 'preview',
         sekolahId: sekolah.id,
         status: 'Terbit',
-        tanggalTerbit: new Date().toISOString().slice(0, 10),
+        tanggalTerbit: localDateString(),
       }
       const carryLines = carryOverLines(draftPreview, {
         invoices: existing,

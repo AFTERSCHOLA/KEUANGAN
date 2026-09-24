@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.js'
+import { test, expect, loginViaApi } from './fixtures.js'
 
 const APP = 'http://localhost:5173'
 
@@ -9,9 +9,13 @@ function clearStorage(page) {
       if (key?.startsWith('afterschola_v4')) localStorage.removeItem(key)
     }
     localStorage.setItem('afterschola_v4_sekolah', JSON.stringify([
-      { id: 'skl-PST-cache', nama: 'Sekolah Cache', trainerIds: [], cabangId: 'cbg-PST' },
+      // Branch scope is server-derived since M-AUTH.5: seed the cache with
+      // the logged-in admin's own branch (cbg-test-pusat), otherwise
+      // readCached() filters the row and the offline-render leg sees nothing.
+      { id: 'skl-PST-cache', nama: 'Sekolah Cache', trainerIds: [], cabangId: 'cbg-test-pusat' },
     ]))
-    localStorage.setItem('afterschola_v4_ui', JSON.stringify({ role: 'admin' }))
+    // NOTE (2026-09-24): no fake `role` seed — identity is server-derived
+    // since M-AUTH.5; the caller logs in for real via loginViaApi first.
     localStorage.setItem('afterschola_v4_syncLog', JSON.stringify([
       { key: 'absensi', id: 'abs-offline-1', record: { id: 'abs-offline-1' }, queuedAt: Date.now() },
     ]))
@@ -19,12 +23,17 @@ function clearStorage(page) {
 }
 
 test('M7.2.1: offline cache renders and pending sync resolves online', async ({ page, pageErrors }) => {
+  // Real surface (2026-09-24): sync lives in the Akun avatar menu as a
+  // menuitem "Sinkronisasi (N)" with a count badge — not a header button.
+  await loginViaApi(page, 'adminCabang')
   await clearStorage(page)
   await page.route('**/api/read.php**', route => route.abort())
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
-  await expect(page.getByRole('button', { name: /Sinkronisasi \(1\)/ })).toBeVisible()
+  await page.getByLabel('Akun').click()
+  await expect(page.getByRole('menuitem', { name: 'Sinkronisasi (1)' })).toBeVisible()
 
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Data Sekolah', exact: true }).click()
   await expect(page.getByText('Sekolah Cache', { exact: true })).toBeVisible()
 
@@ -38,8 +47,12 @@ test('M7.2.1: offline cache renders and pending sync resolves online', async ({ 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ synced: 1, failed: [] }) })
   })
 
-  await page.getByRole('button', { name: /Sinkronisasi \(1\)/ }).click()
-  await expect(page.getByRole('button', { name: 'Sinkronisasi', exact: true })).toBeVisible()
+  await page.getByLabel('Akun').click()
+  await page.getByRole('menuitem', { name: 'Sinkronisasi (1)' }).click()
+  // handleSync() = syncPending() + hydrate: the menu closes on click, so
+  // reopen it to read the drained label.
+  await page.getByLabel('Akun').click()
+  await expect(page.getByRole('menuitem', { name: 'Sinkronisasi', exact: true })).toBeVisible()
   expect(syncPayload.entries).toHaveLength(1)
   expect(syncPayload.entries[0].id).toBe('abs-offline-1')
 

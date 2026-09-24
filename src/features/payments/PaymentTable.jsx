@@ -8,7 +8,7 @@ import {
   correctLedgerEntry,
 } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
-import { newHonorPayment } from '../../lib/constants.js'
+import { newHonorPayment, localDateString } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -22,7 +22,7 @@ export default function PaymentTable() {
   const [payments, setPayments] = useState(() => readCached('honorPayments'))
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedTrainer, setSelectedTrainer] = useState(null)
-  const [payForm, setPayForm] = useState({ nominal: '', tanggalBayar: new Date().toISOString().slice(0, 10) })
+  const [payForm, setPayForm] = useState({ nominal: '', tanggalBayar: localDateString() })
   const [expandedTrainerId, setExpandedTrainerId] = useState(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
@@ -58,7 +58,7 @@ export default function PaymentTable() {
 
   function openPay(trainer) {
     setSelectedTrainer(trainer)
-    setPayForm({ nominal: '', tanggalBayar: new Date().toISOString().slice(0, 10) })
+    setPayForm({ nominal: '', tanggalBayar: localDateString() })
     setModalOpen(true)
   }
 
@@ -103,8 +103,8 @@ export default function PaymentTable() {
       upsert('honorPayments', newHonorPayment({
   trainerId: trainer.id,
   periode,
-  nominal: sisa,
-  tanggalBayar: new Date().toISOString().slice(0, 10),
+    nominal: sisa,
+    tanggalBayar: localDateString(),
   cabangKode: cabangKodeForTrainer(trainer),
   cabangId: cabangIdForTrainer(trainer),
 }))
@@ -125,7 +125,7 @@ const correction = {
     trainerId: original.trainerId,
     periode: original.periode,
     nominal: -Number(original.nominal),
-    tanggalBayar: new Date().toISOString().slice(0, 10),
+    tanggalBayar: localDateString(),
     cabangKode: cabangKodeForTrainer(trainer),
     cabangId: cabangIdForTrainer(trainer),
   }),
