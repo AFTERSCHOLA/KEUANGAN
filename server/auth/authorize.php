@@ -15,7 +15,7 @@ function roleCanReadEntity(string $role, string $entity): bool {
         // closed entirely, not filtered).
         'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
     ], true);
-    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments'], true);
+    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments'], true);
     return false;
 }
 
@@ -142,6 +142,10 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
 
     if ($resource === 'sppPayments') {
         return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
+    }
+
+    if ($resource === 'honorPayments') {
+    return is_string($data['trainerId'] ?? null) && $data['trainerId'] === ($user['trainerId'] ?? null);
     }
 
     return false;

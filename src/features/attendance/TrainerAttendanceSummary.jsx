@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useCallback } from 'react'
-import { readCached, usePeriod, subscribeStore } from '../../lib/store.js'
+import { readCached, usePeriod, subscribeStore, read } from '../../lib/store.js'
 import { summarizeTrainerAttendance } from '../../lib/trainerAttendance.js'
 
 // TA.C.1 (F-TA4, F-TA5; D-TA13, D-TA15; R-TA5, R-TA6) — ringkasan
@@ -19,6 +19,11 @@ export default function TrainerAttendanceSummary({ trainerId }) {
   const periode = periodeKey()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const absensiPengajar = useMemo(() => readCached('absensiPengajar'), [tick])
+
+  useEffect(() => {
+  read('absensiPengajar').then(() => setTick(t => t + 1))
+}, [])
+
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
 
   const summary = useMemo(

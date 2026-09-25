@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
+import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
 import { buildDailyTimetable, dayNameForTanggal } from '../../lib/penugasan.js'
@@ -26,6 +27,10 @@ export default function PenugasanTimetable() {
   const trainers = useMemo(() => readCached('trainer'), [tick])
   const trainerById = useMemo(() => new Map(trainers.map(t => [t.id, t])), [trainers])
 
+  // State tambahan buat nama trainer lintas-cabang yang di-resolve dari server
+  const [crossScopeNames, setCrossScopeNames] = useState({}) // { [id]: nama }
+  const [lookupAttempted, setLookupAttempted] = useState({})
+
   const rows = useMemo(() => {
     const all = buildDailyTimetable({ trainers, sekolah, tanggal })
     if (ctx.role === 'trainer' && ctx.trainerId) {
@@ -34,17 +39,57 @@ export default function PenugasanTimetable() {
     return all
   }, [trainers, sekolah, tanggal, ctx.role, ctx.trainerId])
 
+  useEffect(() => {
+  const missingIds = [...new Set(
+    rows
+      .flatMap(r => [r.trainerId, r.asistenId])
+      .filter(id =>
+        id &&
+        !trainerById.has(id) &&
+        !crossScopeNames[id] &&
+        !lookupAttempted[id]
+      )
+  )]
+
+  if (missingIds.length === 0) return
+
+  setLookupAttempted(prev => {
+    const next = { ...prev }
+    missingIds.forEach(id => {
+      next[id] = true
+    })
+    return next
+  })
+
+  apiRequest(
+    `/api/trainer-name-lookup.php?ids=${missingIds.join(',')}`,
+    { method: 'GET' }
+  )
+    .then(results => {
+      const next = { ...crossScopeNames }
+
+      results.forEach(r => {
+        next[r.id] = r.nama
+      })
+
+      setCrossScopeNames(next)
+    })
+    .catch(() => {})
+}, [rows, trainerById, crossScopeNames, lookupAttempted])
+
   const hari = dayNameForTanggal(tanggal)
 
   // PG.C.1 (D-PG6, D-PG7) — export payload mirrors the visible table
   // exactly (same filtered array + same name resolution); scope filtered
   // upstream, so the file can never contain rows the table hides.
   const displayRows = useMemo(() => rows.map(r => ({
-    sekolah: r.sekolahNama,
-    trainer: trainerById.get(r.trainerId)?.nama || 'Trainer tidak ditemukan',
-    asisten: r.asistenId ? (trainerById.get(r.asistenId)?.nama || 'Trainer tidak ditemukan') : '—',
-    waktu: r.waktu,
-  })), [rows, trainerById])
+  sekolah: r.sekolahNama,
+  trainer: trainerById.get(r.trainerId)?.nama || crossScopeNames[r.trainerId] || 'Trainer tidak ditemukan',
+  asisten: r.asistenId
+    ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Trainer tidak ditemukan')
+    : '—',
+  waktu: r.waktu,
+})), [rows, trainerById, crossScopeNames])
 
   function handleExportCSV() {
     exportJadwalPenugasanCSV(displayRows, tanggal)
@@ -94,8 +139,8 @@ export default function PenugasanTimetable() {
               {rows.map((r, idx) => (
                 <tr key={`${r.assignmentId || r.trainerId}-${r.sekolahId}-${r.waktu}-${idx}`} className="hover:bg-slate-50/50 transition">
                   <td className="py-4 px-6 font-bold text-slate-800">{r.sekolahNama}</td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || 'Trainer tidak ditemukan'}</td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || 'Trainer tidak ditemukan') : '—'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || crossScopeNames[r.trainerId] || 'Memuat...'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Memuat...') : '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.waktu}</td>
                 </tr>
               ))}

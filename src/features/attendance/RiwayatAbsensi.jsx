@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { readCached, upsert, usePeriod } from '../../lib/store'
+import React, { useEffect, useMemo, useState } from 'react'
+import { readCached, upsert, usePeriod, read } from '../../lib/store'
 import { buildReviewQueue } from '../../lib/attendance'
 import { getRole, canVerify } from '../../lib/role'
 
@@ -10,6 +10,11 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
   const [tick, setTick] = useState(0)
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
   const absensi = useMemo(() => readCached('absensi'), [tick])
+
+  useEffect(() => {
+  read('absensi').then(() => setTick(t => t + 1))
+}, [])
+  
   const [filterSekolahId, setFilterSekolahId] = useState('')
   
   const [showAll, setShowAll] = useState(() => {

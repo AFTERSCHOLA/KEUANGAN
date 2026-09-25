@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
+import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, writeRemote, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
 import { newPenugasanRow, validateRowDates } from '../../lib/penugasan.js'
@@ -24,6 +25,10 @@ export default function PenugasanManager() {
   const [alertMsg, setAlertMsg] = useState('')
   const [filterSekolahId, setFilterSekolahId] = useState('')
 
+  // State tambahan buat nama trainer lintas-cabang yang di-resolve dari server
+  const [crossScopeNames, setCrossScopeNames] = useState({}) // { [id]: nama }
+  const [lookupAttempted, setLookupAttempted] = useState({})
+
   // readCached is already role-scoped (store.js isWithinScope): admin_cabang
   // sees own branch, superadmin sees all, trainer sees own rows only.
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
@@ -44,6 +49,44 @@ export default function PenugasanManager() {
     })
     return out.sort((x, y) => String(x.periodeMulai || '').localeCompare(String(y.periodeMulai || '')))
   }, [trainers, filterSekolahId])
+
+  useEffect(() => {
+  const missingIds = [...new Set(
+    rows
+      .map(r => r.asistenId)
+      .filter(id =>
+        id &&
+        !trainerById.has(id) &&
+        !crossScopeNames[id] &&
+        !lookupAttempted[id]
+      )
+  )]
+
+  if (missingIds.length === 0) return
+
+  setLookupAttempted(prev => {
+    const next = { ...prev }
+    missingIds.forEach(id => {
+      next[id] = true
+    })
+    return next
+  })
+
+  apiRequest(
+    `/api/trainer-name-lookup.php?ids=${missingIds.join(',')}`,
+    { method: 'GET' }
+  )
+    .then(results => {
+      const next = { ...crossScopeNames }
+
+      results.forEach(r => {
+        next[r.id] = r.nama
+      })
+
+      setCrossScopeNames(next)
+    })
+    .catch(() => {})
+}, [rows, trainerById, crossScopeNames, lookupAttempted])
 
   function showError(message) {
     setAlertMsg(message)
@@ -182,7 +225,7 @@ export default function PenugasanManager() {
                 <tr key={r.id} className="hover:bg-slate-50/50 transition">
                   <td className="py-4 px-6 font-bold text-slate-800">{sekolahById.get(r.sekolahId)?.nama || 'Sekolah tidak ditemukan'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || 'Trainer tidak ditemukan'}</td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || 'Trainer tidak ditemukan') : '—'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Memuat...') : '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.periodeMulai || '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.periodeSelesai || 'Berlaku terus'}</td>
                   <td className="py-4 px-6 text-center">

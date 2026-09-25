@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
-import { readCached, correctLedgerEntry, usePeriod, subscribeStore } from '../../lib/store'
+import { readCached, correctLedgerEntry, usePeriod, subscribeStore, read } from '../../lib/store'
 import { newAbsensiPengajar, generateId } from '../../lib/constants'
 import Modal from '../../components/Modal.jsx'
 
@@ -53,6 +53,10 @@ export default function TrainerAttendanceAdmin() {
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
   const trainer = useMemo(() => readCached('trainer'), [tick])
   const absensiPengajar = useMemo(() => readCached('absensiPengajar'), [tick])
+
+  useEffect(() => {
+  read('absensiPengajar').then(() => setTick(t => t + 1))
+}, [])
 
   const [filterSekolahId, setFilterSekolahId] = useState('')
   const [correcting, setCorrecting] = useState(null) // record sedang dikoreksi

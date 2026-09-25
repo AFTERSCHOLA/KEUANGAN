@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useCallback } from 'react'
-import { readCached, usePeriod, subscribeStore } from '../../lib/store.js'
+import { readCached, usePeriod, subscribeStore, read } from '../../lib/store.js'
 import { buildTrainerMatrix } from '../../lib/trainerAttendance.js'
 
 // TA.C.2 (F-TA4, F-TA5; D-TA15; R-TA5, R-TA9, R-TA10) — rekap matriks
@@ -21,6 +21,11 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
   const periode = periodeKey()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const absensiPengajar = useMemo(() => readCached('absensiPengajar'), [tick])
+
+  useEffect(() => {
+  read('absensiPengajar').then(() => setTick(t => t + 1))
+}, [])
+
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
   const trainer = useMemo(() => readCached('trainer'), [tick])
 
