@@ -391,6 +391,43 @@ Changed: `src/lib/penugasan.js` (+ `newPenugasanRow`/`validateRowDates`/
 `Jadwal Penugasan`), `src/lib/csv.js` (+ `exportJadwalPenugasanCSV`),
 regression `tests/penugasan-*.spec.js` (persisted). Bug D tertutup sebagai
 konsekuensi PG.A (beban honor Gate C kini punya sumber data); Bug B/C
-tetap deferred dengan owner di `PENUGASAN_PLAN.md §10`.
+tetap deferred dengan owner di `PENUGASAN_PLAN.md` §10.
+
+---
+
+## Gate AP — Auto Penugasan Closure Summary (taste #40 temporary gate)
+
+**Status: DONE (AP.A.1–AP.D.1, 2026-09-25).** Chain lengkap ada di
+`docs/AUTO_PENUGASAN_PLAN.md` + `docs/AUTO_PENUGASAN_MILESTONES.md`
+(tidak ada renumbering rantai di dokumen ini — pair tersebut adalah gate
+doc sementara per taste #40).
+
+Verified: `npx playwright test tests/auto-penugasan-create.spec.js
+tests/auto-penugasan-livejadwal.spec.js tests/auto-penugasan-delete.spec.js
+tests/rekap-pengajar-export.spec.js tests/honor-delete-403.spec.js
+--workers=1` (6/6 passed, zero pageerror) + joint
+`tests/penugasan*.spec.js tests/trainer-attendance*.spec.js --workers=1`
+(17/17) + `tests/sim-full-flow.spec.js` (1/1, 11-step original flow green
+on the new code) + `php server/tests/endpoint.protection.php` (235 checks,
+0 failed) + `npm test` (42 files / 203 passed) + `npm run build` green.
+
+Changed: `server/lib/assignments.php` (baru, shared ensureAssignment),
+`server/api/trainer.php` + `sekolah.php` + `users.php` (auto-create hook),
+`server/api/_master.php` (additive echo penugasanPengajar — F-AP7),
+`server/bin/backfill-penugasan.php` (baru, idempotent),
+`src/features/penugasan/PenugasanManager.jsx` (Edit/Aktifkan/Hapus
+dinamis), `src/features/attendance/AttendanceForm.jsx` +
+`RiwayatAbsensi.jsx` (memo dualitas), `src/lib/trainerAttendance.js` +
+`TrainerAttendanceRecap.jsx` (format `— Status` + export Rekap),
+`src/lib/csv.js` (+ `exportRekapPengajarCSV`), `server/auth/authorize.php`
+(admin_cabang own-branch honor write — D-AP7),
+regression `tests/auto-penugasan-*.spec.js` +
+`tests/rekap-pengajar-export.spec.js` (persisted).
+
+Sign-off decisions: (1) D-PG2 superseded by D-AP1 on client authority
+(2026-09-25); (2) D-AP6 billing checkpoint open — no build until signed;
+(3) AP.C.3 page confirmed Rekap; (4) `authorize.policy.php` fails one
+trainer-sekolah leg identically on pristine HEAD (pre-existing, out of
+scope); (5) F-AP8 checkbox-vs-rerender deferred pending minimal repro.
 
 **End of Microtask Chains**

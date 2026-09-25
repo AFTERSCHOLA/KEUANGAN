@@ -158,6 +158,8 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
           <div>
             <h2 className="text-xl font-bold text-slate-800">Lembar Absensi Harian Kelas</h2>
             <p className="text-xs text-slate-500">Mencatat data kehadiran guru dan siswa</p>
+            {/* AP.C.1 (D-AP4) — intentional duality: this record never feeds honor. */}
+            <p className="text-xs text-slate-400 mt-1">Catatan: absensi ini tidak memengaruhi honor.</p>
           </div>
         </div>
         <div className="bg-white rounded-2xl p-8 shadow-sm border text-center">

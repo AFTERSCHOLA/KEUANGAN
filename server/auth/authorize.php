@@ -173,10 +173,16 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         }
 
         // Audit log: matrix section 5 — Admin Cabang is "Own branch read-only".
-        // Same treatment as honorPayments/invoices: read allowed via the normal
+        // Same treatment as invoices: read allowed via the normal
         // branch-scoped read path below, mutation blocked here regardless of
         // branch ownership so a matching cabangId can't be used to write/delete.
-        if (in_array($resource, ['honorPayments', 'invoices', 'audit_log'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
+        // AP.D.1 (D-AP7): honorPayments is EXCLUDED from this deny-list — it
+        // falls through to the branch-scoped write check below, so
+        // admin_cabang may append/correct own-branch honor (client derives
+        // cabangId from the trainer's school, PaymentTable.jsx:45-47) while
+        // cross-branch stays 403 via recordOwnsBranch. Every write is
+        // trailed (insertLedger auditEvent, bootstrap.php:241).
+        if (in_array($resource, ['invoices', 'audit_log'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
             return false;
         }
 

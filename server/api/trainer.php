@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/_master.php';
+require_once __DIR__ . '/../lib/assignments.php';
 
 $user = requireAuthenticatedUser();
 $method = $_SERVER['REQUEST_METHOD'];
@@ -58,6 +59,50 @@ if ($method === 'POST' || $method === 'PUT') {
         jsonResponse(['error' => 'Trainer tidak ditemukan'], 404);
     }
 }
+
+    // AP.A.1 (D-AP1) — auto-create assignments for newly added school
+    // links. Injected into $data BEFORE masterWrite so the versioned
+    // write stays atomic (no extra bump, 409-safe). Same-branch gated;
+    // cross-branch links persist (legacy behavior) but gain no row.
+    $newLinks = isset($data['sekolahIds']) && is_array($data['sekolahIds']) ? $data['sekolahIds'] : [];
+    if ($newLinks !== []) {
+        $oldLinks = [];
+        $existingRows = [];
+        if ($action === 'update') {
+            $prev = database()->prepare('SELECT payload FROM trainer WHERE id = :id');
+            $prev->execute([':id' => $data['id'] ?? null]);
+            $prow = $prev->fetch();
+            $pp = $prow !== false ? json_decode((string) $prow['payload'], true) : null;
+            if (is_array($pp)) {
+                if (isset($pp['sekolahIds']) && is_array($pp['sekolahIds'])) $oldLinks = $pp['sekolahIds'];
+                if (isset($pp['penugasanPengajar']) && is_array($pp['penugasanPengajar'])) $existingRows = $pp['penugasanPengajar'];
+            }
+        }
+        if (isset($data['penugasanPengajar']) && is_array($data['penugasanPengajar'])) {
+            $existingRows = $data['penugasanPengajar'];
+        }
+        $added = array_values(array_diff(
+            array_values(array_filter($newLinks, 'is_string')),
+            array_values(array_filter($oldLinks, 'is_string'))
+        ));
+        if ($added !== []) {
+            $sameBranch = [];
+            $chk = database()->prepare('SELECT cabang_id FROM sekolah WHERE id = :id');
+            foreach ($added as $sid) {
+                $chk->execute([':id' => $sid]);
+                if ($chk->fetchColumn() === $cabangId) $sameBranch[] = $sid;
+                else error_log("trainer.php auto-assignment skipped non-same-branch link sekolah={$sid}");
+            }
+            $rows = missingAssignmentLinks($existingRows, (string) ($data['id'] ?? ''), $sameBranch, autoAssignmentToday());
+            if ($rows !== []) {
+                $data['penugasanPengajar'] = array_values(array_merge($existingRows, $rows));
+                auditEvent('assignment_auto_created', $user, 'trainer', (string) ($data['id'] ?? ''), [
+                    'sekolahIds' => array_column($rows, 'sekolahId'),
+                    'cabangId' => $cabangId,
+                ]);
+            }
+        }
+    }
 
     masterWrite('trainer', $user, record: $data, overrides: ['cabangId' => $cabangId], action: $action);
 } elseif ($method === 'DELETE') {

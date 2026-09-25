@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../lib/assignments.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
@@ -212,13 +213,18 @@ if ($action === 'create') {
         jsonResponse(['error' => 'Gagal menyimpan record'], 500);
     }
     auditEvent('sekolah_created', $user, 'sekolah', $record['id'], ['cabangId' => $cabangId]);
+    // AP.A.1 (D-AP1) — school created with trainers already linked.
+    $createdLinks = isset($record['trainerIds']) && is_array($record['trainerIds']) ? $record['trainerIds'] : [];
+    if ($createdLinks !== []) {
+        ensureAssignmentsForTrainerIds($pdo, $createdLinks, (string) $record['id'], $user);
+    }
     jsonResponse(['ok' => true, 'id' => $record['id'], 'cabangId' => $cabangId], 201);
 }
 
 // --- update --------------------------------------------------------------
 // Fetch the EXISTING record's branch first — same reasoning as siswa.php:
 // authorization must check where the record actually lives right now.
-$stmt = $pdo->prepare('SELECT cabang_id, version FROM sekolah WHERE id = :id');
+$stmt = $pdo->prepare('SELECT cabang_id, version, payload FROM sekolah WHERE id = :id');
 $stmt->execute([':id' => $record['id']]);
 $existing = $stmt->fetch();
 if ($existing === false) {
@@ -240,4 +246,17 @@ try {
 }
 
 auditEvent('sekolah_updated', $user, 'sekolah', $record['id'], ['cabangId' => $cabangId]);
+// AP.A.1 (D-AP1) — newly linked trainers gain assignments (best-effort,
+// post-write; idempotent so the TrainerList double-write can't duplicate).
+$oldPayload = json_decode((string) ($existing['payload'] ?? ''), true);
+$oldTrainerLinks = is_array($oldPayload) && isset($oldPayload['trainerIds']) && is_array($oldPayload['trainerIds'])
+    ? $oldPayload['trainerIds'] : [];
+$newTrainerLinks = isset($record['trainerIds']) && is_array($record['trainerIds']) ? $record['trainerIds'] : [];
+$addedTrainers = array_values(array_diff(
+    array_values(array_filter($newTrainerLinks, 'is_string')),
+    array_values(array_filter($oldTrainerLinks, 'is_string'))
+));
+if ($addedTrainers !== []) {
+    ensureAssignmentsForTrainerIds($pdo, $addedTrainers, (string) $record['id'], $user);
+}
 jsonResponse(['ok' => true, 'id' => $record['id'], 'cabangId' => $cabangId, 'version' => (int) $existing['version'] + 1], 200);

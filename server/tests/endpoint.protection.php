@@ -326,18 +326,33 @@ check('admin A writing own branch record -> 201', $status === 201, "got $status"
 [$status] = req('POST', "$base/server/api/sppPayments.php", $sppA, $cookieAdminA, $csrfAdminA);
 check('duplicate id -> 409', $status === 409, "got $status");
 
-// --- honorPayments.php: admin_cabang must be BLOCKED (read-only) -----
-echo "\n--- honorPayments.php (admin_cabang read-only per matrix) ---\n";
+// --- honorPayments.php: contract moved by AP.D.1 (D-AP7) ---
+// admin_cabang appends/corrects OWN branch (201, trailed); cross-branch
+// stays 403. The old blanket-403 leg is superseded by the AP.D.1 block
+// below; anonymous still 401, superadmin still 201.
+echo "\n--- honorPayments.php (AP.D.1 contract) ---\n";
 $honorA = ['id' => 'pay-test-' . uniqid(), 'cabangId' => $branchA, 'trainerId' => 'trn-x', 'nominal' => 50000];
 
 [$status] = req('POST', "$base/server/api/honorPayments.php", $honorA);
 check('anonymous POST -> 401', $status === 401, "got $status");
 
-[$status] = req('POST', "$base/server/api/honorPayments.php", $honorA, $cookieAdminA, $csrfAdminA);
-check('admin_cabang writing own branch -> 403 (read-only per matrix)', $status === 403, "got $status");
-
 [$status] = req('POST', "$base/server/api/honorPayments.php", $honorA, $cookieSuper, $csrfSuper);
 check('superadmin writing -> 201', $status === 201, "got $status");
+
+// --- AP.D.1: admin_cabang own-branch honor write (D-AP7) ---
+echo "\n--- honorPayments.php (AP.D.1 admin_cabang own-branch write) ---\n";
+$honorAdmin = ['id' => 'pay-apd-' . uniqid(), 'cabangId' => $branchA, 'trainerId' => 'trn-x', 'nominal' => 25000];
+
+[$status] = req('POST', "$base/server/api/honorPayments.php", $honorAdmin, $cookieAdminA, $csrfAdminA);
+check('admin_cabang appending own branch -> 201', $status === 201, "got $status");
+
+$honorCross = ['id' => 'pay-apd-' . uniqid(), 'cabangId' => $branchB, 'trainerId' => 'trn-x', 'nominal' => 25000];
+[$status] = req('POST', "$base/server/api/honorPayments.php", $honorCross, $cookieAdminA, $csrfAdminA);
+check('admin_cabang appending other branch -> 403', $status === 403, "got $status");
+
+$honorCorr = ['id' => 'pay-apd-' . uniqid(), 'cabangId' => $branchA, 'trainerId' => 'trn-x', 'nominal' => 0];
+[$status] = req('POST', "$base/server/api/honorPayments.php", ['record' => $honorCorr, 'correctionOf' => $honorAdmin['id'], 'action' => 'correct'], $cookieAdminA, $csrfAdminA);
+check('admin_cabang correcting own branch -> 201', $status === 201, "got $status");
 
 // --- siswa.php: cabangId always server-derived from sekolahId --------
 echo "\n--- siswa.php ---\n";
@@ -1292,6 +1307,15 @@ check('absensi_verified cabang_id matches branch A', $row && $row['cabang_id'] =
 $row = auditRow($pdo, 'honorPayments_recorded', $honorA['id']);
 check('honorPayments_recorded audit row exists', $row !== false);
 check('honorPayments_recorded actor is superadmin (only writer)', $row && $row['actor_role'] === 'superadmin', json_encode($row));
+
+// AP.D.1 — admin-created + corrected rows are trailed with actor + branch.
+$row = auditRow($pdo, 'honorPayments_recorded', $honorAdmin['id']);
+check('admin-created honor audit row exists', $row !== false);
+check('admin-created honor actor_role is admin_cabang', $row && $row['actor_role'] === 'admin_cabang', json_encode($row));
+check('admin-created honor cabang_id matches branch A', $row && $row['cabang_id'] === $branchA, json_encode($row));
+$row = auditRow($pdo, 'honorPayments_recorded', $honorCorr['id']);
+check('admin-corrected honor audit row exists', $row !== false);
+check('admin-corrected honor metadata carries correctionOf', $row && (json_decode((string) $row['metadata'], true)['correctionOf'] ?? null) === $honorAdmin['id'], json_encode($row));
 
 $row = auditRow($pdo, 'settings_created', $setNew['id']);
 check('settings_created audit row exists', $row !== false);

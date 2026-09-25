@@ -81,6 +81,8 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
           <p className="text-xs text-slate-500">
             Periode <b>{periode}</b>{!showAll && ` — ${rows.length} record perlu ditinjau`}
           </p>
+          {/* AP.C.1 (D-AP4) — intentional duality: these records never feed honor. */}
+          <p className="text-xs text-slate-400 mt-1">Catatan: absensi ini tidak memengaruhi honor.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select

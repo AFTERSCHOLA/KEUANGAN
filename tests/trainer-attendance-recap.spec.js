@@ -94,9 +94,10 @@ test.describe('TA.C.2: rekap matriks bulanan', () => {
     csrf = await primeCsrf(page)
     await seedRowAsSuperadmin(page, csrf, { trainerId: widiaId, sekolahId: sabangId, tanggal: today, status: 'Hadir', cabangId: CABANG_A })
     csrf = await primeCsrf(page)
-    await seedRowAsSuperadmin(page, csrf, { trainerId: asyifaId, sekolahId: sabangId, tanggal: today, status: 'Hadir', cabangId: CABANG_A })
+    // AP.C.2 — Izin cells use the dash form (`Nama (A) — Izin[, ket]`).
+    await seedRowAsSuperadmin(page, csrf, { trainerId: asyifaId, sekolahId: sabangId, tanggal: today, status: 'Izin', keterangan: 'Pengganti', cabangId: CABANG_A })
     csrf = await primeCsrf(page)
-    await seedRowAsSuperadmin(page, csrf, { trainerId: iraId, sekolahId: sabangId, tanggal: today, status: 'Hadir', cabangId: CABANG_A })
+    await seedRowAsSuperadmin(page, csrf, { trainerId: iraId, sekolahId: sabangId, tanggal: today, status: 'Izin', cabangId: CABANG_A })
 
     await gotoApp(page)
     await openMatriks(page)
@@ -108,8 +109,10 @@ test.describe('TA.C.2: rekap matriks bulanan', () => {
     await expect(tridayaRow.getByRole('cell', { name: `Asyifa TAC2 ${suffix} (A) — EXPO` })).toBeVisible()
     // Sabang same-date cell holds three teachers.
     const sabangRow = page.locator('tr', { hasText: `SDN 037 Sabang TAC2 ${suffix}` })
-    await expect(sabangRow.getByRole('cell', { name: `Ira TAC2 ${suffix} (A)` })).toBeVisible()
+    await expect(sabangRow.getByRole('cell', { name: `Ira TAC2 ${suffix} (A) — Izin` })).toBeVisible()
     await expect(sabangRow.getByRole('cell', { name: `Widia TAC2 ${suffix} (I)` })).toBeVisible()
+    // AP.C.2 — status + keterangan share the dash slot, status first.
+    await expect(sabangRow.getByRole('cell', { name: `Asyifa TAC2 ${suffix} (A) — Izin, Pengganti` })).toBeVisible()
 
     // Empty dates stay columns in periode order: day-1 header exists
     // before the today column header.

@@ -1,6 +1,8 @@
 import { useMemo, useEffect, useState, useCallback } from 'react'
 import { readCached, usePeriod, subscribeStore, read } from '../../lib/store.js'
-import { buildTrainerMatrix } from '../../lib/trainerAttendance.js'
+import { buildTrainerMatrix, formatMatrixCell } from '../../lib/trainerAttendance.js'
+import { exportRekapPengajarCSV } from '../../lib/csv.js'
+import PrintButton from '../../components/PrintButton.jsx'
 
 // TA.C.2 (F-TA4, F-TA5; D-TA15; R-TA5, R-TA9, R-TA10) — rekap matriks
 // bulanan sekolah × tanggal. Mirrors the TrainerAttendanceAdmin.jsx
@@ -39,21 +41,55 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
     [matrix, filterSekolahId],
   )
 
+  // AP.C.3 (D-AP5) — export payload mirrors the visible cells exactly
+  // (same matrix order + same formatMatrixCell text); scope filtered
+  // upstream, so the file can never contain rows the table hides.
+  const displayRows = useMemo(() => {
+    const out = []
+    rows.forEach(r => {
+      matrix.dates.forEach(d => {
+        ;(r.cells[d] || []).forEach(entry => {
+          out.push({
+            sekolah: r.nama,
+            tanggal: d,
+            nama: entry.nama,
+            peran: entry.label,
+            status: entry.status || '',
+            keterangan: entry.keterangan || '',
+            teks: formatMatrixCell(entry),
+          })
+        })
+      })
+    })
+    return out
+  }, [rows, matrix])
+
+  function handleExportCSV() {
+    exportRekapPengajarCSV(displayRows, periode)
+  }
+
   function cellText(entry) {
-    let text = `${entry.nama} (${entry.label})`
-    if (entry.keterangan) text += ` — ${entry.keterangan}`
-    if (entry.status && entry.status !== 'Hadir') text += ` (${entry.status})`
-    return text
+    // AP.C.2 — single owner in lib/trainerAttendance.js (unit-pinned).
+    return formatMatrixCell(entry)
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 printable-report">
       <div className="bg-white p-4 rounded-2xl shadow-sm border flex items-center justify-between flex-wrap gap-3">
         <div>
           <h3 className="text-base font-bold text-slate-800">Rekap Absensi Pengajar</h3>
           <p className="text-xs text-slate-500">
             Periode <b>{periode}</b> — {rows.length} sekolah
           </p>
+        </div>
+        <div className="flex items-end gap-2 no-print">
+          <button
+            onClick={handleExportCSV}
+            className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
+          >
+            Unduh CSV
+          </button>
+          <PrintButton />
         </div>
       </div>
 

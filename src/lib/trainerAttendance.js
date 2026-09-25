@@ -19,6 +19,19 @@
 // R-TA4: correction records supersede the original they point at via
 // `correctionOf` (same latest-wins rule as TrainerAttendanceAdmin.jsx
 // visibleRows) — a corrected row never appears twice in one cell.
+// AP.C.2 (D-AP5) — matrix cell text. Pure so the format is unit-pinned:
+// Hadir renders bare `Nama (I/A)` (exemplar default); any non-Hadir
+// status joins the details after the dash, keterangan last:
+// `Nama (I) — EXPO`, `Nama (I) — Izin`, `Nama (I) — Izin, Acara keluarga`.
+export function formatMatrixCell(entry) {
+  let text = `${entry.nama} (${entry.label})`
+  const details = []
+  if (entry.status && entry.status !== 'Hadir') details.push(entry.status)
+  if (entry.keterangan) details.push(entry.keterangan)
+  if (details.length > 0) text += ` — ${details.join(', ')}`
+  return text
+}
+
 export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer = [], periode }) {
   const trainersById = new Map((trainer || []).map(t => [t.id, t]))
   const schoolsById = new Map((sekolah || []).map(s => [s.id, s]))

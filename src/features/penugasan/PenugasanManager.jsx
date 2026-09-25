@@ -5,6 +5,7 @@ import { localDateString } from '../../lib/constants.js'
 import { newPenugasanRow, validateRowDates } from '../../lib/penugasan.js'
 import Modal from '../../components/Modal.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
+import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 
 // PG.A.1 (F-PG1; D-PG1, D-PG2, D-PG3, D-PG7, D-PG8) — explicit assignment
 // management. Writes ONLY trainer.penugasanPengajar[] via the existing
@@ -20,6 +21,10 @@ export default function PenugasanManager() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ sekolahId: '', trainerId: '', asistenId: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
+  // AP.B.1 (D-AP3) — edit targets one row inside its host record; cross-host
+  // moves are out of scope (Sekolah/Instruktur selects lock in edit mode).
+  const [editing, setEditing] = useState(null) // { hostId, assignmentId } | null
+  const [confirm, setConfirm] = useState(null) // { action: 'activate'|'delete', row } | null
   const [saving, setSaving] = useState(false)
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertMsg, setAlertMsg] = useState('')
@@ -95,6 +100,24 @@ export default function PenugasanManager() {
 
   function openAdd() {
     setForm({ sekolahId: '', trainerId: '', asistenId: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
+    setEditing(null)
+    setModalOpen(true)
+  }
+
+  // AP.B.1 — Edit reuses the Tambah modal pre-filled. Sekolah/Instruktur
+  // stay locked: moving a row across host records is a delete+create, not
+  // an edit (entities.php:172-175 trainerId-host invariant).
+  function openEdit(row) {
+    setForm({
+      sekolahId: row.sekolahId || '',
+      trainerId: row.trainerId || '',
+      asistenId: row.asistenId || '',
+      periodeMulai: row.periodeMulai || localDateString(),
+      ongoing: !(row.periodeSelesai != null && String(row.periodeSelesai).trim() !== ''),
+      periodeSelesai: row.periodeSelesai || '',
+      aktif: row.aktif,
+    })
+    setEditing({ hostId: row.hostId, assignmentId: row.id })
     setModalOpen(true)
   }
 
@@ -116,22 +139,38 @@ export default function PenugasanManager() {
       return
     }
     const sch = sekolahById.get(form.sekolahId)
-    const row = newPenugasanRow({
-      sekolahId: form.sekolahId,
-      trainerId: form.trainerId,
-      asistenId: form.asistenId || null,
-      // Nested cabangId: send the school branch so same-branch rows validate
-      // (entities.php:176-194); cross-branch rows correctly 422 instead of
-      // silently landing (D-PG plan §4).
-      cabangId: sch?.cabangId || host?.cabangId || null,
-      periodeMulai: form.periodeMulai,
-      periodeSelesai,
-      aktif: form.aktif,
-    })
     setSaving(true)
     try {
       const existing = Array.isArray(host.penugasanPengajar) ? host.penugasanPengajar : []
-      const result = await writeRemote('trainer', { ...host, penugasanPengajar: [...existing, row] })
+      let next
+      if (editing && editing.hostId === host.id) {
+        // AP.B.1 — map-replace by row id; id preserved so history joins hold.
+        next = existing.map(a => (a && a.id === editing.assignmentId
+          ? {
+              ...a,
+              asistenId: form.asistenId || null,
+              cabangId: sch?.cabangId || host?.cabangId || a.cabangId || null,
+              periodeMulai: form.periodeMulai,
+              periodeSelesai,
+              aktif: form.aktif,
+            }
+          : a))
+      } else {
+        const row = newPenugasanRow({
+          sekolahId: form.sekolahId,
+          trainerId: form.trainerId,
+          asistenId: form.asistenId || null,
+          // Nested cabangId: send the school branch so same-branch rows validate
+          // (entities.php:176-194); cross-branch rows correctly 422 instead of
+          // silently landing (D-PG plan §4).
+          cabangId: sch?.cabangId || host?.cabangId || null,
+          periodeMulai: form.periodeMulai,
+          periodeSelesai,
+          aktif: form.aktif,
+        })
+        next = [...existing, row]
+      }
+      const result = await writeRemote('trainer', { ...host, penugasanPengajar: next })
       if (result.status === 'forbidden') {
         showError(result.message || 'Kamu tidak punya izin untuk menyimpan penugasan ini.')
         return
@@ -141,6 +180,7 @@ export default function PenugasanManager() {
         return
       }
       setModalOpen(false)
+      setEditing(null)
       bump()
     } catch (error) {
       showError(error?.message || 'Gagal menyimpan penugasan. Coba lagi.')
@@ -149,32 +189,50 @@ export default function PenugasanManager() {
     }
   }
 
-  async function deactivate(hostId, assignmentId) {
-    if (saving) return
+  // AP.B.1 (D-AP3) — shared map-replace writer for status flips and
+  // row removal. Full-array replace through the existing trainer.php
+  // update path (same as save/deactivate); version/409 copy preserved.
+  async function replaceRows(hostId, mapFn) {
+    if (saving) return false
     const host = trainerById.get(hostId)
     if (!host) {
       showError('Instruktur tidak ditemukan. Muat ulang halaman dan coba lagi.')
-      return
+      return false
     }
     setSaving(true)
     try {
       const existing = Array.isArray(host.penugasanPengajar) ? host.penugasanPengajar : []
-      const next = existing.map(a => (a && a.id === assignmentId ? { ...a, aktif: false } : a))
-      const result = await writeRemote('trainer', { ...host, penugasanPengajar: next })
+      const result = await writeRemote('trainer', { ...host, penugasanPengajar: existing.map(mapFn).filter(Boolean) })
       if (result.status === 'forbidden') {
-        showError(result.message || 'Kamu tidak punya izin untuk menonaktifkan penugasan ini.')
-        return
+        showError(result.message || 'Kamu tidak punya izin untuk mengubah penugasan ini.')
+        return false
       }
       if (result.status === 'conflict') {
         showError('Data trainer ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
-        return
+        return false
       }
       bump()
+      return true
     } catch (error) {
-      showError(error?.message || 'Gagal menonaktifkan penugasan. Coba lagi.')
+      showError(error?.message || 'Gagal mengubah penugasan. Coba lagi.')
+      return false
     } finally {
       setSaving(false)
     }
+  }
+
+  async function activate(hostId, assignmentId) {
+    await replaceRows(hostId, a => (a && a.id === assignmentId ? { ...a, aktif: true } : a))
+  }
+
+  // AP.B.1 — Hapus removes the array entry only. absensi_pengajar rows
+  // live in their own table, so history and honor math are untouched.
+  async function removeRow(hostId, assignmentId) {
+    await replaceRows(hostId, a => (a && a.id === assignmentId ? null : a))
+  }
+
+  async function deactivate(hostId, assignmentId) {
+    await replaceRows(hostId, a => (a && a.id === assignmentId ? { ...a, aktif: false } : a))
   }
 
   if (ctx.role === 'trainer') {
@@ -234,15 +292,41 @@ export default function PenugasanManager() {
                     </span>
                   </td>
                   <td className="py-4 px-6 text-center">
-                    {r.aktif === true && (
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
                       <button
-                        onClick={() => deactivate(r.hostId, r.id)}
+                        onClick={() => openEdit(r)}
                         disabled={saving}
                         className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
                       >
-                        Nonaktifkan
+                        Edit
                       </button>
-                    )}
+                      {r.aktif === true ? (
+                        <button
+                          onClick={() => deactivate(r.hostId, r.id)}
+                          disabled={saving}
+                          className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
+                        >
+                          Nonaktifkan
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setConfirm({ action: 'activate', row: r })}
+                            disabled={saving}
+                            className="bg-emerald-100 hover:bg-emerald-200 disabled:opacity-60 text-emerald-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
+                          >
+                            Aktifkan
+                          </button>
+                          <button
+                            onClick={() => setConfirm({ action: 'delete', row: r })}
+                            disabled={saving}
+                            className="bg-rose-100 hover:bg-rose-200 disabled:opacity-60 text-rose-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
+                          >
+                            Hapus
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -258,13 +342,14 @@ export default function PenugasanManager() {
         </div>
       </div>
 
-      <Modal open={modalOpen} onClose={() => !saving && setModalOpen(false)} title="Tambah Penugasan">
+      <Modal open={modalOpen} onClose={() => !saving && setModalOpen(false)} title={editing ? 'Edit Penugasan' : 'Tambah Penugasan'}>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Sekolah</label>
           <select
             value={form.sekolahId}
             onChange={e => setForm({ ...form, sekolahId: e.target.value })}
-            disabled={saving}
+            disabled={saving || editing !== null}
+            title={editing !== null ? 'Sekolah tidak dapat dipindah pada mode edit' : undefined}
             className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
           >
             <option value="">-- Pilih Sekolah --</option>
@@ -276,7 +361,8 @@ export default function PenugasanManager() {
           <select
             value={form.trainerId}
             onChange={e => setForm({ ...form, trainerId: e.target.value, asistenId: '' })}
-            disabled={saving}
+            disabled={saving || editing !== null}
+            title={editing !== null ? 'Instruktur tidak dapat dipindah pada mode edit' : undefined}
             className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
           >
             <option value="">-- Pilih Instruktur --</option>
@@ -338,6 +424,23 @@ export default function PenugasanManager() {
       </Modal>
 
       <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
+      <ConfirmDialog
+        open={confirm !== null}
+        onCancel={() => setConfirm(null)}
+        onConfirm={async () => {
+          const c = confirm
+          setConfirm(null)
+          if (!c) return
+          if (c.action === 'activate') await activate(c.row.hostId, c.row.id)
+          else await removeRow(c.row.hostId, c.row.id)
+        }}
+        title={confirm?.action === 'delete' ? 'Hapus Penugasan' : 'Aktifkan Penugasan'}
+        body={confirm?.action === 'delete'
+          ? 'Hapus penugasan ini? Riwayat absensi tidak ikut terhapus.'
+          : 'Aktifkan kembali penugasan ini?'}
+        confirmLabel={confirm?.action === 'delete' ? 'Hapus' : 'Aktifkan'}
+        danger={confirm?.action === 'delete'}
+      />
     </div>
   )
 }

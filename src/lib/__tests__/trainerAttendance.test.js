@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { summarizeTrainerAttendance, buildTrainerMatrix } from '../trainerAttendance.js'
+import { summarizeTrainerAttendance, buildTrainerMatrix, formatMatrixCell } from '../trainerAttendance.js'
 
 // TA.C.1 VERIFY (unit half): ownership + periode isolation for the
 // personal summary. UI isolation is pinned separately by
@@ -89,5 +89,26 @@ describe('buildTrainerMatrix (TA.C.2)', () => {
     const tridaya = rows.find(r => r.sekolahId === 'skl-tridaya')
     expect(tridaya.cells['2026-09-10']).toHaveLength(1)
     expect(tridaya.cells['2026-09-10'][0].status).toBe('Izin')
+  })
+})
+
+// AP.C.2 (D-AP5) — cell format pins: Hadir bare, status joins after the
+// dash, keterangan last. Mirrors docs/exemplar/ABSENSI TRAINER.xlsx
+// `Nama (I)/(A)` default.
+describe('formatMatrixCell (AP.C.2)', () => {
+  it('renders Hadir bare', () => {
+    expect(formatMatrixCell({ nama: 'Widia', label: 'I', status: 'Hadir', keterangan: null })).toBe('Widia (I)')
+  })
+
+  it('renders Hadir + keterangan after the dash', () => {
+    expect(formatMatrixCell({ nama: 'Asyifa', label: 'A', status: 'Hadir', keterangan: 'EXPO' })).toBe('Asyifa (A) — EXPO')
+  })
+
+  it('renders Izin after the dash', () => {
+    expect(formatMatrixCell({ nama: 'Asyifa', label: 'A', status: 'Izin', keterangan: null })).toBe('Asyifa (A) — Izin')
+  })
+
+  it('renders status before keterangan when both present', () => {
+    expect(formatMatrixCell({ nama: 'Asyifa', label: 'A', status: 'Izin', keterangan: 'Acara keluarga' })).toBe('Asyifa (A) — Izin, Acara keluarga')
   })
 })

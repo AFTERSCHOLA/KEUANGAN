@@ -1,17 +1,14 @@
 import { test, expect, loginViaApi } from './fixtures.js'
 
 // ============================================================
-// AUDIT_FOLLOWUP M-AF2.1 — honor-payment 403 path coverage
+// AUDIT_FOLLOWUP M-AF2.1 — honor-payment 403 path coverage (trainer,
+// unchanged) + AP.D.1 admin_cabang own-branch write (D-AP7).
 //
-// The trainer (and admin_cabang) should never be able to write a
-// honorPayments record directly. The server's authorize() deny-list
-// at server/auth/authorize.php:105-107 rejects any create/update/
-// delete/write against honorPayments for non-superadmin roles, and
-// the trainer role can only ever write resource 'absensi' anyway.
-//
-// This test logs in as trainer and POSTs to /api/honorPayments.php
-// directly. The 403 is the authoritative server-side contract per
-// taste #61 — the server's deny-list, not a client-side guard.
+// Trainer can never write honorPayments (authorize() trainer lane has no
+// honorPayments branch). admin_cabang appends/corrects OWN-branch honor
+// (branch-scoped lane, authorize.php) and stays 403 cross-branch; every
+// write is trailed (insertLedger auditEvent, bootstrap.php). The 403/201
+// below are the authoritative server-side contract per taste #61.
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -66,6 +63,67 @@ test('M-AF2.1: trainer direct POST to /api/honorPayments.php returns 403 and loc
     expect(beforeIds.has(existing.id)).toBe(true)
   }
   expect(after.raw.find(p => p.id === sampleHonor.id)).toBeUndefined()
+
+  expect(pageErrors).toHaveLength(0)
+})
+
+test('AP.D.1: admin_cabang appends own-branch honor (201), denied cross-branch (403)', async ({ page, pageErrors }) => {
+  await loginViaApi(page, 'adminCabang')
+  const csrf = await primeCsrf(page)
+  const suffix = String(Date.now()).slice(-6)
+  const trainerId = `trn-HDL-${suffix}`
+
+  // temp trainer in own branch (deleted at the end; ledger rows for a
+  // deleted trainer are inert — finance joins skip unknown ids).
+  const createRes = await page.request.post('/api/trainer.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { id: trainerId, nama: `Trainer HDL ${suffix}`, honor: 50000, sekolahIds: [], action: 'create' },
+  })
+  expect(createRes.ok()).toBe(true)
+
+  const payId = `hrp-hdl-${suffix}`
+  const appendRes = await page.request.post('/api/honorPayments.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: {
+      action: 'append', id: payId, trainerId, cabangId: 'cbg-test-pusat',
+      periode: new Date().toISOString().slice(0, 7), nominal: 25000,
+      tanggalBayar: new Date().toISOString().slice(0, 10),
+    },
+  })
+  expect(appendRes.status()).toBe(201)
+  console.log('## AP.D.1 admin own-branch append -> 201')
+
+  const crossRes = await page.request.post('/api/honorPayments.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: {
+      action: 'append', id: `hrp-hdl-x-${suffix}`, trainerId, cabangId: 'cbg-does-not-exist',
+      periode: new Date().toISOString().slice(0, 7), nominal: 25000,
+      tanggalBayar: new Date().toISOString().slice(0, 10),
+    },
+  })
+  expect(crossRes.status()).toBe(403)
+  console.log('## AP.D.1 admin cross-branch append -> 403')
+
+  // correction-delete path (the UI Hapus flow) on own branch.
+  const corrRes = await page.request.post('/api/honorPayments.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: {
+      action: 'correct', correctionOf: payId,
+      record: {
+        id: `hrp-hdl-c-${suffix}`, trainerId, cabangId: 'cbg-test-pusat',
+        periode: new Date().toISOString().slice(0, 7), nominal: 0,
+        tanggalBayar: new Date().toISOString().slice(0, 10),
+      },
+    },
+  })
+  expect(corrRes.status()).toBe(201)
+  console.log('## AP.D.1 admin own-branch correct -> 201')
+
+  const delRes = await page.request.post('/api/trainer.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { action: 'delete', id: trainerId },
+  })
+  expect(delRes.ok()).toBe(true)
 
   expect(pageErrors).toHaveLength(0)
 })

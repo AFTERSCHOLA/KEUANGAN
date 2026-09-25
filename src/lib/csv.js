@@ -134,3 +134,17 @@ export function exportJadwalPenugasanCSV(displayRows, tanggal) {
   ])
   downloadCSV(headers, rows, 'Jadwal_Penugasan', tanggal)
 }
+
+// AP.C.3 (F-AP5; D-AP5) — export the Rekap matrix ACTUALS (one row per
+// school × date × entry). displayRows: [{ sekolah, tanggal, nama, peran,
+// status, keterangan, teks }] — full details (status + keterangan),
+// byte-equal to the visible cells (D-PG6 idiom). Filename carries the
+// monthly periode: Rekap_Pengajar_2026-09.csv. BOM + quoting via
+// downloadCSV (Excel-ready, same as existing exports).
+export function exportRekapPengajarCSV(displayRows, periode) {
+  const headers = ["Sekolah", "Tanggal", "Nama", "Peran", "Status", "Keterangan", "Teks"]
+  const rows = (displayRows || []).map(r => [
+    r.sekolah, r.tanggal, r.nama, r.peran, r.status, r.keterangan, r.teks,
+  ])
+  downloadCSV(headers, rows, 'Rekap_Pengajar', periode)
+}

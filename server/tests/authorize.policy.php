@@ -60,8 +60,15 @@ foreach (['create', 'update', 'delete', 'write'] as $action) {
     policyCheck(!authorize($action, 'cabang', ['id' => 'cab-1'], $adminCabang), "Admin Cabang should NOT {$action} own cabang record (must go through manage_branch)");
 }
 
-// honorPayments / invoices: read-only for Admin Cabang.
-foreach (['honorPayments', 'invoices'] as $resource) {
+// AP.D.1 (D-AP7): honorPayments — admin_cabang writes own branch
+// (branch-scoped lane), cross-branch denied. Invoices stay read-only.
+policyCheck(authorize('read', 'honorPayments', ['cabangId' => 'cab-1'], $adminCabang), 'Admin Cabang should read own-branch honorPayments');
+foreach (['create', 'update', 'delete', 'write'] as $action) {
+    policyCheck(authorize($action, 'honorPayments', ['cabangId' => 'cab-1'], $adminCabang), "Admin Cabang should {$action} own-branch honorPayments (AP.D.1)");
+    policyCheck(!authorize($action, 'honorPayments', ['cabangId' => 'cab-2'], $adminCabang), "Admin Cabang should NOT {$action} cross-branch honorPayments");
+}
+// invoices: read-only for Admin Cabang (unchanged).
+foreach (['invoices'] as $resource) {
     policyCheck(authorize('read', $resource, ['cabangId' => 'cab-1'], $adminCabang), "Admin Cabang should read own-branch {$resource}");
     foreach (['create', 'update', 'delete', 'write'] as $action) {
         policyCheck(!authorize($action, $resource, ['cabangId' => 'cab-1'], $adminCabang), "Admin Cabang should NOT {$action} {$resource}, even own branch");

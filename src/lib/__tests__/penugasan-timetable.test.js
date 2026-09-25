@@ -46,4 +46,16 @@ describe('buildDailyTimetable (PG.B.1)', () => {
     const noSlotDay = buildDailyTimetable({ trainers, sekolah, tanggal: '2026-09-26' })
     expect(noSlotDay).toEqual([])
   })
+
+  // AP.A.3 (D-AP2): Waktu derives from the LIVE sekolah.jadwalList at read
+  // time. Assignment rows carry no time keys at all, so a school jadwal
+  // edit propagates with zero penugasan writes — this pins that contract.
+  it('derives Waktu from live jadwalList, never from assignment rows', () => {
+    const editedSekolah = [
+      { id: 'skl-1', nama: 'SD Sim', jadwalList: [{ dayOfWeek: 'Rabu', time: '16:00', endTime: '17:30' }] },
+    ]
+    const rows = buildDailyTimetable({ trainers, sekolah: editedSekolah, tanggal: '2026-09-23' })
+    expect(rows.map(r => r.waktu)).toEqual(['Rabu 16:00–17:30'])
+    expect(trainers[0].penugasanPengajar.every(a => a.hari == null && a.jamMulai == null)).toBe(true)
+  })
 })

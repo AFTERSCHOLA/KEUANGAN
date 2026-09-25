@@ -150,7 +150,16 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
     auditEvent("{$entity}_updated", $user, $entity, $id, array_filter([
         'cabangId' => $isCabang ? null : $cabangId,
     ]));
-    jsonResponse(['ok' => true, 'id' => $id, 'version' => $newVersion, 'cabangId' => $isCabang ? null : $cabangId], 200);
+    // AP.A.1 (F-AP7) — echo the canonical array the server persisted.
+    // writeRemote() merges the SENT record over cache (store.js:376-380),
+    // so server-injected rows would be deleted by the next stale full-array
+    // re-save unless echoed back here. Additive: old clients ignore it;
+    // omitted entirely when the key is absent (older clients unaffected).
+    $echo = ['ok' => true, 'id' => $id, 'version' => $newVersion, 'cabangId' => $isCabang ? null : $cabangId];
+    if ($entity === 'trainer' && isset($record['penugasanPengajar']) && is_array($record['penugasanPengajar'])) {
+        $echo['penugasanPengajar'] = array_values($record['penugasanPengajar']);
+    }
+    jsonResponse($echo, 200);
 }
 
 function masterDelete(string $entity, array $user, bool $isCabang = false): never
