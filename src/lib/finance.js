@@ -1,3 +1,5 @@
+import { resolveCurrentAbsensiPengajar } from './trainerAttendance.js'
+
 // ============================================
 // M2.4 — Money engine (Person 3)
 // D1: cash basis. labaRugi = Σ SPP lunas(periode) − Σ honorPayments(periode).
@@ -51,20 +53,13 @@ export function honorPaidByTrainer(honorPayments = [], periode) {
 // (PLAN §9, TA_C2B_VALIDATION.md §3). Correction records supersede
 // via latest-wins on `correctionOf` (R-TA4, same rule as the matrix).
 export function pengajarHonorStats(absensiPengajar = [], periode) {
-  const latestByOriginal = new Map()
-  ;(absensiPengajar || [])
-    .filter(r => r.periode === periode)
-    .forEach(r => {
-      const key = r.correctionOf || r.id
-      const existing = latestByOriginal.get(key)
-      if (!existing || (r.correctionOf && !existing.correctionOf) || r.id > existing.id) {
-        latestByOriginal.set(key, r)
-      }
-    })
+  const current = resolveCurrentAbsensiPengajar(
+     (absensiPengajar || []).filter(r => r.periode === periode)
+   )
   const hadirByTrainer = {}
   const hadirBySekolah = {}
   const hadirRecords = []
-  ;[...latestByOriginal.values()].forEach(r => {
+  current.forEach(r => {
     if (r.status !== 'Hadir' || !r.trainerId) return
     hadirByTrainer[r.trainerId] = (hadirByTrainer[r.trainerId] || 0) + 1
     if (r.sekolahId) hadirBySekolah[r.sekolahId] = (hadirBySekolah[r.sekolahId] || 0) + 1

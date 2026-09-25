@@ -321,6 +321,13 @@ const WRITE_ENDPOINTS = {
   users: '/api/users.php',
   invoices: '/api/invoices.php',
   honorPayments: '/api/honorPayments.php',
+  // TA.B.2 fix — self-submit absensi tenaga pengajar langsung sync,
+  // bukan lewat antrian manual (queueSync/syncPending). Sebelumnya
+  // upsert() cuma nge-queue lokal; kalau belum di-flush manual, admin
+  // yang nyoba koreksi record itu dari sesi lain dapet 422 "Record
+  // asli tidak ditemukan" karena beneran belum ada di database.
+  // Korelasinya jadi konsisten juga sama correctLedgerEntry() yang
+  // MEMANG udah langsung POST (bukan queue) buat koreksi entity ini.
   absensiPengajar: '/api/absensiPengajar.php',
 }
 

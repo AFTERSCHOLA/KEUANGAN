@@ -1,3 +1,23 @@
+// TA.B.4 fix — resolve absensiPengajar ke state TERKINI, benar untuk
+// rantai koreksi berapa pun levelnya (bukan cuma 1 level). Sebelumnya
+// tiap pemanggil (TrainerAttendanceAdmin.jsx, pengajarHonorStats,
+// buildTrainerMatrix) punya logic dedup sendiri-sendiri berbasis
+// `correctionOf || id` — pecah jadi 2 grup kalau ada koreksi-dari-koreksi
+// (rantai 2 level), menyebabkan versi PERANTARA (belum final) ikut
+// tampil berdampingan sama versi final — dan untuk pengajarHonorStats,
+// berisiko salah hitung honor kalau status berubah di tengah rantai.
+// summarizeTrainerAttendance() malah tidak punya dedup sama sekali —
+// setiap koreksi dalam rantai dihitung sebagai entry terpisah.
+//
+// Fix: sebuah record dianggap "sudah kedaluwarsa" kalau id-nya jadi
+// correctionOf milik record LAIN — tidak peduli berapa level rantainya.
+export function resolveCurrentAbsensiPengajar(records = []) {
+  const supersededIds = new Set(
+    (records || []).map(r => r?.correctionOf).filter(Boolean)
+  )
+  return (records || []).filter(r => r && !supersededIds.has(r.id))
+}
+
 // TA.C.1 (F-TA4, F-TA5; D-TA13, D-TA15; R-TA5, R-TA6) — personal
 // attendance summary helpers for `absensiPengajar` (D-TA7). Pure
 // functions so the VERIFY unit test can pin ownership + periode
@@ -36,19 +56,12 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
   const trainersById = new Map((trainer || []).map(t => [t.id, t]))
   const schoolsById = new Map((sekolah || []).map(s => [s.id, s]))
 
-  const latestByOriginal = new Map()
-  ;(absensiPengajar || [])
-    .filter(r => r.periode === periode)
-    .forEach(r => {
-      const key = r.correctionOf || r.id
-      const existing = latestByOriginal.get(key)
-      if (!existing || (r.correctionOf && !existing.correctionOf) || r.id > existing.id) {
-        latestByOriginal.set(key, r)
-      }
-    })
+  const current = resolveCurrentAbsensiPengajar(
+   (absensiPengajar || []).filter(r => r.periode === periode)
+ )
 
   const cellsBySchoolDay = new Map()
-  ;[...latestByOriginal.values()].forEach(r => {
+  ;current.forEach(r => {
     const t = trainersById.get(r.trainerId)
     const label = t?.tipePengajar === 'asisten' ? 'A' : 'I'
     const entry = {
@@ -67,7 +80,7 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
   const daysInMonth = new Date(y, m, 0).getDate()
   const dates = Array.from({ length: daysInMonth }, (_, i) => `${periode}-${String(i + 1).padStart(2, '0')}`)
 
-  const schoolIds = [...new Set([...latestByOriginal.values()].map(r => r.sekolahId))]
+  const schoolIds = [...new Set(current.map(r => r.sekolahId))]
   const rows = schoolIds
     .map(id => ({
       sekolahId: id,
@@ -79,9 +92,11 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
   return { periode, dates, rows }
 }
 export function summarizeTrainerAttendance({ absensiPengajar = [], trainerId, periode }) {
-  const mine = (absensiPengajar || []).filter(
-    r => r.trainerId === trainerId && (!periode || r.periode === periode),
-  )
+  const mine = resolveCurrentAbsensiPengajar(
+   (absensiPengajar || []).filter(
+     r => r.trainerId === trainerId && (!periode || r.periode === periode),
+   )
+ )
   const total = { Hadir: 0, Izin: 0, Alpa: 0 }
   const schoolIds = new Set()
   mine.forEach(r => {

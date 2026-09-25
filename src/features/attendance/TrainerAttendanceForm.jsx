@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { readCached, upsert, getRoleContext } from '../../lib/store.js'
+import { readCached, writeRemote, getRoleContext } from '../../lib/store.js'
 import { newAbsensiPengajar, localDateString } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 
@@ -55,7 +55,7 @@ export default function TrainerAttendanceForm({ trainerId }) {
     setSaved(false)
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!tanggal || !sekolahId) {
       setAlertMsg('Lengkapi tanggal dan sekolah.')
       setAlertOpen(true)
@@ -70,13 +70,31 @@ export default function TrainerAttendanceForm({ trainerId }) {
       catatan,
       cabangId: trainer?.cabangId || ctx.cabangId,
     })
-    upsert('absensiPengajar', record)
-    setSaved(true)
-    setStatus('Hadir')
-    setKeterangan('')
-    setCatatan('')
-    setSekolahId('')
-    setTimeout(() => setSaved(false), 2000)
+    try {
+     const result = await writeRemote('absensiPengajar', record)
+     if (result.status === 'forbidden') {
+       setAlertMsg(result.message || 'Kamu tidak punya izin mencatat absensi ini.')
+       setAlertOpen(true)
+       return
+     }
+     if (result.status === 'conflict') {
+       setAlertMsg('Sudah ada catatan absensi untuk tanggal/sekolah ini. Muat ulang halaman.')
+       setAlertOpen(true)
+       return
+     }
+     setSaved(true)
+     setStatus('Hadir')
+     setKeterangan('')
+     setCatatan('')
+     setSekolahId('')
+     setTimeout(() => setSaved(false), 2000)
+   } catch (error) {
+     // Sebelumnya (upsert(), fire-and-forget) error apa pun di sini
+     // gagal diam-diam — trainer kelihatan "berhasil" simpan padahal
+     // sebenarnya gagal. Sekarang pesan server asli ditampilkan.
+     setAlertMsg(error?.message || 'Gagal menyimpan absensi. Coba lagi.')
+     setAlertOpen(true)
+   }
   }
 
   return (
