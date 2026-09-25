@@ -349,3 +349,13 @@ Context: flat Potensi (53,5M) vs per-meeting tagihan (73,5M) disagree; some scho
 ## Remaining (explicitly Unverified)
 
 - Full E2E suite green + unrelated-failure triage — Unverified (only remaining; narrowest checks all green, full suite deferred per taste).
+
+## Addendum 2026-09-26 — Financing read-out (assistant inference, recorded at user request)
+
+Context: user asked where the financing problem stems from — our calculation or the flat-bill data. Inference below; no code changed, no decisions locked (Q1–Q7 still with the team).
+
+- I1 (verdict): arithmetic is clean on both paths. `finance.js:94` flat (`siswaBilling.length × sch.spp`) and `finance.js:206` `billingForSekolah` (tarif × Hadir-meetings × pupils) each recompute HIT (2026-09-26 spot-check of the real function: Sains 13.750.000 / Sabang 9.528.750 / SDM7 22.050.000, exact). Honor likewise: every recorded row pays its D2 tier; the G5 miss is absent rows, never wrong multiplication. (Note: G5 OUTCOME line says -875k/F13 225k while the body says -850.000/F13 200.000 with Rahmat 125k + Luthfi 75k = 200k — 850k is the arithmetically coherent figure; OUTCOME line looks like a stale edit.) The defect is architectural (two answers, P2), not mathematical.
+- I2 (labeling): `metodePembayaran null` = **Frozen**, set = **Session-Bill (Tarif)**. Backend owns the derivation (single source on the D-SB10 canonical path; UI never decides the category — taste #61). Frontend mirrors it: the SchoolForm opt-in toggle (`SchoolList.jsx:668`) becomes the category switch with these labels + an effective-bill preview; Potensi-per-school follows the invoice-path figure when Tarif, `spp × pupils` when Frozen (P1–P2). No schema change.
+- I3 (miss cause (a) — unrepresentable events): the exemplar HAS the data, the codebase has no write path. F9 (asisten sessions 650k — single `asistenId`, `newAbsensiPengajar` carries no asisten field) + F13 (cover sessions 200k — `authorize.php:203` ownership-only for `absensi` vs `:205-215` ownership+assignment for `absensiPengajar`). Resolution = new microtask(s), not more input data.
+- I4 (miss cause (b) — holes in ground truth): no code can HIT these. F4 (MA tariff but zero attendance; invoice nominals absent) + F14 (SMP Sains sessions but zero pupils). Resolution = team-supplied data or accepted Unverified (Q7).
+- I5 (cosmetic, neither): F15 fractional `spp` legacy (141666.67 → Potensi 53.535.011) needs a rounding rule, not a formula fix.
