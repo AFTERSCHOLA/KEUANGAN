@@ -300,7 +300,7 @@ MICROTASK: Run real finance.js on migrated DB vs exemplar-derived expectations
   EDIT:    none in src/ or DB (read-only: API dump + node import of finance.js + xlsx expected)
   RULES:   real code under test (no reimplementation); audit test assumptions first (taste #14); temp scripts removed
   DEPENDS: G2b, G3, G4c-2, G4d
-  OUTCOME: SPP 19/19 HIT + Trial-probe HIT; Honor 7 HIT with -875k fully decomposed (F9 650k + F13 225k)
+  OUTCOME: SPP 19/19 HIT + Trial-probe HIT; Honor 7 HIT with -850k fully decomposed (F9 650k + F13 200k)
   VERIFY:  table below recomputed from DB; zero UNPARSED cells; build green
   DONE-IF: verify passes; verdicts recorded with owners
 ```
@@ -309,7 +309,7 @@ MICROTASK: Run real finance.js on migrated DB vs exemplar-derived expectations
 
 All 19 configured schools HIT to the rupiah (formula + D8 tariffs + Hadir-only counting + Trial exclusion all hold). SMPN 18 stays FLAT legacy (F2, `basis flat_legacy`, flat target 4.750.000). Trial probe: 1 meeting × (1 Aktif + 1 Trial) @10000 → 10000 HIT (M5.4.3 holds). Largest tagihan: SDM7 22.050.000 (12×49×37.500), Sains 13.750.000 (10×22×62.500), Sabang 9.528.750 (9×77×13.750).
 
-### Honor session-role (matrix-expected vs `financialData`) — 7 HIT, -875.000 decomposed
+### Honor session-role (matrix-expected vs `financialData`) — 7 HIT, -850.000 decomposed
 
 HIT (7): Ditha 800k, Iqbaludin 1M, M Davin 200k, Rafly 750k, Paris 600k (double-slot days count 2 ✓), Vazira 450k (all-Sept-(I) → Newbie rate ✓), Widia 1.2M (incl. 09-01 bare-name EXPO).
 MISS total exp 6.975.000 vs app 6.125.000, delta -850.000 = F9 650.000 (Afrizal 100k + Alifah 150k + Asyifa 150k + Ira 150k + Raihan 50k + Zahra 50k: asisten sessions unrepresentable — no accounts/rows) + F13 200.000 (Rahmat 125k: Tridaya-(I) cover 75k + Istiqamah-(A) 50k role-aware, no assignment; Luthfi 75k: SMP-Tridaya 09-01 cover). No per-person-rate error anywhere the app could see a row: every recorded row honors D2 tiers exactly, and no single session exceeds Senior 100k (150k rows are multi-session sums, e.g. Rahmat 75+50, Asyifa 3×50, Ira 3×50).
@@ -354,7 +354,7 @@ Context: flat Potensi (53,5M) vs per-meeting tagihan (73,5M) disagree; some scho
 
 Context: user asked where the financing problem stems from — our calculation or the flat-bill data. Inference below; no code changed, no decisions locked (Q1–Q7 still with the team).
 
-- I1 (verdict): arithmetic is clean on both paths. `finance.js:94` flat (`siswaBilling.length × sch.spp`) and `finance.js:206` `billingForSekolah` (tarif × Hadir-meetings × pupils) each recompute HIT (2026-09-26 spot-check of the real function: Sains 13.750.000 / Sabang 9.528.750 / SDM7 22.050.000, exact). Honor likewise: every recorded row pays its D2 tier; the G5 miss is absent rows, never wrong multiplication. (Note: G5 OUTCOME line says -875k/F13 225k while the body says -850.000/F13 200.000 with Rahmat 125k + Luthfi 75k = 200k — 850k is the arithmetically coherent figure; OUTCOME line looks like a stale edit.) The defect is architectural (two answers, P2), not mathematical.
+- I1 (verdict): arithmetic is clean on both paths. `finance.js:94` flat (`siswaBilling.length × sch.spp`) and `finance.js:206` `billingForSekolah` (tarif × Hadir-meetings × pupils) each recompute HIT (2026-09-26 spot-check of the real function: Sains 13.750.000 / Sabang 9.528.750 / SDM7 22.050.000, exact). Honor likewise: every recorded row pays its D2 tier; the G5 miss is absent rows, never wrong multiplication. (Note 2026-09-26 fix: G5 OUTCOME/header said -875k/F13 225k while the body said -850.000/F13 200.000 with Rahmat 125k + Luthfi 75k = 200k — 850k is the arithmetically coherent figure; operative lines now read -850k/F13 200k. DB recompute: app honor 6,125,000 vs expected 6,975,000.) The defect is architectural (two answers, P2), not mathematical.
 - I2 (labeling): `metodePembayaran null` = **Frozen**, set = **Session-Bill (Tarif)**. Backend owns the derivation (single source on the D-SB10 canonical path; UI never decides the category — taste #61). Frontend mirrors it: the SchoolForm opt-in toggle (`SchoolList.jsx:668`) becomes the category switch with these labels + an effective-bill preview; Potensi-per-school follows the invoice-path figure when Tarif, `spp × pupils` when Frozen (P1–P2). No schema change.
 - I3 (miss cause (a) — unrepresentable events): the exemplar HAS the data, the codebase has no write path. F9 (asisten sessions 650k — single `asistenId`, `newAbsensiPengajar` carries no asisten field) + F13 (cover sessions 200k — `authorize.php:203` ownership-only for `absensi` vs `:205-215` ownership+assignment for `absensiPengajar`). Resolution = new microtask(s), not more input data.
 - I4 (miss cause (b) — holes in ground truth): no code can HIT these. F4 (MA tariff but zero attendance; invoice nominals absent) + F14 (SMP Sains sessions but zero pupils). Resolution = team-supplied data or accepted Unverified (Q7).

@@ -35,6 +35,10 @@ test('SB.C.1: sekolah metode pembayaran survives save and refresh', async ({ pag
 
   await field(page, 'Nama Sekolah').fill(SCH_NEW)
 
+  // The metode fields render only after the category toggle opts in
+  // (SchoolList.jsx conditional); a new school defaults to Flat / Beku.
+  await page.locator('label:has-text("Gunakan Tarif per Pertemuan") input[type="checkbox"]').check()
+
   await field(page, 'Basis Penagihan').selectOption({ value: 'trainer' })
   await field(page, 'Tarif per Pertemuan').fill('75000')
   await field(page, 'Pemicu Penagihan').selectOption({ value: 'per_n_pertemuan' })
@@ -117,6 +121,40 @@ test('SB.C.1: legacy sekolah without metodePembayaran still opens and saves', as
       return list.some(s => s.nama === name)
     }, SCH_LEGACY)
   ).toBe(true)
+
+  expect(pageErrors).toHaveLength(0)
+})
+
+// EF.A.1 (F-EF1; D-EF1) — category labels + effective-bill preview.
+test('EF.A.1: category switch shows Frozen/Tarif labels with live estimate', async ({ page, pageErrors }) => {
+  await loginViaApi(page, 'superadmin')
+  await gotoApp(page)
+
+  await openTab(page, 'Data Sekolah')
+  await page.getByRole('button', { name: 'Tambah Sekolah Mitra' }).click()
+
+  await expect(page.getByText('Metode penagihan')).toBeVisible()
+  await expect(page.getByText('Flat / Beku atau Tarif per Pertemuan')).toBeVisible()
+  await expect(page.getByText('Kategori: Flat / Beku')).toBeVisible()
+  await expect(page.getByText(/Hanya SMPN 18 untuk saat ini/)).toBeVisible()
+  const preview = page.getByText(/Estimasi tagihan:/)
+  await expect(preview).toBeVisible()
+
+  const toggle = page.locator('label:has-text("Gunakan Tarif per Pertemuan") input[type="checkbox"]')
+  await toggle.check()
+
+  await expect(page.getByText('Kategori: Tarif per Pertemuan')).toBeVisible()
+  await expect(page.getByText('Tarif per Pertemuan', { exact: true }).first()).toBeVisible()
+
+  await field(page, 'Tarif per Pertemuan').fill('50000')
+  await expect(preview).toContainText('50.000')
+
+  await field(page, 'Tarif per Pertemuan').fill('75000')
+  await expect(preview).toContainText('75.000')
+
+  await toggle.uncheck()
+  await expect(page.getByText('Kategori: Flat / Beku')).toBeVisible()
+  await expect(page.getByText(/Estimasi tagihan:/)).toBeVisible()
 
   expect(pageErrors).toHaveLength(0)
 })

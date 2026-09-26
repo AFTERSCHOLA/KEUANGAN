@@ -457,6 +457,22 @@ function BranchFilter({ cabang, value, onChange, role }) {
 }
 
 function SchoolForm({ form, setForm, save, onClose, cabang }) {
+  // EF.A.1 (F-EF1; D-EF1) — read-only effective-bill preview. Derived from
+  // existing form state only, never stored; pupil count mirrors the
+  // finance.js billing filter (status !== 'Trial). New schools have no
+  // pupils yet so the formula still renders with a 0 count.
+  const siswaCount = (() => {
+    try {
+      return readCached('siswa').filter(s => s.sekolahId === form.id && s.status !== 'Trial').length
+    } catch {
+      return 0
+    }
+  })()
+  const previewText = !form.metodePembayaran
+    ? `Estimasi tagihan: ${formatRupiah((Number(form.spp) || 0) * siswaCount)} (${siswaCount} siswa × ${formatRupiah(Number(form.spp) || 0)})`
+    : form.metodePembayaran.basis === 'trainer'
+      ? `Estimasi tagihan: ${formatRupiah((Number(form.metodePembayaran.tarifPerPertemuan) || 0))} (1 pertemuan × ${formatRupiah(Number(form.metodePembayaran.tarifPerPertemuan) || 0)})`
+      : `Estimasi tagihan: ${formatRupiah((Number(form.metodePembayaran.tarifPerPertemuan) || 0) * siswaCount)} (1 pertemuan × ${siswaCount} siswa × ${formatRupiah(Number(form.metodePembayaran.tarifPerPertemuan) || 0)})`
   return (
     <>
       <div>
@@ -658,8 +674,11 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
       </div>
 
       <div className="pt-2 border-t border-slate-100">
-  <p className="text-xs font-bold text-slate-400 uppercase mb-3">
-    Metode Pembayaran
+  <p className="text-xs font-bold text-slate-400 uppercase mb-1">
+    Metode penagihan
+  </p>
+  <p className="text-xs text-slate-500 mb-3">
+    Flat / Beku atau Tarif per Pertemuan
   </p>
 
   <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
@@ -690,6 +709,18 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
     />
     <span>Gunakan Tarif per Pertemuan</span>
   </label>
+
+  <p className="text-xs text-slate-500 mt-2">
+    {form.metodePembayaran ? 'Kategori: Tarif per Pertemuan' : 'Kategori: Flat / Beku'}
+  </p>
+  {!form.metodePembayaran && (
+    <p className="text-[11px] text-slate-400 mt-1">
+      Hanya SMPN 18 untuk saat ini (keputusan bertanggal 2026-09-26)
+    </p>
+  )}
+  <p className="text-xs font-semibold text-slate-700 mt-1">
+    {previewText}
+  </p>
 
   {form.metodePembayaran && (
     <div className="space-y-3 mt-3">

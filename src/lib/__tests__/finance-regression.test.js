@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { financialData } from '../finance.js'
+import { billingForSekolah, financialData } from '../finance.js'
 
 // SB.A.3 (F-SB1; D-SB7) — regression guard: financialData() tidak boleh
 // bergeser sedikit pun untuk data produksi (sekolah tanpa metodePembayaran)
@@ -116,5 +116,46 @@ describe('finance regression guard — SB.A.3', () => {
     for (const field of CHECKED_FIELDS) {
       expect(resultAfter[field]).toBe(resultBefore[field])
     }
+  })
+
+  // EF.A.3 (F-EF3; D-EF3) — fractional semester-legacy spp (141666.67)
+  // rounds once at the flat derivation; integer fixtures stay identical
+  // and the per-meeting path is untouched.
+  it('spp pecahan semester (141666.67) dibulatkan ke rupiah utuh; flat_legacy mirror sama; per-meeting tidak berubah', () => {
+    const entities = {
+      sekolah: [{ id: 'school-frac', nama: 'SD Semester Legacy', spp: 141666.67, trainerIds: [] }],
+      siswa: [
+        { id: 's-1', nama: 'A1', sekolahId: 'school-frac', status: 'Aktif' },
+        { id: 's-2', nama: 'A2', sekolahId: 'school-frac', status: 'Aktif' },
+        { id: 's-3', nama: 'A3', sekolahId: 'school-frac', status: 'Aktif' },
+        { id: 's-4', nama: 'T1', sekolahId: 'school-frac', status: 'Trial' },
+      ],
+      trainer: [],
+      absensi: [],
+      honorPayments: [],
+      sppPayments: [],
+    }
+    // 3 aktif × 141666.67 = 425000.01 mentah → 425000 bulat (Trial dikecualikan).
+    const result = financialData({ ...entities, periode: '2026-08' })
+    expect(result.sekolahFinance[0].targetSpp).toBe(425000)
+    expect(result.potensiSpp).toBe(425000)
+    expect(Number.isInteger(result.potensiSpp)).toBe(true)
+
+    const flat = billingForSekolah(entities.sekolah[0], { absensi: [], siswa: entities.siswa, periode: '2026-08' })
+    expect(flat.basis).toBe('flat_legacy')
+    expect(flat.total).toBe(425000)
+
+    const tarif = billingForSekolah(
+      {
+        id: 'school-frac', nama: 'SD Tarif', spp: 0,
+        metodePembayaran: { basis: 'siswa', tarifPerPertemuan: 20000, trigger: 'per_pertemuan', jumlahN: null, jumlahMinggu: null, sumberDana: 'sekolah' },
+      },
+      {
+        absensi: Array.from({ length: 5 }, (_, i) => ({ id: `a-${i}`, sekolahId: 'school-frac', periode: '2026-08', trainerStatus: 'Hadir' })),
+        siswa: entities.siswa.filter(s => s.status !== 'Trial'),
+        periode: '2026-08',
+      },
+    )
+    expect(tarif.total).toBe(20000 * 5 * 3)
   })
 })

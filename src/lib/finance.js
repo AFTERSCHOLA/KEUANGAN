@@ -86,7 +86,11 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     // M5.4.3 — Trial students never enter SPP potensi/tunggakan math (R4: ledger trust,
     // and Trial is a billing-status, not attendance/list-membership filter)
     const siswaBilling = siswaSekolah.filter(s => s.status !== 'Trial')
-    const targetSpp = siswaBilling.length * sch.spp
+    // EF.A.3 (F-EF3; D-EF3) — round once at the flat derivation so a
+    // semester-normalized fractional spp (e.g. 141666.67) never leaks
+    // fractions into targetSpp/Potensi. Integer-spp schools are unaffected
+    // (Math.round is identity); the per-meeting path is untouched.
+    const targetSpp = Math.round(siswaBilling.length * sch.spp)
     const realisasiSpp = siswaBilling.reduce((sum, s) => sum + sppPayments
       .filter(p => p.siswaId === s.id && p.periode === periode)
       .reduce((studentSum, p) => studentSum + Number(p.nominal || 0), 0), 0)
@@ -203,7 +207,9 @@ export function billingForSekolah(sch, { absensi = [], siswa = [], periode }) {
 
   if (!sch.metodePembayaran) {
     return {
-      total: siswaBilling.length * sch.spp,
+      // EF.A.3 (D-EF3) — same once-at-derivation rounding as the flat path
+      // above; per-meeting branches below use tarifPerPertemuan directly.
+      total: Math.round(siswaBilling.length * sch.spp),
       basis: 'flat_legacy',
       pertemuanAktual: null,
 

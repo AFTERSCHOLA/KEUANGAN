@@ -64,4 +64,31 @@ describe('TA.C.3 honor from absensiPengajar', () => {
     expect(senior.dibayar).toBe(100000)
     expect(senior.sisaHonor).toBe(100000)
   })
+
+  // EF.A.2 (F-EF2; D-EF2) — pin: keterangan is free text, never parsed.
+  // Same status with different remarks must price identically; a future
+  // `keterangan.includes(...)` branch breaks this test instead of silently
+  // changing pay. No app-code edit in this microtask.
+  it('keterangan text never changes pricing: Hadir+any-text prices full, Izin/Alpa+any-text prices 0', () => {
+    const texts = ['EXPO', 'Pengganti', 'Acara keluarga', '', null]
+    const rows = texts.flatMap((keterangan, i) => ([
+      {
+        id: `q-hadir-${i}`, trainerId: 'trn-senior', sekolahId: 'skl-1',
+        tanggal: `2026-09-${String(10 + i).padStart(2, '0')}`, periode: '2026-09',
+        status: 'Hadir', ...(keterangan === null ? {} : { keterangan }),
+      },
+      {
+        id: `q-absen-${i}`, trainerId: 'trn-baru', sekolahId: 'skl-1',
+        tanggal: `2026-09-${String(10 + i).padStart(2, '0')}`, periode: '2026-09',
+        status: i % 2 ? 'Alpa' : 'Izin', keterangan: keterangan ?? 'EXPO',
+      },
+    ]))
+    const stats = pengajarHonorStats(rows, '2026-09')
+    expect(stats.hadirByTrainer).toEqual({ 'trn-senior': texts.length })
+    const out = financialData({ ...base, absensiPengajar: rows })
+    const byId = Object.fromEntries(out.trainerFinance.map(t => [t.id, t]))
+    expect(byId['trn-senior'].bebanHonor).toBe(texts.length * 100000)
+    expect(byId['trn-baru'].bebanHonor).toBe(0)
+    expect(byId['trn-baru'].hadirSesi).toBe(0)
+  })
 })
