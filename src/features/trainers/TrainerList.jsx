@@ -42,6 +42,12 @@ export default function TrainerList() {
   const [initialPasswordDialog, setInitialPasswordDialog] = useState(null) // { username, password } | null
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
 
+  // CS.A.2 (F-CS1; D-CS1) — per-new-link slot picks, kept OUTSIDE `form`
+  // so they never land in trainer.payload (Part 2 R8). Shape mirrors the
+  // server `slotPicks` map: { [sekolahId]: Array<null | {hari,jamMulai,jamSelesai}> }.
+  // Absent/empty entry = no rows ("No pick, no row"); [null] = Semua slot.
+  const [slotPicks, setSlotPicks] = useState({})
+
   // PM.5.13: per-button copy feedback state. 'idle' | 'copied' | 'error'.
   const [copiedUsername, setCopiedUsername] = useState('idle')
   const [copiedPassword, setCopiedPassword] = useState('idle')
@@ -81,11 +87,13 @@ export default function TrainerList() {
   setForm(newTrainer(branch.id, branch.kode))
   setUsername('')
   setCreateAccount(true)
+  setSlotPicks({})
   setModalOpen(true)
 }
 
   function openEdit(t) {
     setForm({ ...t })
+    setSlotPicks({})
     setModalOpen(true)
   }
 
@@ -103,6 +111,15 @@ export default function TrainerList() {
     const oldSekolahIds = prev ? prev.sekolahIds : []
     const isEdit = prev !== undefined
     const isCreatingAccount = !isEdit && createAccount
+
+    // CS.A.2 — explicit picks for added links only; untouched/missing
+    // entries read as [] (no rows, D-CS1). Sent as request extras via
+    // writeRemote, never stored in any payload (Part 2 R8).
+    const picksMap = {}
+    form.sekolahIds.forEach(sId => {
+      if (!oldSekolahIds.includes(sId)) picksMap[sId] = slotPicks[sId] || []
+    })
+    const picksExtra = Object.keys(picksMap).length > 0 ? { slotPicks: picksMap } : null
 
     // USER_PROVISIONING.md D3: when creating a trainer with login account,
     // route through /api/users.php which atomically creates both the trainer
@@ -126,7 +143,7 @@ export default function TrainerList() {
         username: username.trim(),
         displayName: form.nama,
         trainer: trainerPayload,
-      })
+      }, picksExtra)
 
       if (result.status === 'forbidden') {
         showError(result.message || 'Kamu tidak punya izin untuk membuat akun trainer ini.')
@@ -158,7 +175,7 @@ if (serverTrainer && initialPassword) {
       // untouched, never rendered (R6).
       const trainerToSave = { ...form }
       delete trainerToSave.jadwal
-      result = await writeRemote('trainer', trainerToSave)
+      result = await writeRemote('trainer', trainerToSave, picksExtra)
 
       if (result.status === 'forbidden') {
         showError(result.message || 'Kamu tidak punya izin untuk menyimpan trainer ini.')
@@ -180,8 +197,11 @@ if (serverTrainer && initialPassword) {
 
         if (s) {
           schoolUpdates.push({
-            ...s,
-            trainerIds: (s.trainerIds || []).filter(tId => tId !== form.id),
+            record: {
+              ...s,
+              trainerIds: (s.trainerIds || []).filter(tId => tId !== form.id),
+            },
+            picks: null,
           })
         }
       }
@@ -192,9 +212,15 @@ if (serverTrainer && initialPassword) {
         const s = sekolahList.find(sch => sch.id === sId)
 
         if (s && !(s.trainerIds || []).includes(form.id)) {
+          // CS.A.2 — carry the same picks into the inverse write so the
+          // sekolah.php backstop cannot mint rows the admin did not pick
+          // (overlap skips what the trainer write already created).
           schoolUpdates.push({
-            ...s,
-            trainerIds: [...(s.trainerIds || []), form.id],
+            record: {
+              ...s,
+              trainerIds: [...(s.trainerIds || []), form.id],
+            },
+            picks: picksExtra,
           })
         }
       }
@@ -203,7 +229,7 @@ if (serverTrainer && initialPassword) {
     let schoolUpdateFailed = false
 
     for (const s of schoolUpdates) {
-      const schoolResult = await writeRemote('sekolah', s)
+      const schoolResult = await writeRemote('sekolah', s.record, s.picks)
 
       if (
         schoolResult.status === 'forbidden' ||
@@ -290,7 +316,7 @@ if (serverTrainer && initialPassword) {
         </div>
         {canCreateOrDeleteTrainers && (
   <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Trainer">
-    <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} saving={saving} />
+    <TrainerForm form={form} setForm={setForm} save={save} onClose={() => setModalOpen(false)} saving={saving} slotPicks={slotPicks} setSlotPicks={setSlotPicks} prevSekolahIds={[]} />
   </Modal>
 )}
         <ConfirmDialog open={confirmOpen} onCancel={() => { setConfirmOpen(false); setPendingRemoveId(null) }} onConfirm={doRemove} title="Konfirmasi" body={confirmMsg} danger={true} confirmLabel="Hapus" />
@@ -377,6 +403,9 @@ if (serverTrainer && initialPassword) {
       setCreateAccount={setCreateAccount}
       username={username}
       setUsername={setUsername}
+      slotPicks={slotPicks}
+      setSlotPicks={setSlotPicks}
+      prevSekolahIds={(trainers.find(t => t.id === form.id)?.sekolahIds) || []}
     />
   </Modal>
 )}
@@ -446,7 +475,7 @@ if (serverTrainer && initialPassword) {
   )
 }
 
-function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccount, setCreateAccount, username, setUsername }) {
+function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccount, setCreateAccount, username, setUsername, slotPicks, setSlotPicks, prevSekolahIds }) {
   const sekolah = readCached('sekolah')
   return (
     <>
@@ -470,13 +499,70 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
         <label className="text-xs font-bold text-slate-400 uppercase">Sekolah Penugasan</label>
         <div className="space-y-1 mt-1">
           {sekolah.map(s => (
-            <label key={s.id} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.sekolahIds.includes(s.id)} disabled={saving} onChange={e => {
-                const ids = e.target.checked ? [...form.sekolahIds, s.id] : form.sekolahIds.filter(id => id !== s.id)
-                setForm({ ...form, sekolahIds: ids })
-              }} className="rounded" />
-              {s.nama}
-            </label>
+            <div key={s.id}>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.sekolahIds.includes(s.id)} disabled={saving} onChange={e => {
+                  const ids = e.target.checked ? [...form.sekolahIds, s.id] : form.sekolahIds.filter(id => id !== s.id)
+                  setForm({ ...form, sekolahIds: ids })
+                  // CS.A.2 — dropping the link drops its picks with it.
+                  if (!e.target.checked) {
+                    setSlotPicks(prev => {
+                      if (!(s.id in prev)) return prev
+                      const next = { ...prev }
+                      delete next[s.id]
+                      return next
+                    })
+                  }
+                }} className="rounded" />
+                {s.nama}
+              </label>
+              {/* CS.A.2 (D-CS1) — explicit slot pick per newly added link.
+                  Nothing checked = no rows ("No pick, no row"); "Semua slot"
+                  = one unscoped row. Previously linked schools keep their
+                  rows untouched (re-scope in Penugasan Pengajar). */}
+              {form.sekolahIds.includes(s.id) && !(prevSekolahIds || []).includes(s.id) && (
+                <div className="ml-6 mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50 p-2" aria-label={`Slot untuk ${s.nama}`}>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase">Slot penugasan</p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(slotPicks[s.id] || []).some(p => p === null)}
+                      disabled={saving}
+                      onChange={e => {
+                        setSlotPicks(prev => ({ ...prev, [s.id]: e.target.checked ? [null] : [] }))
+                      }}
+                      className="rounded"
+                    />
+                    Semua slot
+                  </label>
+                  {(s.jadwalList || []).map((slot, idx) => {
+                    const triple = { hari: slot.dayOfWeek, jamMulai: slot.time, jamSelesai: slot.endTime }
+                    const tripleKey = JSON.stringify(triple)
+                    const checked = (slotPicks[s.id] || []).some(p => p !== null && JSON.stringify(p) === tripleKey)
+                    return (
+                      <label key={idx} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={saving}
+                          onChange={e => {
+                            setSlotPicks(prev => {
+                              const cur = (prev[s.id] || []).filter(p => p !== null)
+                              const next = e.target.checked
+                                ? [...cur.filter(p => JSON.stringify(p) !== tripleKey), triple]
+                                : cur.filter(p => JSON.stringify(p) !== tripleKey)
+                              return { ...prev, [s.id]: next }
+                            })
+                          }}
+                          className="rounded"
+                        />
+                        {`${slot.dayOfWeek} · ${slot.time}–${slot.endTime}`}
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>

@@ -96,10 +96,16 @@ function createUser(array $data, array $user): never {
     }
 
     // ---- 3. Trainer-record creation (atomic with the account) ----
+    // CS.A.2 (D-CS1) — optional top-level `slotPicks` narrows assignment
+    // auto-create to admin-picked slots; absent/null preserves AP.A.1.
+    [$slotPicks, $slotPicksError] = parseSlotPicks($data['slotPicks'] ?? null);
+    if ($slotPicksError !== null) {
+        jsonResponse(['error' => $slotPicksError], 422);
+    }
     $trainerRecord = null;
     if ($targetRole === 'trainer') {
         $trainerPayload = isset($data['trainer']) && is_array($data['trainer']) ? $data['trainer'] : [];
-        $trainerRecord = createTrainerRecord($trainerPayload, $cabangId, $user);
+        $trainerRecord = createTrainerRecord($trainerPayload, $cabangId, $user, $slotPicks);
         if ($trainerRecord === null) {
             jsonResponse(['error' => 'Gagal membuat record trainer (nama wajib diisi)'], 422);
         }
@@ -181,7 +187,7 @@ function createUser(array $data, array $user): never {
     jsonResponse($response, 201);
 }
 
-function createTrainerRecord(array $payload, string $cabangId, array $user): ?array {
+function createTrainerRecord(array $payload, string $cabangId, array $user, ?array $slotPicks = null): ?array {
     // Mirrors the validation done in trainer.php, minus the HTTP layer.
     // Returns null on validation failure; the caller maps that to a 422.
     $name = isset($payload['nama']) && is_string($payload['nama']) ? trim($payload['nama']) : '';
@@ -255,7 +261,7 @@ function createTrainerRecord(array $payload, string $cabangId, array $user): ?ar
     // included (D9 atomicity preserved). Same-branch gated in the helper.
     if (!empty($sekolahIds)) {
         foreach ($sekolahIds as $sekolahId) {
-            ensureAssignment(database(), $trainerId, $sekolahId, $user);
+            ensureAssignment(database(), $trainerId, $sekolahId, $user, $slotPicks, null);
         }
     }
 

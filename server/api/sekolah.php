@@ -18,6 +18,14 @@ if (!isset($data['id']) || !is_string($data['id']) || trim($data['id']) === '') 
     jsonResponse(['error' => 'Record membutuhkan id'], 422);
 }
 
+// CS.A.2 (D-CS1) — optional `slotPicks` narrows assignment auto-create to
+// admin-picked slots; absent/null preserves AP.A.1. Stripped from the
+// stored payload below (Part 2 R8).
+[$slotPicks, $slotPicksError] = parseSlotPicks($data['slotPicks'] ?? null);
+if ($slotPicksError !== null) {
+    jsonResponse(['error' => $slotPicksError], 422);
+}
+
 $pdo = database();
 
 if ($action === 'delete') {
@@ -197,6 +205,7 @@ if (($user['role'] ?? null) === 'admin_cabang') {
 
 $record = $data;
 $record['cabangId'] = $cabangId;
+unset($record['slotPicks']);
 
 if ($action === 'create') {
     requireAuthorization('create', 'sekolah', $record, $user);
@@ -216,7 +225,7 @@ if ($action === 'create') {
     // AP.A.1 (D-AP1) — school created with trainers already linked.
     $createdLinks = isset($record['trainerIds']) && is_array($record['trainerIds']) ? $record['trainerIds'] : [];
     if ($createdLinks !== []) {
-        ensureAssignmentsForTrainerIds($pdo, $createdLinks, (string) $record['id'], $user);
+        ensureAssignmentsForTrainerIds($pdo, $createdLinks, (string) $record['id'], $user, $slotPicks, null);
     }
     jsonResponse(['ok' => true, 'id' => $record['id'], 'cabangId' => $cabangId], 201);
 }
@@ -257,6 +266,6 @@ $addedTrainers = array_values(array_diff(
     array_values(array_filter($oldTrainerLinks, 'is_string'))
 ));
 if ($addedTrainers !== []) {
-    ensureAssignmentsForTrainerIds($pdo, $addedTrainers, (string) $record['id'], $user);
+    ensureAssignmentsForTrainerIds($pdo, $addedTrainers, (string) $record['id'], $user, $slotPicks, null);
 }
 jsonResponse(['ok' => true, 'id' => $record['id'], 'cabangId' => $cabangId, 'version' => (int) $existing['version'] + 1], 200);

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, writeRemote, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
-import { newPenugasanRow, validateRowDates } from '../../lib/penugasan.js'
+import { newPenugasanRow, validateRowDates, PENUGASAN_HARI } from '../../lib/penugasan.js'
 import Modal from '../../components/Modal.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -20,7 +20,7 @@ export default function PenugasanManager() {
   useEffect(() => subscribeStore(bump), [bump])
 
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState({ sekolahId: '', trainerId: '', asistenId: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
+  const [form, setForm] = useState({ sekolahId: '', trainerId: '', asistenId: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
   // AP.B.1 (D-AP3) — edit targets one row inside its host record; cross-host
   // moves are out of scope (Sekolah/Instruktur selects lock in edit mode).
   const [editing, setEditing] = useState(null) // { hostId, assignmentId } | null
@@ -93,13 +93,25 @@ export default function PenugasanManager() {
     .catch(() => {})
 }, [rows, trainerById, crossScopeNames, lookupAttempted])
 
+  // CS.A.1 (F-CS1; D-CS1/D-PS6) — human-readable scope for the Slot
+  // column: `Semua slot` when unscoped, else `Hari · HH:MM–HH:MM`
+  // (hari-only rows render the day name alone).
+  function slotLabel(a) {
+    const hari = a && a.hari ? String(a.hari) : ''
+    const mulai = a && a.jamMulai ? String(a.jamMulai) : ''
+    const selesai = a && a.jamSelesai ? String(a.jamSelesai) : ''
+    if (!hari) return 'Semua slot'
+    if (!mulai || !selesai) return hari
+    return `${hari} · ${mulai}–${selesai}`
+  }
+
   function showError(message) {
     setAlertMsg(message)
     setAlertOpen(true)
   }
 
   function openAdd() {
-    setForm({ sekolahId: '', trainerId: '', asistenId: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
+    setForm({ sekolahId: '', trainerId: '', asistenId: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
     setEditing(null)
     setModalOpen(true)
   }
@@ -112,6 +124,9 @@ export default function PenugasanManager() {
       sekolahId: row.sekolahId || '',
       trainerId: row.trainerId || '',
       asistenId: row.asistenId || '',
+      hari: row.hari || '',
+      jamMulai: row.jamMulai || '',
+      jamSelesai: row.jamSelesai || '',
       periodeMulai: row.periodeMulai || localDateString(),
       ongoing: !(row.periodeSelesai != null && String(row.periodeSelesai).trim() !== ''),
       periodeSelesai: row.periodeSelesai || '',
@@ -124,7 +139,20 @@ export default function PenugasanManager() {
   async function save() {
     if (saving) return
     const periodeSelesai = form.ongoing ? null : (form.periodeSelesai || null)
-    const err = validateRowDates({ sekolahId: form.sekolahId, trainerId: form.trainerId, periodeMulai: form.periodeMulai, periodeSelesai })
+    // CS.A.1 — slot triple validates against the picked school's
+    // jadwalList vocabulary (entities.php mirrors server-side); empty Hari
+    // reads as unscoped `Semua slot`.
+    const sch = sekolahById.get(form.sekolahId)
+    const err = validateRowDates({
+      sekolahId: form.sekolahId,
+      trainerId: form.trainerId,
+      periodeMulai: form.periodeMulai,
+      periodeSelesai,
+      hari: form.hari || null,
+      jamMulai: form.jamMulai || null,
+      jamSelesai: form.jamSelesai || null,
+      sekolahJadwalList: sch?.jadwalList,
+    })
     if (err) {
       showError(err)
       return
@@ -138,18 +166,21 @@ export default function PenugasanManager() {
       showError('Instruktur tidak ditemukan. Muat ulang halaman dan coba lagi.')
       return
     }
-    const sch = sekolahById.get(form.sekolahId)
     setSaving(true)
     try {
       const existing = Array.isArray(host.penugasanPengajar) ? host.penugasanPengajar : []
       let next
       if (editing && editing.hostId === host.id) {
         // AP.B.1 — map-replace by row id; id preserved so history joins hold.
+        // CS.A.1 — slot triple travels with the row (D-PS2/D-CS1).
         next = existing.map(a => (a && a.id === editing.assignmentId
           ? {
               ...a,
               asistenId: form.asistenId || null,
               cabangId: sch?.cabangId || host?.cabangId || a.cabangId || null,
+              hari: form.hari || null,
+              jamMulai: form.jamMulai || null,
+              jamSelesai: form.jamSelesai || null,
               periodeMulai: form.periodeMulai,
               periodeSelesai,
               aktif: form.aktif,
@@ -164,6 +195,9 @@ export default function PenugasanManager() {
           // (entities.php:176-194); cross-branch rows correctly 422 instead of
           // silently landing (D-PG plan §4).
           cabangId: sch?.cabangId || host?.cabangId || null,
+          hari: form.hari || null,
+          jamMulai: form.jamMulai || null,
+          jamSelesai: form.jamSelesai || null,
           periodeMulai: form.periodeMulai,
           periodeSelesai,
           aktif: form.aktif,
@@ -272,6 +306,7 @@ export default function PenugasanManager() {
                 <th className="py-4 px-6">Sekolah</th>
                 <th className="py-4 px-6">Instruktur</th>
                 <th className="py-4 px-6">Asisten</th>
+                <th className="py-4 px-6">Slot</th>
                 <th className="py-4 px-6">Mulai</th>
                 <th className="py-4 px-6">Selesai</th>
                 <th className="py-4 px-6 text-center">Status</th>
@@ -284,6 +319,7 @@ export default function PenugasanManager() {
                   <td className="py-4 px-6 font-bold text-slate-800">{sekolahById.get(r.sekolahId)?.nama || 'Sekolah tidak ditemukan'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || 'Trainer tidak ditemukan'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Memuat...') : '—'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{slotLabel(r)}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.periodeMulai || '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.periodeSelesai || 'Berlaku terus'}</td>
                   <td className="py-4 px-6 text-center">
@@ -332,7 +368,7 @@ export default function PenugasanManager() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     Belum ada penugasan.
                   </td>
                 </tr>
@@ -380,6 +416,39 @@ export default function PenugasanManager() {
             <option value="">— Tanpa asisten —</option>
             {trainers.filter(t => t.id !== form.trainerId).map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
           </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Slot <span className="normal-case font-normal text-slate-400">(opsional — Semua slot bila kosong)</span></label>
+          <div className="flex gap-2 mt-1">
+            <select
+              value={form.hari}
+              onChange={e => setForm({ ...form, hari: e.target.value, jamMulai: e.target.value ? form.jamMulai : '', jamSelesai: e.target.value ? form.jamSelesai : '' })}
+              disabled={saving}
+              aria-label="Hari"
+              className="flex-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
+            >
+              <option value="">Semua hari</option>
+              {PENUGASAN_HARI.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <input
+              type="time"
+              value={form.jamMulai}
+              onChange={e => setForm({ ...form, jamMulai: e.target.value })}
+              disabled={saving || !form.hari}
+              aria-label="Jam Mulai"
+              title="Jam Mulai"
+              className="flex-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60"
+            />
+            <input
+              type="time"
+              value={form.jamSelesai}
+              onChange={e => setForm({ ...form, jamSelesai: e.target.value })}
+              disabled={saving || !form.hari}
+              aria-label="Jam Selesai"
+              title="Jam Selesai"
+              className="flex-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60"
+            />
+          </div>
         </div>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Tanggal Mulai</label>

@@ -64,7 +64,17 @@ if ($method === 'POST' || $method === 'PUT') {
     // links. Injected into $data BEFORE masterWrite so the versioned
     // write stays atomic (no extra bump, 409-safe). Same-branch gated;
     // cross-branch links persist (legacy behavior) but gain no row.
+    // CS.A.2 (D-CS1) — optional `slotPicks` ({sekolahId: [picks]}) narrows
+    // creation to admin-picked slots; absent/null preserves AP.A.1
+    // (one unscoped row), malformed 422s. Stripped before masterWrite so
+    // it never lands in trainer.payload (Part 2 R8). Pick vocabulary is
+    // enforced strictly here (masterWrite performs no entity validation).
     $newLinks = isset($data['sekolahIds']) && is_array($data['sekolahIds']) ? $data['sekolahIds'] : [];
+    [$slotPicks, $slotPicksError] = parseSlotPicks($data['slotPicks'] ?? null);
+    if ($slotPicksError !== null) {
+        jsonResponse(['error' => $slotPicksError], 422);
+    }
+    unset($data['slotPicks']);
     if ($newLinks !== []) {
         $oldLinks = [];
         $existingRows = [];
@@ -93,7 +103,17 @@ if ($method === 'POST' || $method === 'PUT') {
                 if ($chk->fetchColumn() === $cabangId) $sameBranch[] = $sid;
                 else error_log("trainer.php auto-assignment skipped non-same-branch link sekolah={$sid}");
             }
-            $rows = missingAssignmentLinks($existingRows, (string) ($data['id'] ?? ''), $sameBranch, autoAssignmentToday());
+            // Strict pick gate: out-of-vocabulary picks fail the save
+            // before anything persists (nothing written yet at this point).
+            if ($slotPicks !== null) {
+                foreach ($sameBranch as $sid) {
+                    foreach ($slotPicks[$sid] ?? [] as $pick) {
+                        $pickError = validateSlotPick(database(), $sid, is_array($pick) ? $pick : null);
+                        if ($pickError !== null) jsonResponse(['error' => $pickError], 422);
+                    }
+                }
+            }
+            $rows = missingAssignmentLinks($existingRows, (string) ($data['id'] ?? ''), $sameBranch, autoAssignmentToday(), $slotPicks, null);
             if ($rows !== []) {
                 $data['penugasanPengajar'] = array_values(array_merge($existingRows, $rows));
                 auditEvent('assignment_auto_created', $user, 'trainer', (string) ($data['id'] ?? ''), [

@@ -66,6 +66,11 @@ test('AP.A.3 school jadwal edit propagates with zero penugasan writes', async ({
   await page.getByRole('button', { name: 'Tambah Trainer Baru' }).click()
   await fieldInput(page, 'Nama Trainer').fill(TRAINER_NAME)
   await page.locator('label', { hasText: SCH }).locator('input[type="checkbox"]').check()
+  // CS.A.2 — pick Semua slot: the row stays unscoped so the school jadwal
+  // edit below keeps deriving live with zero penugasan writes (D-AP2).
+  const slotBlock = page.locator(`div[aria-label="Slot untuk ${SCH}"]`)
+  await expect(slotBlock).toBeVisible({ timeout: 10000 })
+  await slotBlock.getByRole('checkbox', { name: 'Semua slot' }).check()
   const accBox = page.locator('label', { hasText: 'Buat akun login untuk trainer ini' }).locator('input[type="checkbox"]')
   if (await accBox.count() && await accBox.isChecked()) await accBox.uncheck()
   await page.getByRole('button', { name: 'Simpan' }).click()

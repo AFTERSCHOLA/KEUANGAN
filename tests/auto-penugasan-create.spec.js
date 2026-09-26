@@ -11,6 +11,15 @@ const localToday = (() => {
   const n = new Date()
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 })()
+// CS.A.2 test-assumption fix (taste #14): periodeMulai is stamped by the
+// SERVER clock (PHP TZ, currently Europe/Berlin) while localToday is the
+// browser clock (WIB here) — they disagree 00:00–07:00 WIB daily. Accept
+// either frame; both pin "creation date" (rejects null/epoch/future).
+const localYesterday = (() => {
+  const n = new Date()
+  n.setDate(n.getDate() - 1)
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+})()
 
 function fieldInput(page, label) {
   return page.locator(`div:has(> label:text-is("${label}"))`).first().locator('input').first()
@@ -37,6 +46,13 @@ async function readViaApi(page, entity, csrf) {
   if (!res.ok()) throw new Error(`read ${entity} -> ${res.status()}`)
   const body = await res.json()
   return Array.isArray(body) ? body : (body[entity] || [])
+}
+// CS.A.2 — drive the link-add slot picks: check the school's single slot
+// inside its Slot block (scoped row), or "Semua slot" for unscoped.
+async function pickSlot(page, schoolName, name) {
+  const block = page.locator(`div[aria-label="Slot untuk ${schoolName}"]`)
+  await expect(block).toBeVisible({ timeout: 10000 })
+  await block.getByRole('checkbox', { name }).check()
 }
 async function primeCsrf(page) {
   const res = await page.request.get('/api/auth/csrf.php')
@@ -86,6 +102,7 @@ test('AP.A.1 auto-create assignment on school-trainer link', async ({ page, page
   await fieldInput(page, 'Nama Trainer').fill(TRAINER_NAME)
   await page.locator('div:has(> label:text-is("Honor per Kedatangan"))').first().locator('input').fill('50000')
   await page.locator('label', { hasText: SCH_A }).locator('input[type="checkbox"]').check()
+  await pickSlot(page, SCH_A, new RegExp(todayName))
   const accBox = page.locator('label', { hasText: 'Buat akun login untuk trainer ini' }).locator('input[type="checkbox"]')
   if (await accBox.count() && !(await accBox.isChecked())) await accBox.check()
   await fieldInput(page, 'Username Login').fill(TRAINER_USER)
@@ -104,7 +121,7 @@ test('AP.A.1 auto-create assignment on school-trainer link', async ({ page, page
   const rowsA = (trow.penugasanPengajar || []).filter(r => r.sekolahId && r.aktif === true)
   console.log(`## AP.A.1 users.php path rows: ${rowsA.length}`)
   expect(rowsA.length).toBe(1)
-  expect(rowsA[0].periodeMulai).toBe(localToday)
+  expect([localToday, localYesterday]).toContain(rowsA[0].periodeMulai)
   expect(rowsA[0].periodeSelesai ?? null).toBe(null)
   expect(rowsA[0].asistenId ?? null).toBe(null)
   const trainerId = trow.id
@@ -117,6 +134,7 @@ test('AP.A.1 auto-create assignment on school-trainer link', async ({ page, page
   const card = page.locator('div.bg-white.p-5', { hasText: TRAINER_NAME }).first()
   await card.getByTitle('Edit').or(card.locator('button').nth(0)).first().click()
   await page.locator('label', { hasText: SCH_B }).locator('input[type="checkbox"]').check()
+  await pickSlot(page, SCH_B, new RegExp(todayName))
   await page.getByRole('button', { name: 'Simpan' }).click()
   await page.waitForTimeout(800)
   await clearOverlays(page)

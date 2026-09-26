@@ -523,6 +523,101 @@ check('admin A deleting unassigned (NULL cabang_id) trainer -> 403', $status ===
 
 $pdo->exec("DELETE FROM trainer WHERE id = '$trnOrphan'");
 
+// ============================================================
+// CS.A.2 (F-CS1; D-CS1) — link-add slot picks on trainer.php.
+// Optional `slotPicks` narrows auto-create to picked slots; absent
+// preserves AP.A.1 (one unscoped row); malformed 422s; the key never
+// lands in trainer.payload (Part 2 R8).
+// ============================================================
+echo "\n--- trainer.php (CS.A.2 slotPicks) ---\n";
+$csaSch = 'skl-csa2-' . uniqid();
+$pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)')->execute([
+    ':id' => $csaSch,
+    ':cabang_id' => $branchA,
+    ':payload' => json_encode([
+        'id' => $csaSch,
+        'cabangId' => $branchA,
+        'jadwalList' => [['dayOfWeek' => 'Senin', 'time' => '09:00', 'endTime' => '10:00']],
+    ], JSON_UNESCAPED_UNICODE),
+]);
+$csaTrn = static function (PDO $pdo, string $base, string $cookie, string $csrf, string $branchA): array {
+    $t = ['id' => 'trn-csa2-' . uniqid(), 'nama' => 'Trainer CSA2'];
+    [$status] = req('POST', "$base/server/api/trainer.php", $t, $cookie, $csrf);
+    check('CS.A.2 fixture trainer created -> 201', $status === 201, "got $status");
+    return $t;
+};
+$csaPayload = static function (PDO $pdo, string $id): array {
+    $stmt = $pdo->prepare('SELECT payload FROM trainer WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+    $decoded = is_array($row) ? json_decode((string) $row['payload'], true) : null;
+    return is_array($decoded) ? $decoded : [];
+};
+
+$trnSemua = $csaTrn($pdo, $base, $cookieAdminA, $csrfAdminA, $branchA);
+[$status] = req('POST', "$base/server/api/trainer.php", [
+    'action' => 'update', 'id' => $trnSemua['id'], 'version' => 1, 'nama' => $trnSemua['nama'],
+    'sekolahIds' => [$csaSch], 'slotPicks' => [$csaSch => [null]],
+], $cookieAdminA, $csrfAdminA);
+check('CS.A.2 Semua-slot pick links one unscoped row -> 200', $status === 200, "got $status");
+$rowsSemua = $csaPayload($pdo, $trnSemua['id'])['penugasanPengajar'] ?? null;
+check(
+    'CS.A.2 Semua-slot row is unscoped',
+    is_array($rowsSemua) && count($rowsSemua) === 1 && ($rowsSemua[0]['hari'] ?? null) === null,
+    json_encode($rowsSemua)
+);
+check(
+    'CS.A.2 slotPicks never lands in trainer.payload (R8)',
+    !array_key_exists('slotPicks', $csaPayload($pdo, $trnSemua['id'])),
+    'slotPicks persisted'
+);
+
+$trnScoped = $csaTrn($pdo, $base, $cookieAdminA, $csrfAdminA, $branchA);
+[$status] = req('POST', "$base/server/api/trainer.php", [
+    'action' => 'update', 'id' => $trnScoped['id'], 'version' => 1, 'nama' => $trnScoped['nama'],
+    'sekolahIds' => [$csaSch],
+    'slotPicks' => [$csaSch => [['hari' => 'Senin', 'jamMulai' => '09:00', 'jamSelesai' => '10:00']]],
+], $cookieAdminA, $csrfAdminA);
+check('CS.A.2 scoped pick links one scoped row -> 200', $status === 200, "got $status");
+$rowsScoped = $csaPayload($pdo, $trnScoped['id'])['penugasanPengajar'] ?? null;
+check(
+    'CS.A.2 scoped row carries the picked triple',
+    is_array($rowsScoped) && count($rowsScoped) === 1
+        && ($rowsScoped[0]['hari'] ?? null) === 'Senin'
+        && ($rowsScoped[0]['jamMulai'] ?? null) === '09:00'
+        && ($rowsScoped[0]['jamSelesai'] ?? null) === '10:00',
+    json_encode($rowsScoped)
+);
+
+$trnLegacy = $csaTrn($pdo, $base, $cookieAdminA, $csrfAdminA, $branchA);
+[$status] = req('POST', "$base/server/api/trainer.php", [
+    'action' => 'update', 'id' => $trnLegacy['id'], 'version' => 1, 'nama' => $trnLegacy['nama'],
+    'sekolahIds' => [$csaSch],
+    'slotPicks' => [$csaSch => [['hari' => 'Senin', 'jamMulai' => '09:00', 'jamSelesai' => '11:00']]],
+], $cookieAdminA, $csrfAdminA);
+check('CS.A.2 out-of-vocabulary pick rejected -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", [
+    'action' => 'update', 'id' => $trnLegacy['id'], 'version' => 1, 'nama' => $trnLegacy['nama'],
+    'sekolahIds' => [$csaSch], 'slotPicks' => 'bogus',
+], $cookieAdminA, $csrfAdminA);
+check('CS.A.2 malformed slotPicks rejected -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/trainer.php", [
+    'action' => 'update', 'id' => $trnLegacy['id'], 'version' => 1, 'nama' => $trnLegacy['nama'],
+    'sekolahIds' => [$csaSch],
+], $cookieAdminA, $csrfAdminA);
+check('CS.A.2 no picks preserves AP.A.1 unscoped row -> 200', $status === 200, "got $status");
+$rowsLegacy = $csaPayload($pdo, $trnLegacy['id'])['penugasanPengajar'] ?? null;
+check(
+    'CS.A.2 legacy row shape byte-identical (no hari key)',
+    is_array($rowsLegacy) && count($rowsLegacy) === 1 && !array_key_exists('hari', $rowsLegacy[0]),
+    json_encode($rowsLegacy)
+);
+
+$pdo->exec("DELETE FROM trainer WHERE id IN ('{$trnSemua['id']}', '{$trnScoped['id']}', '{$trnLegacy['id']}')");
+$pdo->exec("DELETE FROM sekolah WHERE id = '$csaSch'");
+
 echo "\n--- trainer.php (delete) ---\n";
 [$status] = req('POST', "$base/server/api/trainer.php", ['id' => $trnNew['id'], 'action' => 'delete'], $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
 check('admin B deleting branch A trainer -> 403', $status === 403, "got $status");

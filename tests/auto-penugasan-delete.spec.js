@@ -125,6 +125,10 @@ test('AP.B.2 assignment delete preserves attendance history and honor math', asy
   await fieldInput(page, 'Nama Trainer').fill(TRAINER_NAME)
   await page.locator('div:has(> label:text-is("Honor per Kedatangan"))').first().locator('input').fill('50000')
   await page.locator('label', { hasText: SCH }).locator('input[type="checkbox"]').check()
+  // CS.A.2 — pick the school's single slot so the link mints a scoped row.
+  const slotBlock = page.locator(`div[aria-label="Slot untuk ${SCH}"]`)
+  await expect(slotBlock).toBeVisible({ timeout: 10000 })
+  await slotBlock.getByRole('checkbox', { name: new RegExp(todayName) }).check()
   const accBox = page.locator('label', { hasText: 'Buat akun login untuk trainer ini' }).locator('input[type="checkbox"]')
   if (await accBox.count() && !(await accBox.isChecked())) await accBox.check()
   await fieldInput(page, 'Username Login').fill(TRAINER_USER)
@@ -147,8 +151,19 @@ test('AP.B.2 assignment delete preserves attendance history and honor math', asy
   await page.getByLabel('Akun').first().click()
   const syncItem = page.getByRole('menuitem', { name: /Sinkronisasi/ })
   await expect(syncItem).toBeVisible({ timeout: 10000 })
-  await syncItem.click()
-  await page.waitForTimeout(3000)
+  // CS.A.2 spec-assumption fix (taste #14): the Hadir save above syncs
+  // directly (TA.B.2 design), so the outbox is empty and the menu item is
+  // correctly disabled — there is nothing to flush. Click only when items
+  // are actually pending; the API reads below stay falsifiable either way.
+  if (await syncItem.isEnabled()) {
+    await syncItem.click()
+    await page.waitForTimeout(3000)
+  } else {
+    console.log('## AP.B.2 sync skipped: outbox empty (direct-sync active)')
+    // The sync click would have closed the Akun menu via handle(); skipping
+    // leaves it open, which would invert uiLogout's toggle below — close it.
+    await page.getByLabel('Akun').first().click()
+  }
 
   // ---- 3. admin: beban>0, Hapus assignment, beban unchanged ----
   await clearOverlays(page)

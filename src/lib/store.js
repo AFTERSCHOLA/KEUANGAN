@@ -366,19 +366,23 @@ export function prepareWritePayload(key, record, ctx) {
   }
 }
 
-export async function writeRemote(key, record) {
+export async function writeRemote(key, record, extraBody = null) {
   const url = WRITE_ENDPOINTS[key]
   if (!url) throw new Error(`writeRemote: entitas "${key}" belum punya endpoint server`)
 
   const ctx = getRoleContext()
   const sanitized = prepareWritePayload(key, record, ctx)
+  const extra = extraBody != null && typeof extraBody === 'object' ? extraBody : {}
 
-const isUpdate = record.id != null && readRaw(key).some(r => r.id === record.id)
+  const isUpdate = record.id != null && readRaw(key).some(r => r.id === record.id)
 
   try {
     const result = await apiRequest(url, {
       method: 'POST',
-      body: isUpdate ? { ...sanitized, action: 'update' } : { ...sanitized, action: 'create' },
+      // CS.A.2 — extra body keys (e.g. slotPicks) ride to the server only;
+      // the local cache merge below uses `record` + server echo, so extras
+      // never pollute stored payloads (Part 2 R8).
+      body: isUpdate ? { ...sanitized, ...extra, action: 'update' } : { ...sanitized, ...extra, action: 'create' },
     })
     const merged = { ...record, ...result }
     const records = readRaw(key)

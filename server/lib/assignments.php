@@ -18,6 +18,105 @@ function autoAssignmentId(): string
     return 'pgs-' . (string) (int) (microtime(true) * 1000) . '-' . substr(bin2hex(random_bytes(4)), 0, 7);
 }
 
+// CS.A.2 (F-CS1; D-CS1) — parses the optional `slotPicks` link payload:
+// { sekolahId: [null | {hari, jamMulai, jamSelesai}, ...], ... }.
+// Returns [normalized|null, error|null]. Absent/null => [null, null]
+// (legacy AP.A.1 behavior, one unscoped row). Malformed =>
+// [null, 'slotPicks tidak valid']. Shape-only here; school-vocabulary
+// matching stays in entities.php (trainer.php, via masterWrite validation)
+// or filterSlotPicksByVocabulary() below (ensure paths, which bypass
+// entity validation with direct UPDATEs).
+function parseSlotPicks(mixed $raw): array
+{
+    if ($raw === null) return [null, null];
+    if (!is_array($raw)) return [null, 'slotPicks tidak valid'];
+    $out = [];
+    foreach ($raw as $sid => $picks) {
+        if (!is_string($sid) || trim($sid) === '' || !is_array($picks)) return [null, 'slotPicks tidak valid'];
+        $list = [];
+        foreach ($picks as $pick) {
+            if ($pick === null) {
+                $list[] = null;
+                continue;
+            }
+            if (!is_array($pick)) return [null, 'slotPicks tidak valid'];
+            foreach ($pick as $k => $v) {
+                if (!in_array($k, ['hari', 'jamMulai', 'jamSelesai'], true)) return [null, 'slotPicks tidak valid'];
+                if ($v !== null && !is_string($v)) return [null, 'slotPicks tidak valid'];
+            }
+            $list[] = ['hari' => $pick['hari'] ?? null, 'jamMulai' => $pick['jamMulai'] ?? null, 'jamSelesai' => $pick['jamSelesai'] ?? null];
+        }
+        $out[$sid] = $list;
+    }
+    return [$out, null];
+}
+
+// Strict single-pick validator shared by link endpoints that validate
+// BEFORE persisting (trainer.php 422s). Returns null when valid, else the
+// pinned Indonesian copy (mirrors entities.php PS.A.1 messages).
+// NOTE: whole-payload entity validation (validateTrainer) is currently
+// unenforced on HTTP writes (no endpoint calls it — standalone
+// entity.validation.php only); this helper gates the newly injected
+// pick-rows narrowly without changing that legacy posture.
+function validateSlotPick(PDO $pdo, string $sekolahId, ?array $pick): ?string
+{
+    if ($pick === null) return null;
+    if (!function_exists('sekolahJadwalList')) require_once __DIR__ . '/../validation/entities.php';
+    $vocabErr = 'Hari, jam mulai, dan jam selesai harus merujuk pada jadwal sekolah yang dipilih.';
+    $hari = slotPartOf($pick, 'hari');
+    $mulai = slotPartOf($pick, 'jamMulai');
+    $selesai = slotPartOf($pick, 'jamSelesai');
+    if ($hari === null) {
+        return ($mulai === null && $selesai === null) ? null : $vocabErr;
+    }
+    if (!in_array($hari, PENUGASAN_HARI_VALUES, true)) return $vocabErr;
+    if (($mulai === null) !== ($selesai === null)) return $vocabErr;
+    if ($mulai === null) {
+        $slots = sekolahJadwalList($pdo, $sekolahId);
+        if (!is_array($slots)) return $vocabErr;
+        foreach ($slots as $s) {
+            if (is_array($s) && ($s['dayOfWeek'] ?? null) === $hari) return null;
+        }
+        return $vocabErr;
+    }
+    if (!isValidTimeHM($mulai) || !isValidTimeHM($selesai)) return $vocabErr;
+    if (strcmp((string)$selesai, (string)$mulai) <= 0) {
+        return 'Jam selesai harus setelah jam mulai.';
+    }
+    $slots = sekolahJadwalList($pdo, $sekolahId);
+    if (!is_array($slots)) return $vocabErr;
+    foreach ($slots as $s) {
+        if (
+            is_array($s) && ($s['dayOfWeek'] ?? null) === $hari
+            && ($s['time'] ?? null) === $mulai && (($s['endTime'] ?? '') === $selesai)
+        ) {
+            return null;
+        }
+    }
+    return $vocabErr;
+}
+
+// ensure() writes post-commit with no entity-validation layer, so picks
+// are matched against the school vocabulary here (trainer.php instead
+// 422s out-of-vocabulary picks strictly via validateSlotPick above).
+// Invalid picks are skipped with a log line, never written (R-CS4).
+function filterSlotPicksByVocabulary(PDO $pdo, string $sekolahId, array $picks): array
+{
+    $keep = [];
+    foreach ($picks as $pick) {
+        if ($pick === null) {
+            $keep[] = null;
+            continue;
+        }
+        if (validateSlotPick($pdo, $sekolahId, $pick) === null) {
+            $keep[] = ['hari' => slotPartOf($pick, 'hari'), 'jamMulai' => slotPartOf($pick, 'jamMulai'), 'jamSelesai' => slotPartOf($pick, 'jamSelesai')];
+        } else {
+            error_log("ensureAssignment skipped out-of-vocabulary pick sekolah={$sekolahId}");
+        }
+    }
+    return $keep;
+}
+
 function autoAssignmentToday(): string
 {
     return date('Y-m-d');
@@ -26,12 +125,49 @@ function autoAssignmentToday(): string
 // Overlap mirrors the attendance gates (authorize.php
 // trainerHasActiveAssignment + buildDailyTimetable date predicate):
 // same school + aktif true + open-ended or not yet ended.
-function hasOverlappingActiveAssignment(array $rows, string $sekolahId, string $today): bool
+//
+// CS.A.1 (F-CS1; D-CS1) — slot-picked revision, additive only. $slot null
+// preserves the AP.A.1 match-all behavior byte-identically (any same-school
+// active row blocks). A provided triple narrows the gate to exact-scope
+// matches: an unscoped existing row still blocks (it fans out over every
+// slot at read time), a scoped row blocks only its exact triple.
+// $excludeId lets a cover row ignore its origin id (D-CS2 groundwork):
+// cover rows never conflict with their origin.
+function slotPartOf(array $slot, string $key): ?string
 {
+    $v = $slot[$key] ?? null;
+    if ($v === '') return null;
+    return is_string($v) ? $v : null;
+}
+
+function slotKeyOfAssignment(array $r): string
+{
+    $hari = $r['hari'] ?? null;
+    $mulai = $r['jamMulai'] ?? null;
+    $selesai = $r['jamSelesai'] ?? null;
+    if ($hari === '') $hari = null;
+    if ($mulai === '') $mulai = null;
+    if ($selesai === '') $selesai = null;
+    return json_encode([$hari, $mulai, $selesai]);
+}
+
+function isUnscopedAssignmentSlot(array $r): bool
+{
+    return slotKeyOfAssignment($r) === json_encode([null, null, null]);
+}
+
+function hasOverlappingActiveAssignment(array $rows, string $sekolahId, string $today, ?array $slot = null, ?string $excludeId = null): bool
+{
+    $slotKey = null;
+    if ($slot !== null) {
+        $slotKey = json_encode([slotPartOf($slot, 'hari'), slotPartOf($slot, 'jamMulai'), slotPartOf($slot, 'jamSelesai')]);
+    }
     foreach ($rows as $r) {
         if (!is_array($r)) continue;
         if (($r['sekolahId'] ?? null) !== $sekolahId) continue;
         if (($r['aktif'] ?? null) !== true) continue;
+        if ($excludeId !== null && ($r['id'] ?? null) === $excludeId) continue;
+        if ($slotKey !== null && !isUnscopedAssignmentSlot($r) && slotKeyOfAssignment($r) !== $slotKey) continue;
         $end = $r['periodeSelesai'] ?? null;
         if ($end === null || $end === '' || (is_string($end) && $end >= $today)) return true;
     }
@@ -39,21 +175,57 @@ function hasOverlappingActiveAssignment(array $rows, string $sekolahId, string $
 }
 
 // Pure diff: build rows for added links lacking an overlapping active row.
-function missingAssignmentLinks(array $existingRows, string $trainerId, array $addedSekolahIds, string $today): array
+//
+// CS.A.1 (F-CS1; D-CS1) — $slotPicks null preserves AP.A.1 byte-identically
+// (one unscoped row per added school; legacy row shape untouched). An array
+// maps sekolahId => list of picks (a null pick = one unscoped `Semua slot`
+// row, else {hari, jamMulai, jamSelesai}); a school with no entry gains no
+// rows ("No pick, no row"). $coverOf tags every created row (null = normal
+// row; the link itself is validated in CS.B.1 — here it only drives overlap
+// exclusion so a cover never conflicts with its origin).
+function missingAssignmentLinks(array $existingRows, string $trainerId, array $addedSekolahIds, string $today, ?array $slotPicks = null, ?string $coverOf = null): array
 {
     $out = [];
+    // $seen grows within the batch so duplicate picks in one call stay
+    // idempotent instead of fanning out.
+    $seen = $existingRows;
     foreach ($addedSekolahIds as $sid) {
         if (!is_string($sid) || trim($sid) === '') continue;
-        if (hasOverlappingActiveAssignment($existingRows, $sid, $today)) continue;
-        $out[] = [
-            'id' => autoAssignmentId(),
-            'sekolahId' => $sid,
-            'trainerId' => $trainerId,
-            'asistenId' => null,
-            'periodeMulai' => $today,
-            'periodeSelesai' => null,
-            'aktif' => true,
-        ];
+        if ($slotPicks === null) {
+            if (hasOverlappingActiveAssignment($seen, $sid, $today, null, $coverOf)) continue;
+            $row = [
+                'id' => autoAssignmentId(),
+                'sekolahId' => $sid,
+                'trainerId' => $trainerId,
+                'asistenId' => null,
+                'periodeMulai' => $today,
+                'periodeSelesai' => null,
+                'aktif' => true,
+            ];
+            $out[] = $row;
+            $seen[] = $row;
+            continue;
+        }
+        if (!array_key_exists($sid, $slotPicks) || !is_array($slotPicks[$sid])) continue;
+        foreach ($slotPicks[$sid] as $pick) {
+            $slot = is_array($pick) ? $pick : null;
+            if (hasOverlappingActiveAssignment($seen, $sid, $today, $slot, $coverOf)) continue;
+            $row = [
+                'id' => autoAssignmentId(),
+                'sekolahId' => $sid,
+                'trainerId' => $trainerId,
+                'asistenId' => null,
+                'coverOf' => $coverOf,
+                'hari' => $slot === null ? null : slotPartOf($slot, 'hari'),
+                'jamMulai' => $slot === null ? null : slotPartOf($slot, 'jamMulai'),
+                'jamSelesai' => $slot === null ? null : slotPartOf($slot, 'jamSelesai'),
+                'periodeMulai' => $today,
+                'periodeSelesai' => null,
+                'aktif' => true,
+            ];
+            $out[] = $row;
+            $seen[] = $row;
+        }
     }
     return $out;
 }
@@ -61,7 +233,9 @@ function missingAssignmentLinks(array $existingRows, string $trainerId, array $a
 // Load-trainer-and-persist variant for post-write hooks (sekolah.php,
 // users.php): appends missing rows and bumps version. Same-branch gated.
 // Returns rows added. Best-effort: never throws past the caller.
-function ensureAssignment(PDO $pdo, string $trainerId, string $sekolahId, array $user): int
+// CS.A.1: $slotPicks/$coverOf pass straight through to
+// missingAssignmentLinks (both null = AP.A.1 behavior, untouched).
+function ensureAssignment(PDO $pdo, string $trainerId, string $sekolahId, array $user, ?array $slotPicks = null, ?string $coverOf = null): int
 {
     try {
         $sel = $pdo->prepare('SELECT cabang_id, payload FROM trainer WHERE id = :id');
@@ -80,7 +254,13 @@ function ensureAssignment(PDO $pdo, string $trainerId, string $sekolahId, array 
         $today = autoAssignmentToday();
         $existing = isset($payload['penugasanPengajar']) && is_array($payload['penugasanPengajar'])
             ? $payload['penugasanPengajar'] : [];
-        $missing = missingAssignmentLinks($existing, $trainerId, [$sekolahId], $today);
+        // CS.A.2 — picks for other schools ride along untouched;
+        // missingAssignmentLinks only consumes this school's entry.
+        $picks = $slotPicks;
+        if (is_array($picks) && array_key_exists($sekolahId, $picks) && is_array($picks[$sekolahId])) {
+            $picks[$sekolahId] = filterSlotPicksByVocabulary($pdo, $sekolahId, $picks[$sekolahId]);
+        }
+        $missing = missingAssignmentLinks($existing, $trainerId, [$sekolahId], $today, $picks, $coverOf);
         if ($missing === []) return 0;
         $payload['penugasanPengajar'] = array_values(array_merge($existing, $missing));
         $upd = $pdo->prepare('UPDATE trainer SET payload = :payload, version = version + 1 WHERE id = :id');
@@ -100,12 +280,13 @@ function ensureAssignment(PDO $pdo, string $trainerId, string $sekolahId, array 
 }
 
 // Batch variant for hooks holding added trainerIds (sekolah.php update).
-function ensureAssignmentsForTrainerIds(PDO $pdo, array $addedTrainerIds, string $sekolahId, array $user): int
+// CS.A.1: $slotPicks/$coverOf pass through (both null = legacy).
+function ensureAssignmentsForTrainerIds(PDO $pdo, array $addedTrainerIds, string $sekolahId, array $user, ?array $slotPicks = null, ?string $coverOf = null): int
 {
     $n = 0;
     foreach ($addedTrainerIds as $tid) {
         if (!is_string($tid) || trim($tid) === '') continue;
-        $n += ensureAssignment($pdo, $tid, $sekolahId, $user);
+        $n += ensureAssignment($pdo, $tid, $sekolahId, $user, $slotPicks, $coverOf);
     }
     return $n;
 }
