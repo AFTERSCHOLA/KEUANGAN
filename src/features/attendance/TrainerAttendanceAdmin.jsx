@@ -173,7 +173,7 @@ export default function TrainerAttendanceAdmin() {
                       {r.status}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-[11px] text-slate-500">{r.keterangan || '—'}</td>
+                  <td className="py-4 px-6 text-[11px] text-slate-500">{[r.keterangan, r.catatan].filter(Boolean).join(' — ') || '—'}</td>
                   <td className="py-4 px-6 text-center">
                     {r.correctionOf ? (
                       <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">

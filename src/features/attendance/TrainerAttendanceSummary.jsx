@@ -91,7 +91,7 @@ export default function TrainerAttendanceSummary({ trainerId }) {
                       {r.status}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-[11px] text-slate-500">{r.keterangan || '—'}</td>
+                  <td className="py-4 px-6 text-[11px] text-slate-500">{[r.keterangan, r.catatan].filter(Boolean).join(' — ') || '—'}</td>
                 </tr>
               ))}
               {summary.riwayat.length === 0 && (

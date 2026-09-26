@@ -113,7 +113,7 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
                   {matrix.dates.map(d => (
                     <td key={d} className="py-2 px-3 text-[11px] text-slate-600 min-w-10">
                       {(r.cells[d] || []).map((entry, i) => (
-                        <div key={i} className="whitespace-nowrap font-semibold">
+                        <div key={i} className="whitespace-nowrap font-semibold" title={entry.catatan || undefined}>
                           {cellText(entry)}
                         </div>
                       ))}

@@ -68,6 +68,9 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
       nama: t?.nama || 'Trainer tidak ditemukan',
       label,
       keterangan: r.keterangan || null,
+      // Display-only thread for the matrix title-tooltip; never part of
+      // cell text (formatMatrixCell) or the CSV export mirror.
+      catatan: r.catatan || null,
       status: r.status,
     }
     const key = `${r.sekolahId}|${r.tanggal}`
