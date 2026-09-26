@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { readCached, correctLedgerEntry, usePeriod, subscribeStore, read } from '../../lib/store'
 import { newAbsensiPengajar, generateId } from '../../lib/constants'
 import Modal from '../../components/Modal.jsx'
+import { resolveCurrentAbsensiPengajar } from '../../lib/trainerAttendance.js'
 
 // TA.B.4 — admin-side list + correction UI for `absensiPengajar`
 // (self-attendance records written by trainers via TrainerAttendanceForm,
@@ -79,18 +80,9 @@ export default function TrainerAttendanceAdmin() {
   // utama (tapi tidak dihapus dari data, R-TA1).
   const visibleRows = useMemo(() => {
     const filtered = absensiPengajar
-      .filter(r => r.periode === periode)
-      .filter(r => !filterSekolahId || r.sekolahId === filterSekolahId)
-
-    const latestByOriginal = new Map()
-    filtered.forEach(r => {
-      const originalId = r.correctionOf || r.id
-      const existing = latestByOriginal.get(originalId)
-      if (!existing || (r.correctionOf && !existing.correctionOf) || r.id > existing.id) {
-        latestByOriginal.set(originalId, r)
-      }
-    })
-    return [...latestByOriginal.values()].sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
+     .filter(r => r.periode === periode)
+     .filter(r => !filterSekolahId || r.sekolahId === filterSekolahId)
+   return resolveCurrentAbsensiPengajar(filtered).sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
   }, [absensiPengajar, periode, filterSekolahId])
 
   function openCorrection(record) {
