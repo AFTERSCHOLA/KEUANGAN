@@ -167,6 +167,8 @@ MICROTASK: Prove pipeline on screen
   OUTCOME: the dashboard-last switch is proven on screen for both categories in one run.
   VERIFY:  npx playwright test tests/invoice-pipeline-dashboard.spec.js --workers=1 -> green zero pageerror
   DONE-IF: verify passes; only intended files changed
+
+  DC.D.1 → Verified: npx playwright test tests/invoice-pipeline-dashboard.spec.js --workers=1 -> 1 passed (Tarif 360000 + invoice badge, Frozen 250000 flat no badge, hermetic cleanup), zero pageerror
 ```
 
 ---
