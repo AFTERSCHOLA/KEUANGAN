@@ -41,6 +41,11 @@ declare(strict_types=1);
  * $sekolahIdFilter (enforced by the caller in invoices-generate.php) and is
  * attached to the resulting record as-is; it never feeds into $grandTotal —
  * carry-over must not change invoice.total (see SB.B.4).
+ *
+ * EF.C.1 (F-EF4; D-EF5): sekolah with a non-null `metodePembayaran` bill
+ * per-meeting (Tarif branch, new below); sekolah with `metodePembayaran`
+ * null keep the ORIGINAL flat-grouping logic below UNCHANGED (Frozen
+ * branch, byte-identical to pre-EF.C.1 output, R-SB3).
  */
 function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, array $actor, ?string $cabangIdFilter = null, ?string $sekolahIdFilter = null, array $carryOverLines = []): array
 {
@@ -108,30 +113,87 @@ function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, ar
             continue;
         }
 
-        // Group by effective tariff: siswa.sppOverride if present and
-        // numeric, else sekolah.spp default.
-        $groups = []; // tarif (string key to avoid float precision dupes) => count
-        foreach ($siswaRows as $siswaRow) {
-            $siswaPayload = json_decode($siswaRow['payload'], true);
-            if (!is_array($siswaPayload)) continue;
-            $override = $siswaPayload['sppOverride'] ?? null;
-            $tarif = (is_numeric($override)) ? (float) $override : $defaultTarif;
-            $key = number_format($tarif, 2, '.', '');
-            $groups[$key] = ($groups[$key] ?? 0) + 1;
-        }
+        // EF.C.1 (F-EF4; D-EF5) — branch on metodePembayaran, same category
+        // pick as EF.A.1/billingForSekolah: null = Frozen (flat, legacy),
+        // set = Tarif (per-meeting).
+        $metodePembayaran = $sekolahPayload['metodePembayaran'] ?? null;
 
-        $items = [];
-        $grandTotal = 0.0;
-        foreach ($groups as $tarifKey => $jumlahSiswa) {
-            $hargaSatuan = (float) $tarifKey;
-            $total = $hargaSatuan * $jumlahSiswa;
-            $items[] = [
+                if (is_array($metodePembayaran) && isset($metodePembayaran['tarifPerPertemuan'])) {
+            // ---- Tarif branch (NEW) ----
+            // pertemuanAktual: SAME predicate as billingForSekolah
+            // (finance.js) — D-SB13: only trainerStatus 'Hadir' bills;
+            // Izin/Alpa = 0; a cover session is a NEW Hadir row (never a
+            // status flip), so it is already counted normally here, no
+            // special-casing needed.
+            $basis = ($metodePembayaran['basis'] ?? 'siswa') === 'trainer' ? 'trainer' : 'siswa';
+            $tarifPerPertemuan = (float) $metodePembayaran['tarifPerPertemuan'];
+
+            $pertemuanStmt = $pdo->prepare(
+                "SELECT COUNT(*) FROM absensi
+                 WHERE JSON_UNQUOTE(JSON_EXTRACT(payload, '$.sekolahId')) = :sid
+                   AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.periode')) = :p
+                   AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.trainerStatus')) = 'Hadir'"
+            );
+            $pertemuanStmt->execute([':sid' => $sekolahId, ':p' => $periode]);
+            $pertemuanAktual = (int) $pertemuanStmt->fetchColumn();
+
+            // FIX: billingForSekolah (finance.js) filters `status !== 'Trial'`
+            // — Aktif DAN Berhenti dua-duanya dihitung, cuma Trial yang
+            // dikecualikan. $siswaRows di atas TIDAK bisa dipakai di sini
+            // karena sudah difilter status='Aktif' saja (query legacy untuk
+            // Frozen branch) — siswa Berhenti akan ke-drop dan beda hasil
+            // dari billingForSekolah. Query ulang dengan predicate yang
+            // sama persis untuk parity.
+            $siswaBillingStmt = $pdo->prepare(
+                "SELECT COUNT(*) FROM siswa
+                 WHERE cabang_id = :c
+                   AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.sekolahId')) = :sid
+                   AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.status')) != 'Trial'"
+            );
+
+            $siswaBillingStmt->execute([':c' => $cabangId, ':sid' => $sekolahId]);
+            $jumlahSiswaAktif = (int) $siswaBillingStmt->fetchColumn();
+
+            $total = $basis === 'trainer'
+                ? $tarifPerPertemuan * $pertemuanAktual
+                : $tarifPerPertemuan * $pertemuanAktual * $jumlahSiswaAktif;
+
+            $items = [[
                 'deskripsi' => $uraian,
-                'jumlahSiswa' => $jumlahSiswa,
-                'hargaSatuan' => $hargaSatuan,
+                'basis' => $basis,
+                'tarifPerPertemuan' => $tarifPerPertemuan,
+                'pertemuanAktual' => $pertemuanAktual,
+                'jumlahSiswa' => $basis === 'trainer' ? null : $jumlahSiswaAktif,
                 'total' => $total,
-            ];
-            $grandTotal += $total;
+            ]];
+            $grandTotal = $total;
+        } else {
+            // ---- Frozen branch (UNCHANGED — byte-identical, R-SB3) ----
+            // Group by effective tariff: siswa.sppOverride if present and
+            // numeric, else sekolah.spp default.
+            $groups = []; // tarif (string key to avoid float precision dupes) => count
+            foreach ($siswaRows as $siswaRow) {
+                $siswaPayload = json_decode($siswaRow['payload'], true);
+                if (!is_array($siswaPayload)) continue;
+                $override = $siswaPayload['sppOverride'] ?? null;
+                $tarif = (is_numeric($override)) ? (float) $override : $defaultTarif;
+                $key = number_format($tarif, 2, '.', '');
+                $groups[$key] = ($groups[$key] ?? 0) + 1;
+            }
+
+            $items = [];
+            $grandTotal = 0.0;
+            foreach ($groups as $tarifKey => $jumlahSiswa) {
+                $hargaSatuan = (float) $tarifKey;
+                $total = $hargaSatuan * $jumlahSiswa;
+                $items[] = [
+                    'deskripsi' => $uraian,
+                    'jumlahSiswa' => $jumlahSiswa,
+                    'hargaSatuan' => $hargaSatuan,
+                    'total' => $total,
+                ];
+                $grandTotal += $total;
+            }
         }
 
         // Sequence number + insert, transactional to avoid two concurrent

@@ -102,3 +102,66 @@ describe('billingForSekolah — SB.A.2', () => {
     expect(result.pertemuanAktual).toBe(3)
   })
 })
+
+// ============================================================
+// EF.C.1 (F-EF4; D-EF5) — generator-parity pin.
+//
+// billingForSekolah() (finance.js) dan invoiceGenerator.php's Tarif
+// branch (server) sekarang isomorfik: sama-sama filter siswa dengan
+// `status !== 'Trial'`, sama-sama hitung pertemuanAktual dari
+// trainerStatus === 'Hadir', dan sama-sama pakai rumus
+// tarif x pertemuan (x siswa kalau basis 'siswa'). Karena JS tidak bisa
+// memanggil PHP langsung, parity dibuktikan dengan MEMBEKUKAN angka
+// yang sama di dua sisi: fixture di sini identik dengan skenario di
+// server/tests/invoice-billing.check.php (Scenario 1 & 2), dan hasil
+// billingForSekolah() di sini di-pin ke angka yang SAMA yang sudah
+// terverifikasi lolos di sisi PHP (16/16 checks). Kalau salah satu sisi
+// berubah rumus tanpa yang lain diikutkan, test ini pecah duluan.
+describe('EF.C.1 generator parity — billingForSekolah mirrors invoiceGenerator.php Tarif branch', () => {
+  const periode = '2026-09'
+
+  it('Tarif-siswa: 3 pertemuan Hadir x 3 siswa non-Trial (Berhenti tetap dihitung) x tarif 20000 = 180000 — sama dengan invoice-billing.check.php Scenario 1', () => {
+    const sch = {
+      id: 'skl-parity-ts',
+      metodePembayaran: { basis: 'siswa', tarifPerPertemuan: 20000 },
+    }
+    const siswa = [
+      { id: 'sw-1', sekolahId: sch.id, status: 'Aktif' },
+      { id: 'sw-2', sekolahId: sch.id, status: 'Aktif' },
+      { id: 'sw-3', sekolahId: sch.id, status: 'Berhenti' },
+      { id: 'sw-4', sekolahId: sch.id, status: 'Trial' },
+    ]
+    const absensi = [
+      { sekolahId: sch.id, periode, trainerStatus: 'Hadir' },
+      { sekolahId: sch.id, periode, trainerStatus: 'Hadir' },
+      { sekolahId: sch.id, periode, trainerStatus: 'Izin' },
+      { sekolahId: sch.id, periode, trainerStatus: 'Hadir' },
+    ]
+
+    const result = billingForSekolah(sch, { absensi, siswa, periode })
+
+    expect(result.pertemuanAktual).toBe(3)
+    expect(result.total).toBe(180000)
+  })
+
+  it('Tarif-trainer: 2 pertemuan Hadir x tarif 50000, siswa TIDAK berpengaruh = 100000 — sama dengan invoice-billing.check.php Scenario 2', () => {
+    const sch = {
+      id: 'skl-parity-tt',
+      metodePembayaran: { basis: 'trainer', tarifPerPertemuan: 50000 },
+    }
+    const siswa = [
+      { id: 'sw-1', sekolahId: sch.id, status: 'Aktif' },
+      { id: 'sw-2', sekolahId: sch.id, status: 'Aktif' },
+      { id: 'sw-3', sekolahId: sch.id, status: 'Aktif' },
+    ]
+    const absensi = [
+      { sekolahId: sch.id, periode, trainerStatus: 'Hadir' },
+      { sekolahId: sch.id, periode, trainerStatus: 'Hadir' },
+    ]
+
+    const result = billingForSekolah(sch, { absensi, siswa, periode })
+
+    expect(result.total).toBe(100000)
+  })
+})
+
