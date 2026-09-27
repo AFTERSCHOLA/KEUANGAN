@@ -164,6 +164,7 @@ Create branch CRUD (superadmin only).
 Add async API client: `read()` → `fetch('/api/read.php')`, fallback to localStorage cache.  
 Add `syncLog` tracking unsaved changes.  
 **VERIFY:** Network off → app still works from cache → network on → sync button shows pending count → sync resolves.
+> **SUPERSEDED 2026-09-27 (DRIFT_CLOSE D-DC1, user-directed):** the manual queue + `Sinkronisasi` UI are removed — every write posts direct; offline capture explicitly unsupported for these entities. The M7.2.1 E2E leg (`m72-verify`) and `absensi-outbox-prune.spec.js` were deleted with the feature; server `/api/sync.php` retained legacy-only. History above preserved; do not re-add queue semantics without a new plan.
 
 **M7.2.2** `EDIT: server/api/*.php` (~40 lines each)  
 Create PHP endpoints: `absensi.php`, `sppPayments.php`, `honorPayments.php`, `sync.php`.  
@@ -480,5 +481,16 @@ maintenance — needs minimal repro before any build (taste #13);
 (5) EVALUATION_LOG/EXEMPLAR_MIGRATION Q1(a)/Q2 addendumlink per
 COVER_SLOT_PLAN §11 stays follow-up (outside CS.C.2 EDIT scope, not
 patched here).
+
+## Gate DC — Drift Close Closure Summary (taste #40 temporary gate)
+
+**Status: PARTIAL 2026-09-27 (DC.A–DC.D closed; DC.E default-project triaged, destructive legs blocked).** Chain in `docs/DRIFT_CLOSE_PLAN.md` + `docs/DRIFT_CLOSE_MILESTONES.md` (no renumbering of the existing chain — this pair is the temporary gate doc per taste #40/#74).
+
+Verified: `npm test` (45 files / 246 passed) + `php server/tests/entity.validation.php` (all incl. CS.B.1/B.2) + `php server/tests/endpoint.protection.php` (274 checks, 0 failed incl. 13 DC.B.1 update+certify legs) + `npm run build` green + acceptance E2E re-run 8/8 (form 4/4, manage 3/3 incl. DC.C.2, pipeline 1/1) + default-project full run 119/143 with per-leg disposition (DC.E.1 log).
+Fixed from triage: AP.A.1 (DC.B.3 left a dangling `pendingRecordsForKey` call inside try/catch → silent stale cache; removed + unit-pinned `pullRemote`).
+
+Changed: `src/lib/trainerAttendance.js` (+`buildPengajarCorrection`), `src/lib/penugasan.js` (+`penugasanInvolvesTrainer`, `asistenIds` in factory/timetable), `src/lib/store.js` (queue deleted; direct writes), `src/lib/sppPayments.js`, `src/features/attendance/*` (direct save/verify/certify/correction-carry), `src/features/payments/*` (direct append), `src/features/penugasan/*` (Asisten-2 picker + union), `src/components/AccountMenu.jsx` (Sinkronisasi removed), `src/App.jsx` (sync state removed), `server/api/absensi.php` (+`update`/`certify`), `server/api/honorPayments.php` (create→append), `server/api/sync.php` (legacy-marked, retained), `server/tests/endpoint.protection.php` (+13 legs), `tests/*` (8 spec files updated, `absensi-outbox-prune` + M7.2.1 legs deleted, `invoice-pipeline-dashboard` new).
+
+Sign-off decisions: (1) D-DC1 queue-drop with offline-unsupported consequence (M7.2.1 superseded above); (2) D-DC2 correction carries role (dialog control deferred to team pick); (3) D-DC3 two-track (tests extended + picker shipped); (4) D-DC4 pipeline proven on screen; (5) default-project 24 failures dispositioned — 1 fixed (AP.A.1), 19 pre-existing/pollution with stash-or-mechanism evidence (e2e monolith duplicate-name + timeout drift, m512 13-tab, m73, student-delete, ki1-2 nav-timeout class, export/R3.4/sim cascade), 4 same-signature timeouts carried as environmental flake; (6) destructive 5 failures: auth #6/#10/#11 (HY.5.1b flake cohort + lockout cascade), phase567 (blocked: Temp seed scripts missing — rewritten DC.B.4 legs unverified), stress-sim (cascade suspect) — all Unverified with owners, no code implication; (7) ground truth wins ties (tests fixed, not web — except D3b/AP.A.1 app bugs, microtasked and fixed).
 
 **End of Microtask Chains**

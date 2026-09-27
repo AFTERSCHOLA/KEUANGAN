@@ -85,6 +85,28 @@ describe('M-AUTH.3 cache isolation for anonymous callers', () => {
     expect(store.getRoleContext()).toEqual({ role: null, trainerId: null, cabangId: null })
   })
 
+  // DC.B.3-fix (D-DC1 follow-up) — pullRemote applies the server list
+  // directly with no pending overlay (the sync-log helpers are deleted;
+  // overlaying threw ReferenceError, caught as silent false → stale cache
+  // after trainer account creation, AP.A.1 regression).
+  it('pullRemote writes the server list verbatim and returns true', async () => {
+    setIdentity({ id: 'usr-pusat', role: 'superadmin', cabangId: null, trainerId: null, active: true, mustChangePassword: false })
+    const store = await freshStore()
+    const realFetch = globalThis.fetch
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => [{ id: 'trn-x', nama: 'Baru' }],
+    })
+    try {
+      await expect(store.pullRemote('trainer')).resolves.toBe(true)
+    } finally {
+      globalThis.fetch = realFetch
+    }
+    expect(store.readRaw('trainer')).toEqual([{ id: 'trn-x', nama: 'Baru' }])
+  })
+
   it('superadmin identity unlocks the cache, admin_cabang remains branch-scoped', async () => {
     localStorage.setItem('afterschola_v4_sekolah', JSON.stringify([
       { id: 'skl-1', nama: 'Cabang A', cabangId: 'cbg-A' },

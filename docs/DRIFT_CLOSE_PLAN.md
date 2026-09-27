@@ -80,7 +80,7 @@ D-DC1 removal surface (client only):
 - **R-DC2** Mirror, don't invent: `writeRemote` forbidden/conflict handling, `newAbsensiPengajar` factory, `Modal`/`AlertDialog` idioms, Rupiah/dropdown form idioms, Indonesian pinned copy (`Tersimpan`, `Sinkronisasi` removal must leave no orphan strings — grep gate).
 - **R-DC3** Server authoritative (taste #61): no validation logic removed server-side; client removal only.
 - **R-DC4** Additive except D-DC1: the queue removal is the single sanctioned deletion; everything else additive.
-- **R-DC5** Verification language `Verified: <command> -> <result>`; one OUTCOME + one falsifiable VERIFY per microtask; narrowest check immediately after first edit; hygiene gate (`rg console.log src/` clean, `git status` intended files only); full loop + pre-existing triage + acceptance re-run before done (taste #9/#10).
+- **R-DC5** Verification language `Verified: <command> -> <result>`; one OUTCOME + one falsifiable VERIFY per microtask; narrowest check immediately after first edit; hygiene gate (`rg console.log src/` clean, `git status` intended files only); removal grep-gates must include module-local helper names (`pendingRecordsForKey`, `readSyncLog`, `SYNC_LOG` — DL-6 lesson), not just the public identifiers; full loop + pre-existing triage + acceptance re-run before done (taste #9/#10).
 
 ## 7. UI concept (pinned copy)
 
@@ -106,8 +106,15 @@ No privilege change in this chain. Direct writes reuse the existing `writeRemote
 
 | ID | Obsolete behavior found | Ground-truth-correct behavior | Disposition |
 |---|---|---|---|
-| DL-1 | `absensiPengajar` tests wait for manual `/api/sync.php` flush | Direct `writeRemote` on save (`store.js:334-341`) | Remove legs (DC.B.4) |
-| _reserved_ | _DC.C–DC.E append here_ | | |
+| DL-1 | `absensiPengajar` tests wait for manual `/api/sync.php` flush | Direct `writeRemote` on save (`store.js:334-341`) | Legs removed (DC.B.4 ✓) |
+| DL-2 | `absensi-outbox-prune.spec.js` contracts the deleted queue (`syncPending`, syncLog, Sinkronisasi button) | Direct writes; F-11 durability covered by real save→server legs (`e2e`, `r3-verify`, `phase567` Simpan Absensi legs) | Spec deleted (DC.B.4 ✓) |
+| DL-3 | M7.2.1 offline-queue test (`m72-verify`) contracts deleted feature; offline-render has no dedicated leg | Offline capture explicitly unsupported (D-DC1); cache still renders on read failure by construction (`store.js read()` fallback) | Test deleted; offline-render leg gap open (DC.E triage) |
+| DL-4 | Queued verify/certify/edit stamps never reached the server (sync INSERTs; dups → `alreadyApplied`; zero `konfirmasiTrainer` server handling) | New `absensi.php` `update` + `certify` actions mirroring `verify` (user-confirmed scope) | Shipped (DC.B.1 ✓, 13 endpoint legs) |
+| DL-5 | Full-suite cross-test DB pollution (shared `afterschola_t3_test`, no per-test reset): duplicate names → strict-mode violations; foreign rows in date-scoped exports; seed-dependent aborts | Hermetic specs (unique suffixes + finally-cleanup); full-suite triage per leg in DC.E.1 log | Accepted debt; disposition table in DC.E.1 (DC.E ✓ 2026-09-27) |
+| DL-6 | B.3 deletion missed `pullRemote`'s `pendingRecordsForKey` overlay (greppable only via the local name — gate pattern too narrow) → silent stale cache → AP.A.1 regression | Overlay removed; `pullRemote` unit-pinned (server-list verbatim) | Fixed + verified (AP.A.1 green); gate pattern widened below |
+| DL-7 | `m512` pins 11 nav tabs; app has 13 since the Penugasan chain added 2 tabs | Tab-count ownership sits with the Penugasan chain, not this one | Flagged unplanned drift for owner; spec untouched |
+| DL-8 | Destructive Temp seed scripts (`seed_users.php`, `seed_phase567.php`, …) absent from this machine → phase567 cannot run | Scripts live outside git (user Temp dir); reconstructing = fabrication | Unverified prerequisite, owner team; rewritten phase567 legs await re-run |
+| _reserved_ | _append here_ | | |
 
 ## 11. Write-back contract (taste #43, on DC.E close)
 

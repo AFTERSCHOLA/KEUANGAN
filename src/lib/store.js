@@ -479,15 +479,10 @@ export async function pullRemote(key) {
 
     if (!Array.isArray(remote)) return false
 
-    const pending = pendingRecordsForKey(key)
-    const remoteById = new Map(remote.map(record => [record.id, record]))
-
-    // Jangan hilangkan data lokal yang memang masih pending sync.
-    for (const record of pending) {
-      remoteById.set(record.id, record)
-    }
-
-    writeRaw(key, [...remoteById.values()])
+    // DC.B.3-fix (D-DC1 follow-up): no pending overlay — the sync-log
+    // helpers are deleted, so overlaying would throw (caught below as a
+    // silent false, leaving stale cache). Server list is the whole truth.
+    writeRaw(key, [...remote])
     notifyStoreChanged()
 
     return true
