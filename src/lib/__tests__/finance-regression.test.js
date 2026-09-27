@@ -159,3 +159,61 @@ describe('finance regression guard — SB.A.3', () => {
     expect(tarif.total).toBe(20000 * 5 * 3)
   })
 })
+
+// CS.C.2 (F-CS6; D-CS7) — Dashboard-last sequencing guard (not build).
+// The dashboard keeps the flat Potensi source until the SPP_BILLING chain
+// ships the per-meeting generator upgrade (SB.B/SB.C, D-SB10). This guard
+// pins both figures on their own paths so a premature source switch fails
+// loudly. Exemplar reference (COVER_SLOT_PLAN.md F-CS6): flat Potensi
+// 53,535,011 (finance.js flat siswaBilling.length × spp) vs tariff-only
+// ≈73,453,750 (billingForSekolah); the unit fixture below reproduces the
+// same split at small scale with deliberately distinct values.
+describe('dashboard-last guard — CS.C.2', () => {
+  it('flat Potensi stays flat even when the tariff path diverges; switching source would fail', () => {
+    const entities = {
+      sekolah: [{
+        id: 'school-guard', nama: 'SD Guard', spp: 100000, trainerIds: [],
+        metodePembayaran: {
+          basis: 'siswa', tarifPerPertemuan: 30000, trigger: 'per_pertemuan',
+          jumlahN: null, jumlahMinggu: null, sumberDana: 'sekolah',
+        },
+      }],
+      siswa: [
+        { id: 'g-s1', nama: 'G1', sekolahId: 'school-guard', status: 'Aktif' },
+        { id: 'g-s2', nama: 'G2', sekolahId: 'school-guard', status: 'Aktif' },
+        { id: 'g-t1', nama: 'GT1', sekolahId: 'school-guard', status: 'Trial' },
+      ],
+      trainer: [],
+      absensi: [
+        { id: 'g-a1', sekolahId: 'school-guard', periode: '2026-08', trainerStatus: 'Hadir' },
+        { id: 'g-a2', sekolahId: 'school-guard', periode: '2026-08', trainerStatus: 'Hadir' },
+        { id: 'g-a3', sekolahId: 'school-guard', periode: '2026-08', trainerStatus: 'Hadir' },
+      ],
+      honorPayments: [],
+      sppPayments: [],
+    }
+    // Flat: 2 aktif × 100000 = 200000 (Trial excluded).
+    const flat = financialData({ ...entities, periode: '2026-08' })
+    expect(flat.potensiSpp).toBe(200000)
+    expect(flat.sekolahFinance[0].targetSpp).toBe(200000)
+    // Tariff: 30000 × 3 Hadir × 2 aktif = 180000 — deliberately ≠ flat.
+    const tariff = billingForSekolah(entities.sekolah[0], {
+      absensi: entities.absensi, siswa: entities.siswa, periode: '2026-08',
+    })
+    expect(tariff.basis).toBe('siswa')
+    expect(tariff.pertemuanAktual).toBe(3)
+    expect(tariff.total).toBe(180000)
+    expect(tariff.total).not.toBe(flat.potensiSpp)
+    // Dashboard-last: financialData must still report the flat figure even
+    // though the school carries a tariff config. Wiring billingForSekolah
+    // into financialData (premature switch) moves potensi to 180000 and
+    // breaks this guard instead of silently shipping two answers.
+    const withoutTariff = financialData({
+      ...entities,
+      sekolah: [{ id: 'school-guard', nama: 'SD Guard', spp: 100000, trainerIds: [] }],
+      periode: '2026-08',
+    })
+    expect(flat.potensiSpp).toBe(withoutTariff.potensiSpp)
+    expect(flat.sekolahFinance).toEqual(withoutTariff.sekolahFinance)
+  })
+})

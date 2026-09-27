@@ -45,10 +45,28 @@ export function honorPaidByTrainer(honorPayments = [], periode) {
   return result
 }
 
+// CS.C.1 (F-CS4; D-CS3, D-CS6) — role-first honor flat for assistants.
+// D2: whoever fills the asisten slot that session prices 50k, incl.
+// externals without a login. Documented here only (no second hardcode).
+export const PERAN_ASISTEN_HONOR = 50000
+
+// CS.C.1 — honor for one absensiPengajar row. A -> flat 50k (D2);
+// I or legacy (peran null/absent) -> owner's trainer.honor per R-TA3
+// (no hardcode tiers). Missing owner prices 0 (fails closed; an
+// external-I row mints nothing — externals are always A in practice).
+export function honorForPengajarRow(row, trainer = []) {
+  if (row?.peran === 'A') return PERAN_ASISTEN_HONOR
+  const list = Array.isArray(trainer) ? trainer : [...(trainer?.values?.() ?? [])]
+  const tr = list.find(t => t?.id === row?.trainerId)
+  return tr ? Number(tr.honor) || 0 : 0
+}
+
 // TA.C.3 (F-TA6, F-TA9; D-TA4, D-TA5, D-TA14 Locked berpindah; R-TA3,
 // R-TA11, R-TA12) — beban honor dari `absensiPengajar`.
-// `honor = jumlah Hadir × trainer.honor`: nominal selalu dibaca dari
-// field honor orangnya (R-TA3, tidak ada hardcode 100k/75k/50k);
+// Counts stay role-agnostic (hadirSesi = Hadir rows per person);
+// honor sums are role-first via honorForPengajarRow() (CS.C.1, D-CS6):
+// nominal selalu dibaca dari field honor orangnya untuk I/legacy
+// (R-TA3, tidak ada hardcode 100k/75k/50k) dan flat 50k untuk A (D2);
 // Izin/Alpa = 0; keterangan EXPO/Pengganti tidak mengubah nominal
 // (PLAN §9, TA_C2B_VALIDATION.md §3). Correction records supersede
 // via latest-wins on `correctionOf` (R-TA4, same rule as the matrix).
@@ -105,7 +123,8 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
       .join(', ') || 'Belum Ditugaskan'
 
     // TA.C.3: with the Gate C source, beban per sekolah = Σ Hadir rows
-    // in absensiPengajar × each row owner's trainer.honor (R-TA3).
+    // in absensiPengajar × role-first honor (CS.C.1, D-CS6:
+    // A -> 50k, I/legacy -> owner's trainer.honor per R-TA3).
     // hadirRecords is already latest-wins deduped (R-TA4).
     const sesiHadir = pengajarStats
       ? pengajarStats.hadirRecords.filter(a => a.sekolahId === sch.id)
@@ -113,8 +132,11 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
         a => a.sekolahId === sch.id && a.periode === periode && a.trainerStatus === 'Hadir'
       )
     const bebanHonor = sesiHadir.reduce((sum, a) => {
-      const tr = trainer.find(t => t.id === a.trainerId)
-      return sum + (tr ? tr.honor : 0)
+      if (!pengajarStats) {
+        const tr = trainer.find(t => t.id === a.trainerId)
+        return sum + (tr ? tr.honor : 0)
+      }
+      return sum + honorForPengajarRow(a, trainer)
     }, 0)
 
     return {
@@ -131,9 +153,16 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
   })
 
   let totalBebanHonor = 0
+  const trainerById = new Map((trainer || []).map(t => [t?.id, t]))
   const trainerFinance = trainer.map(t => {
     const hadirSesi = trainerSessionCount[t.id] || 0
-    const bebanHonor = hadirSesi * t.honor
+    // CS.C.1: role-first honor when the Gate C source is active; legacy
+    // count × tarif when absensiPengajar is absent (byte-identical).
+    const bebanHonor = pengajarStats
+      ? pengajarStats.hadirRecords
+        .filter(r => r.trainerId === t.id)
+        .reduce((sum, r) => sum + honorForPengajarRow(r, trainer), 0)
+      : hadirSesi * t.honor
     totalBebanHonor += bebanHonor
     const dibayar = dibayarByTrainer[t.id] || 0
 
@@ -156,6 +185,16 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
       lebihBayarHonor: Math.max(0, dibayar - bebanHonor),
     }
   })
+
+  // CS.C.1: external-assistant rows (no trainer record) price 50k when
+  // peran A and contribute to school/total beban; they carry no
+  // trainerFinance entry (no honorPayments ledger for externals), so
+  // sisaKewajiban stays trainer-only by design.
+  if (pengajarStats) {
+    totalBebanHonor += pengajarStats.hadirRecords
+      .filter(r => !trainerById.has(r.trainerId))
+      .reduce((sum, r) => sum + honorForPengajarRow(r, trainer), 0)
+  }
 
   const totalHonorDibayar = trainerFinance.reduce((sum, t) => sum + t.dibayar, 0)
   // TEAM_FEEDBACK D5 (G5.1) — sisaKewajiban sums the floored per-trainer

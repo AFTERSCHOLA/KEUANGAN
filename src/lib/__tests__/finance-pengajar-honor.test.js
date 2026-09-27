@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { financialData, pengajarHonorStats } from '../finance.js'
+import { financialData, honorForPengajarRow, pengajarHonorStats } from '../finance.js'
 
 // TA.C.3 VERIFY (TRAINER_ATTENDANCE_MILESTONES.md TA.C.3):
 // -> trainer senior honor 100000 × 2 Hadir = 200000;
@@ -90,5 +90,74 @@ describe('TA.C.3 honor from absensiPengajar', () => {
     expect(byId['trn-senior'].bebanHonor).toBe(texts.length * 100000)
     expect(byId['trn-baru'].bebanHonor).toBe(0)
     expect(byId['trn-baru'].hadirSesi).toBe(0)
+  })
+})
+
+// CS.C.1 (F-CS4; D-CS3, D-CS6) — role-first honor.
+// I-row at tier, A-row flat 50k (same person prices differently),
+// external-A 50k, legacy-no-peran per-person unchanged, memo-only
+// (labaRugi untouched).
+describe('CS.C.1 role-first honor (COVER_SLOT)', () => {
+  const trainer = [
+    { id: 'trn-senior', nama: 'Senior', honor: 100000, tipePengajar: 'instruktur', sekolahIds: ['skl-1'] },
+    { id: 'trn-baru', nama: 'Baru', honor: 75000, tipePengajar: 'instruktur', sekolahIds: ['skl-1'] },
+  ]
+  const sekolah = [{ id: 'skl-1', nama: 'SD CS.C.1', spp: 0, trainerIds: [] }]
+  const baseCs = { sekolah, siswa: [], trainer, absensi: [], honorPayments: [], sppPayments: [], periode: '2026-09' }
+
+  it('I-row at Senior prices 100k, A-row by the same person prices 50k', () => {
+    const rows = [
+      { id: 'cs-i1', trainerId: 'trn-senior', sekolahId: 'skl-1', tanggal: '2026-09-02', periode: '2026-09', status: 'Hadir', peran: 'I' },
+      { id: 'cs-a1', trainerId: 'trn-senior', sekolahId: 'skl-1', tanggal: '2026-09-03', periode: '2026-09', status: 'Hadir', peran: 'A' },
+      { id: 'cs-i2', trainerId: 'trn-baru', sekolahId: 'skl-1', tanggal: '2026-09-02', periode: '2026-09', status: 'Hadir', peran: 'I' },
+    ]
+    expect(honorForPengajarRow(rows[0], trainer)).toBe(100000)
+    expect(honorForPengajarRow(rows[1], trainer)).toBe(50000)
+    expect(honorForPengajarRow(rows[2], trainer)).toBe(75000)
+    const out = financialData({ ...baseCs, absensiPengajar: rows })
+    const byId = Object.fromEntries(out.trainerFinance.map(t => [t.id, t]))
+    expect(byId['trn-senior'].hadirSesi).toBe(2)
+    expect(byId['trn-senior'].bebanHonor).toBe(150000)
+    expect(byId['trn-baru'].bebanHonor).toBe(75000)
+    expect(out.totalBebanHonor).toBe(225000)
+    expect(out.sekolahFinance[0].bebanHonor).toBe(225000)
+  })
+
+  it('external-A prices 50k in school/total beban with no trainerFinance entry', () => {
+    const rows = [
+      { id: 'cs-ext-a1', trainerId: 'ext-budi-1', sekolahId: 'skl-1', tanggal: '2026-09-04', periode: '2026-09', status: 'Hadir', peran: 'A', dicatatOleh: 'usr-recorder-1' },
+    ]
+    expect(honorForPengajarRow(rows[0], trainer)).toBe(50000)
+    const out = financialData({ ...baseCs, absensiPengajar: rows })
+    expect(out.sekolahFinance[0].bebanHonor).toBe(50000)
+    expect(out.sekolahFinance[0].trainerKehadiran).toBe(1)
+    expect(out.totalBebanHonor).toBe(50000)
+    expect(out.trainerFinance.find(t => t.id === 'trn-senior').bebanHonor).toBe(0)
+    // Memo-only: external beban never enters cash labaRugi (D1).
+    expect(out.labaRugi).toBe(0)
+  })
+
+  it('legacy row without peran prices per-person honor unchanged', () => {
+    const rows = [
+      { id: 'cs-leg1', trainerId: 'trn-senior', sekolahId: 'skl-1', tanggal: '2026-09-05', periode: '2026-09', status: 'Hadir' },
+      { id: 'cs-leg2', trainerId: 'trn-baru', sekolahId: 'skl-1', tanggal: '2026-09-05', periode: '2026-09', status: 'Hadir' },
+    ]
+    expect(honorForPengajarRow(rows[0], trainer)).toBe(100000)
+    expect(honorForPengajarRow(rows[1], trainer)).toBe(75000)
+    const out = financialData({ ...baseCs, absensiPengajar: rows })
+    const byId = Object.fromEntries(out.trainerFinance.map(t => [t.id, t]))
+    expect(byId['trn-senior'].bebanHonor).toBe(100000)
+    expect(byId['trn-baru'].bebanHonor).toBe(75000)
+    expect(out.totalBebanHonor).toBe(175000)
+  })
+
+  it('peran on Izin/Alpa still prices 0 (only Hadir bills)', () => {
+    const rows = [
+      { id: 'cs-x1', trainerId: 'trn-senior', sekolahId: 'skl-1', tanggal: '2026-09-06', periode: '2026-09', status: 'Izin', peran: 'A' },
+      { id: 'cs-x2', trainerId: 'trn-senior', sekolahId: 'skl-1', tanggal: '2026-09-07', periode: '2026-09', status: 'Alpa', peran: 'I' },
+    ]
+    const out = financialData({ ...baseCs, absensiPengajar: rows })
+    expect(out.trainerFinance.find(t => t.id === 'trn-senior').bebanHonor).toBe(0)
+    expect(out.totalBebanHonor).toBe(0)
   })
 })

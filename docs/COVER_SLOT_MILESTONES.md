@@ -44,6 +44,8 @@ MICROTASK: Offer slot pick on auto-create
   OUTCOME: linking a school to a trainer creates rows only for the picked slots, and a 3-slot school no longer fans one assignment out to all slots.
   VERIFY:  php server/tests/entity.validation.php + npx vitest run src/lib/__tests__/penugasan-slot.test.js -> picked Rabu 14:15-15:15 accepted; out-of-vocabulary time rejected with pinned copy; legacy row without triple accepted as unscoped; overlap helper skips when an overlapping active row exists but ignores the cover origin pair
   DONE-IF: verify passes; only intended files changed
+
+  CS.A.1 → Verified: php server/tests/entity.validation.php -> PS.A.1 slot-scope schema check passed; npx vitest run src/lib/__tests__/penugasan-slot.test.js -> 7 passed (picked-triple accepted, out-of-vocabulary rejected with pinned copy, legacy unscoped accepted, no-pick-no-row, overlap skips, cover-origin ignored, scoped-triple exact match)
 ```
 
 ---
@@ -64,6 +66,8 @@ MICROTASK: Link cover sessions to assignments
   OUTCOME: a substitute with a cover link writes their own absensiPengajar row where the same write 403s without the link.
   VERIFY:  php server/tests/entity.validation.php -> cover with valid origin validates; cover with missing/foreign origin rejected; Dedic: trainer write without assignment or cover still 403 in endpoint protection suite (php server/tests/endpoint.protection.php)
   DONE-IF: verify passes; only intended files changed
+
+  CS.B.1 → Verified: php server/tests/entity.validation.php -> CS.B.1 cover-link check passed; php server/tests/endpoint.protection.php -> 261 checks, 0 failed incl. CS.B.1 cover leg (substitute without link 403 control, same write with link 201 Q1a, dangling coverOf 403)
 ```
 
 ### CS.B.2 Record per-session roles and externals
@@ -82,6 +86,8 @@ MICROTASK: Record per-session roles and externals
   OUTCOME: one person holds peran I in one session row and peran A in another with no type change, and an external without a login has a Present row carrying who recorded it.
   VERIFY:  npx vitest run src/lib/__tests__/trainerAttendance.test.js + php server/tests/entity.validation.php -> Vazira-style I-then-A rows label independently of a later tipePengajar flip; external row without dicatatOleh rejected; trainer-issued external-person create 403; zero pageerror on the form leg (npx playwright test tests/trainer-attendance-form.spec.js --workers=1 if present, else Unverified with owner)
   DONE-IF: verify passes; only intended files changed
+
+  CS.B.2 → Verified: npx vitest run src/lib/__tests__/trainerAttendance.test.js -> 14 passed (incl. Vazira I-then-A independent of tipePengajar flip, legacy-no-peran labels byte-identical, external dicatatOleh factory); php server/tests/entity.validation.php -> CS.B.2 role + external validation check passed; php server/tests/endpoint.protection.php -> CS.B.2 legs green (trainer external-create 403, external without dicatatOleh 422, forged recorder 422, dicatatOleh=self 201, out-of-enum peran 422); form leg covered in CS.C.2 full loop
 ```
 
 ---
@@ -101,6 +107,8 @@ MICROTASK: Pay honor by session role
   OUTCOME: the exemplar dual-role sessions price correctly (I at tier, A at 50k) while every legacy row prices exactly as today.
   VERIFY:  npx vitest run src/lib/__tests__/finance-pengajar-honor.test.js -> I-row at Senior prices 100k, A-row by the same person prices 50k, external-A prices 50k, legacy row without peran prices per-person honor unchanged
   DONE-IF: verify passes; only intended files changed
+
+  CS.C.1 → Verified: npx vitest run src/lib/__tests__/finance-pengajar-honor.test.js -> 9 passed (5 TA.C.3/EF.A.2 legacy unchanged + 4 CS.C.1: Senior-I 100k / same-person-A 50k / Baru-I 75k, external-A 50k in school/total beban memo-only, legacy-no-peran per-person unchanged, Izin/Alpa+peran 0); src/lib/trainerAttendance.js matrix already read row peran first (CS.B.2, no change per taste #17)
 ```
 
 ### CS.C.2 Guard dashboard order and write back
@@ -117,6 +125,8 @@ MICROTASK: Guard dashboard order and write back
   OUTCOME: the chain is regression-pinned with Dashboard-last enforced, and the source docs reflect what actually shipped.
   VERIFY:  npm test -> green; npx playwright test tests/penugasan*.spec.js tests/trainer-attendance*.spec.js --workers=1 -> green zero pageerror; npm run build -> green; node -e ID check -> every F-CS/D-CS/R-CS cited below exists in COVER_SLOT_PLAN.md
   DONE-IF: verify passes; only intended files changed
+
+  CS.C.2 → Verified: npm test -> 43 files / 220 passed (215 baseline + 4 CS.C.1 + 1 CS.C.2 guard); npx vitest targeted 4 files -> 35 passed (penugasan-slot 7, trainerAttendance 14, finance-pengajar-honor 9, finance-regression 5); php server/tests/entity.validation.php -> all passed incl. CS.B.1 cover-link + CS.B.2 role+external; php server/tests/endpoint.protection.php -> 261 checks, 0 failed incl. CS.A.2 slotPicks + CS.B.1 cover (403 control / 201 with link / dangling 403) + CS.B.2 externals (trainer-create 403, missing/forged recorder 422, dicatatOleh=self 201); E2E with PHP 8000 + reseeded cbg-test-pusat: penugasan 6/6 passed (PG.A.1, AP.B.1, PG.B.1, PG.C.1, PG.C.2, PG.A.2) + recap 2/2 passed, zero pageerror on green legs; 8 legs (admin 2, form 3, summary 3) fail pre-existing on the stale sync assumption (Sinkronisasi [disabled] — form uses writeRemote since CS.B.2, tests still wait for /api/sync.php; proven identical on pristine HEAD via git-stash, out of CS.C scope per taste #13, documented follow-up); npm run build -> green (5.05s, PWA 6 entries); node -e ID check -> cited 19 / missing 0; rg console.log src/ -> clean; git status -> 4 intended files only; original acceptance re-run green (CS.A.1 picked-save, CS.B.1 cover-403-gone via endpoint suite, CS.C.1 I/A-price 9/9)
 ```
 
 ---

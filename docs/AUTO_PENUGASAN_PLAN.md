@@ -101,6 +101,7 @@ Auto-create: no new UI (silent row + toast `Penugasan otomatis dibuat`). Manager
 | Audit-log viewer UI | Unrequested | Trail verified server-side; no UI asked |
 | Assistant/photo/catatan/SPP→invoice/aging sims | Later sim passes (client order: izin/alpa + koreksi first) | Explicitly sequenced 2026-09-25 |
 | F-AP8 checkbox-vs-rerender repro | Future hardening (needs minimal repro: checkbox change lost across background store update) | Observed 2× in AP.B.1 VERIFY; worked around via asisten path; no build without repro (taste #13) |
+| D-AP1/D-AP2 revision scope (COVER_SLOT D-CS1, 2026-09-27) | COVER_SLOT chain CS.A.1 (this note only — no AP history rewrite) | Slot-pick wins over whole-school copy: link-add creates rows only for admin-picked slots from the school `jadwalList` vocabulary (`Semua slot` = unscoped `null` allowed); no pick, no row; overlap check idempotent; cover rows never conflict with origin. Unscoped (`null`) rows keep AP.A.1 behavior byte-identically. AP stays otherwise intact. |
 
 ## 11. Write-back contract (on AP close)
 

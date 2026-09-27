@@ -430,4 +430,55 @@ Sign-off decisions: (1) D-PG2 superseded by D-AP1 on client authority
 trainer-sekolah leg identically on pristine HEAD (pre-existing, out of
 scope); (5) F-AP8 checkbox-vs-rerender deferred pending minimal repro.
 
+---
+
+## Gate CS — Cover Slot Closure Summary (taste #40 temporary gate)
+
+**Status: DONE (CS.A.1–CS.C.2, 2026-09-27).** Chain lengkap ada di
+`docs/COVER_SLOT_PLAN.md` + `docs/COVER_SLOT_MILESTONES.md`
+(tidak ada renumbering rantai di dokumen ini — pair tersebut adalah gate
+doc sementara per taste #40).
+
+Verified: `npm test` (43 files / 220 passed: 215 baseline + 4 CS.C.1
+role-first + 1 CS.C.2 dashboard-last guard) + targeted
+`npx vitest run penugasan-slot + trainerAttendance + finance-pengajar-honor
++ finance-regression` (35 passed: 7 + 14 + 9 + 5) +
+`php server/tests/entity.validation.php` (all passed incl. CS.B.1
+cover-link + CS.B.2 role+external) +
+`php server/tests/endpoint.protection.php` (261 checks, 0 failed incl.
+CS.A.2 slotPicks + CS.B.1 cover 403/201 + CS.B.2 externals) + E2E with PHP
+8000 + reseeded `cbg-test-pusat`: penugasan 6/6 + recap 2/2 passed, zero
+pageerror on green legs; 8 legs (admin 2, form 3, summary 3) fail
+pre-existing on the stale sync assumption (proven identical on pristine
+HEAD via git-stash, out of scope) + `npm run build` green + node -e ID
+check cited 19 / missing 0; original acceptance re-run green (CS.A.1
+picked-save, CS.B.1 cover-403-gone, CS.C.1 I/A-price).
+
+Changed (CS.C only; CS.A–CS.B landed in prior commits `db9bd2b`
+slot-picks + `4fd085d` externals, Verified retroactively here):
+`src/lib/finance.js` (+ `honorForPengajarRow`/`PERAN_ASISTEN_HONOR`:
+A → 50k per D2 incl. externals, I/legacy → owner's `trainer.honor` per
+R-TA3; school/total beban role-first, legacy byte-identical;
+`trainerAttendance.js` matrix already row-first — no change),
+`src/lib/__tests__/finance-pengajar-honor.test.js` (+4 CS.C.1:
+Senior-I 100k / same-person-A 50k, external-A 50k memo-only,
+legacy-no-peran unchanged, Izin/Alpa+peran 0),
+`src/lib/__tests__/finance-regression.test.js` (+1 CS.C.2
+dashboard-last guard: flat 200k vs tariff 180k diverge, premature switch
+fails), docs write-back (this row + `COVER_SLOT_*` Verified/status +
+`AUTO_PENUGASAN_PLAN.md` §10 D-AP1/D-AP2 revision note).
+
+Sign-off decisions: (1) D-AP1/D-AP2 revised by D-CS1 (slot-pick wins;
+whole-school copy removed, unscoped `null` rows byte-identical; AP stays
+otherwise intact); (2) Q1(a) closed end-to-end (school bills + substitute
+paid via cover link; genuinely unassigned writes still 403); Q2 guarded
+(Dashboard-last: flat source kept until SPP_BILLING generator upgrade;
+premature switch fails loudly); (3) trainer external-create stays denied
+(reference-only, taste #33); (4) sync-drift E2E failures (8 legs, stale
+`/api/sync.php` wait vs `writeRemote` reality) deferred to test
+maintenance — needs minimal repro before any build (taste #13);
+(5) EVALUATION_LOG/EXEMPLAR_MIGRATION Q1(a)/Q2 addendumlink per
+COVER_SLOT_PLAN §11 stays follow-up (outside CS.C.2 EDIT scope, not
+patched here).
+
 **End of Microtask Chains**
