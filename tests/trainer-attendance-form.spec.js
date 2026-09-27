@@ -157,19 +157,9 @@ test('TA.B.3: form absensi tampil, sekolah hanya dari assignment aktif, Hadir te
 
   await expect(page.getByText('Tersimpan')).toBeVisible({ timeout: 10000 })
 
-  // upsert('absensiPengajar', ...) cuma nge-queue lokal (LEDGER_KEYS di
-  // store.js) — perlu trigger Sinkronisasi manual dari AccountMenu biar
-  // data beneran ke-flush ke /api/sync.php sebelum dibaca ulang dari server.
-  await page.getByRole('button', { name: 'Akun' }).click()
-  const [syncRes] = await Promise.all([
-    page.waitForResponse(res => res.url().includes('/api/sync.php') && res.request().method() === 'POST'),
-    page.getByRole('menuitem', { name: /Sinkronisasi/ }).click(),
-  ])
-  expect(syncRes.ok()).toBe(true)
-  const syncBody = await syncRes.json()
-  if (syncBody.failed?.length > 0) {
-    throw new Error(`sync failed entries: ${JSON.stringify(syncBody.failed)}`)
-  }
+  // DC.B.4 (D-DC1) — direct save: Tersimpan means server-persisted
+  // (writeRemote); the Sinkronisasi queue is removed. Read back straight
+  // from the server.
 
   const readRes = await page.request.get('/api/read.php?entity=absensiPengajar')
   expect(readRes.ok()).toBe(true)
@@ -193,19 +183,9 @@ test('TA.B.3: Izin dan Alpa dapat disimpan', async ({ page }) => {
   await page.getByRole('button', { name: 'Simpan Absensi' }).click()
   await expect(page.getByText('Tersimpan')).toBeVisible({ timeout: 10000 })
 
-  // upsert('absensiPengajar', ...) cuma nge-queue lokal (LEDGER_KEYS di
-  // store.js) — perlu trigger Sinkronisasi manual dari AccountMenu biar
-  // data beneran ke-flush ke /api/sync.php sebelum dibaca ulang dari server.
-  await page.getByRole('button', { name: 'Akun' }).click()
-  const [syncRes] = await Promise.all([
-    page.waitForResponse(res => res.url().includes('/api/sync.php') && res.request().method() === 'POST'),
-    page.getByRole('menuitem', { name: /Sinkronisasi/ }).click(),
-  ])
-  expect(syncRes.ok()).toBe(true)
-  const syncBody = await syncRes.json()
-  if (syncBody.failed?.length > 0) {
-    throw new Error(`sync failed entries: ${JSON.stringify(syncBody.failed)}`)
-  }
+  // DC.B.4 (D-DC1) — direct save: Tersimpan means server-persisted
+  // (writeRemote); the Sinkronisasi queue is removed. Read back straight
+  // from the server.
 
   const readRes = await page.request.get('/api/read.php?entity=absensiPengajar')
   const rows = await readRes.json()
@@ -232,19 +212,9 @@ test('TA.B.3: keterangan EXPO/Pengganti/Lainnya tersimpan', async ({ page }) => 
   await page.getByRole('button', { name: 'Simpan Absensi' }).click()
   await expect(page.getByText('Tersimpan')).toBeVisible({ timeout: 10000 })
 
-  // upsert('absensiPengajar', ...) cuma nge-queue lokal (LEDGER_KEYS di
-  // store.js) — perlu trigger Sinkronisasi manual dari AccountMenu biar
-  // data beneran ke-flush ke /api/sync.php sebelum dibaca ulang dari server.
-  await page.getByRole('button', { name: 'Akun' }).click()
-  const [syncRes] = await Promise.all([
-    page.waitForResponse(res => res.url().includes('/api/sync.php') && res.request().method() === 'POST'),
-    page.getByRole('menuitem', { name: /Sinkronisasi/ }).click(),
-  ])
-  expect(syncRes.ok()).toBe(true)
-  const syncBody = await syncRes.json()
-  if (syncBody.failed?.length > 0) {
-    throw new Error(`sync failed entries: ${JSON.stringify(syncBody.failed)}`)
-  }
+  // DC.B.4 (D-DC1) — direct save: Tersimpan means server-persisted
+  // (writeRemote); the Sinkronisasi queue is removed. Read back straight
+  // from the server.
 
   const readRes = await page.request.get('/api/read.php?entity=absensiPengajar')
   const rows = await readRes.json()

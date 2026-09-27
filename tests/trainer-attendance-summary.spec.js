@@ -11,9 +11,9 @@ import { test, expect, loginViaApi, primeCsrf, readEntity, logout } from './fixt
 // Idiom mirrors tests/trainer-attendance-form.spec.js (seed as
 // superadmin — trainer cannot write master data) and
 // tests/trainer-attendance-admin.spec.js (switchRole via logout +
-// clearCookies, trainerFillAndSync via the real "Absensi Saya" form +
-// manual Sinkronisasi flush, cell-scoped assertions to avoid the
-// <option>-vs-<td> strict-mode violation).
+// clearCookies, trainerFillMultiple via the real "Absensi Saya" form +
+// direct save (DC.B.4 — no Sinkronisasi step), cell-scoped assertions to
+// avoid the <option>-vs-<td> strict-mode violation).
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -85,7 +85,9 @@ async function seedSchoolAsSuperadmin(page, csrf, nama) {
   return res.json()
 }
 
-async function trainerFillMultipleAndSync(page, entries) {
+// DC.B.4 (D-DC1) — direct save: Tersimpan means server-persisted; no
+// Sinkronisasi step.
+async function trainerFillMultiple(page, entries) {
   await switchRole(page, 'trainer')
   await gotoApp(page)
   await openTab(page, 'Absensi Saya')
@@ -97,20 +99,13 @@ async function trainerFillMultipleAndSync(page, entries) {
     await page.getByRole('button', { name: 'Simpan Absensi' }).click()
     await expect(page.getByText('Tersimpan')).toBeVisible({ timeout: 10000 })
   }
-  await page.getByRole('button', { name: 'Akun' }).click()
-  const [syncRes] = await Promise.all([
-    page.waitForResponse(res => res.url().includes('/api/sync.php') && res.request().method() === 'POST'),
-    page.getByRole('menuitem', { name: /Sinkronisasi/ }).click(),
-  ])
-  expect(syncRes.ok()).toBe(true)
-  const syncBody = await syncRes.json()
-  if (syncBody.failed?.length > 0) throw new Error(`sync failed entries: ${JSON.stringify(syncBody.failed)}`)
 }
 
 // Direct server seed of one absensiPengajar row via /api/sync.php as
 // superadmin (bypasses the trainer form, which can only write today +
 // own trainerId). Used for trainer-B isolation rows and other-periode
-// rows the form cannot produce.
+// rows the form cannot produce. The endpoint is legacy-retained
+// (DC.B.3) but functional for seeds; envelope shape unchanged.
 async function seedAbsensiPengajarAsSuperadmin(page, csrf, { trainerId, sekolahId, tanggal, status }) {
   const periode = tanggal.slice(0, 7)
   const id = `absp-TAC1-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -138,7 +133,7 @@ test.describe('TA.C.1: ringkasan absensi pribadi', () => {
     csrf = await primeCsrf(page)
     await addActiveAssignment(page, csrf, sekolahBId, CABANG_ID)
 
-    await trainerFillMultipleAndSync(page, [
+    await trainerFillMultiple(page, [
       { sekolahId: sekolahAId, status: 'Hadir' },
       { sekolahId: sekolahBId, status: 'Izin' },
     ])
@@ -183,7 +178,7 @@ test.describe('TA.C.1: ringkasan absensi pribadi', () => {
     const { id: sekolahAId } = await seedSchoolAsSuperadmin(page, csrf, `SD TAC1-Milik-A ${suffix}`)
     csrf = await primeCsrf(page)
     await addActiveAssignment(page, csrf, sekolahAId, CABANG_ID)
-    await trainerFillMultipleAndSync(page, [{ sekolahId: sekolahAId, status: 'Hadir' }])
+    await trainerFillMultiple(page, [{ sekolahId: sekolahAId, status: 'Hadir' }])
 
     await switchRole(page, 'trainer')
     await gotoApp(page)
@@ -216,7 +211,7 @@ test.describe('TA.C.1: ringkasan absensi pribadi', () => {
     csrf = await primeCsrf(page)
     await seedAbsensiPengajarAsSuperadmin(page, csrf, { trainerId: TRAINER_ID, sekolahId: sekolahLaluId, tanggal: prevTanggal, status: 'Alpa' })
 
-    await trainerFillMultipleAndSync(page, [{ sekolahId: sekolahKiniId, status: 'Hadir' }])
+    await trainerFillMultiple(page, [{ sekolahId: sekolahKiniId, status: 'Hadir' }])
 
     await switchRole(page, 'trainer')
     await gotoApp(page)

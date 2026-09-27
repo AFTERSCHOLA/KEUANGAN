@@ -74,13 +74,8 @@ async function financeSnapshot(page) {
 }
 
 test('Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation', async ({ page, pageErrors }) => {
-  // Block the real /api/sync.php so we can capture and assert the
-  // payload without hitting a (non-existent) sync endpoint.
-  let syncPayload = null
-  await page.route('**/api/sync.php', async route => {
-    syncPayload = route.request().postDataJSON()
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ synced: 0, alreadyApplied: ['abs-PST-sync-sim'], failed: [] }) })
-  })
+  // DC.B.4 (D-DC1): the Sync queue is removed — no /api/sync.php route
+  // mock; every write below posts direct to its entity endpoint.
 
   // Phase 5: Trainer day, capture, proof review, and self-certification.
   await loginViaApi(page, 'trainer')
@@ -127,13 +122,14 @@ test('Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation'
   await expect(page.locator('img[alt="Foto Kegiatan"]').first()).toBeVisible()
   await page.getByRole('button', { name: 'Saya nyatakan absensi minggu ini sesuai dokumen kertas' }).click()
 
-  const certified = await page.evaluate(() => JSON.parse(localStorage.getItem('afterschola_v4_absensi') || '[]').find(record => record.catatan === 'Sesi simulasi trainer dengan bukti lengkap.'))
-  expect(certified.konfirmasiTrainer).toEqual(expect.any(String))
-
-  // Flush the trainer's pending writes to the (mocked) sync endpoint so
-  // the new absensi is visible to the superadmin's MySQL-backed view.
-  await page.getByRole('button', { name: /Sinkronisasi/ }).click()
-  await expect(page.getByRole('button', { name: 'Sinkronisasi', exact: true })).toBeVisible()
+  // DC.B.4 (D-DC1): certify posts direct (absensi.php certify action),
+  // so poll the cache for the server-stamped value instead of reading
+  // it synchronously — the click does not await the async handler.
+  await expect.poll(async () => page.evaluate(() => {
+    const rows = JSON.parse(localStorage.getItem('afterschola_v4_absensi') || '[]')
+    const found = rows.find(record => record.catatan === 'Sesi simulasi trainer dengan bukti lengkap.')
+    return found?.konfirmasiTrainer ?? null
+  }), { timeout: 10000 }).toEqual(expect.any(String))
 
   // Switch to superadmin via real logout + login.
   await logout(page)
@@ -210,7 +206,7 @@ test('Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation'
   await page.getByRole('button', { name: 'Ganjil (Jul–Des)', exact: true }).click()
   await expect(page.getByRole('columnheader', { name: 'Total', exact: true })).toBeVisible()
 
-  // Phase 7: branch aggregation, client-side scope, and offline sync queue.
+  // Phase 7: branch aggregation, client-side scope, and direct write.
   await openTab(page, 'Overview')
   const branchSelect = page.getByLabel('Cabang', { exact: true })
   await expect(branchSelect).toHaveValue('')
@@ -222,11 +218,14 @@ test('Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation'
   await expect(page.getByText('Rp 100.000').first()).toBeVisible()
   await expect(page.getByText('Rp 150.000')).toHaveCount(0)
 
-  await page.evaluate(() => localStorage.setItem('afterschola_v4_syncLog', JSON.stringify([])))
-  const syncResult = await page.evaluate(async ({ schoolId, trainerId, period }) => {
-    const { upsert, getSyncStatus } = await import('/src/lib/store.js')
+  // DC.B.4 (D-DC1): the offline sync queue is removed — upsert() is a
+  // local cache write only (never queues), every server write posts
+  // direct, and no Sinkronisasi control exists. Prove all three.
+  await page.evaluate(() => localStorage.removeItem('afterschola_v4_syncLog'))
+  const directWrite = await page.evaluate(async ({ schoolId, trainerId, period }) => {
+    const { upsert } = await import('/src/lib/store.js')
     upsert('absensi', {
-      id: 'abs-PST-sync-sim',
+      id: 'abs-PST-direct-sim',
       tanggal: new Date().toISOString().slice(0, 10),
       periode: period,
       sekolahId: schoolId,
@@ -234,25 +233,36 @@ test('Phase 5-7 exit gates: Trainer to Head Trainer and branch close simulation'
       trainerStatus: 'Hadir',
       siswaList: [],
     })
-    return getSyncStatus()
+    const { apiRequest } = await import('/src/lib/api.js')
+    await apiRequest('/api/absensi.php', { method: 'POST', body: {
+      id: 'abs-PST-direct-sim',
+      cabangId: 'cbg-PST-sim',
+      tanggal: new Date().toISOString().slice(0, 10),
+      periode: period,
+      sekolahId,
+      trainerId,
+      trainerStatus: 'Hadir',
+      siswaList: [],
+    } })
+    return {
+      cached: JSON.parse(localStorage.getItem('afterschola_v4_absensi') || '[]').some(r => r.id === 'abs-PST-direct-sim'),
+      syncLog: localStorage.getItem('afterschola_v4_syncLog'),
+    }
   }, { schoolId: SCHOOL_PUSAT, trainerId: TRAINER_PUSAT, period: PERIOD })
-  expect(syncResult.pending).toBe(1)
-  await expect(page.getByRole('button', { name: /Sinkronisasi \(1\)/ })).toBeVisible()
-
-  await page.getByRole('button', { name: /Sinkronisasi \(1\)/ }).click()
-  await expect(page.getByRole('button', { name: 'Sinkronisasi', exact: true })).toBeVisible()
-  expect(syncPayload.entries).toHaveLength(1)
-  expect(syncPayload.entries[0].key).toBe('absensi')
-  expect(syncPayload.entries[0].record.sekolahId).toBe(SCHOOL_PUSAT)
-  expect(syncPayload.entries[0].record).not.toHaveProperty('cabang')
-  expect(syncPayload.entries[0].record).not.toHaveProperty('trainer')
+  expect(directWrite.cached).toBe(true)
+  expect(directWrite.syncLog).toBeNull()
+  await page.getByLabel('Akun').click()
+  await expect(page.getByRole('menuitem', { name: /Sinkronisasi/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  const serverAbs = await page.request.get('/api/read.php?entity=absensi').then(r => r.json())
+  expect(serverAbs.some(r => r.id === 'abs-PST-direct-sim')).toBe(true)
 
   const finalSnapshot = await page.evaluate(() => ({
-    pending: JSON.parse(localStorage.getItem('afterschola_v4_syncLog') || '[]'),
+    queueGone: localStorage.getItem('afterschola_v4_syncLog') === null,
     branches: JSON.parse(localStorage.getItem('afterschola_v4_cabang') || '[]'),
     masterData: Object.keys(localStorage).filter(storageKey => storageKey.includes('sekolah') || storageKey.includes('trainer') || storageKey.includes('siswa')),
   }))
-  expect(finalSnapshot.pending).toHaveLength(0)
+  expect(finalSnapshot.queueGone).toBe(true)
   // The DB carries the phase-5-7 seed branches (PST, BDG) plus the
   // test-users seed branch (TST). >= 2 confirms hydration; the test no
   // longer asserts an exact count.

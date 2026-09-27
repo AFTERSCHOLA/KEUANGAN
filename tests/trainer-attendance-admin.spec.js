@@ -91,7 +91,9 @@ async function addActiveAssignment(page, csrf, sekolahId, cabangId) {
   if (!res.ok()) throw new Error(`addActiveAssignment failed: ${res.status()} ${await res.text()}`)
 }
 
-async function trainerFillMultipleAndSync(page, entries) {
+// DC.B.4 (D-DC1) — direct save: Tersimpan means server-persisted; no
+// Sinkronisasi step. Helpers renamed (drop the Sync suffix).
+async function trainerFillMultiple(page, entries) {
   await switchRole(page, 'trainer')
   await gotoApp(page)
   await openTab(page, 'Absensi Saya')
@@ -104,21 +106,10 @@ async function trainerFillMultipleAndSync(page, entries) {
     await page.getByRole('button', { name: 'Simpan Absensi' }).click()
     await expect(page.getByText('Tersimpan')).toBeVisible({ timeout: 10000 })
   }
-
-  await page.getByRole('button', { name: 'Akun' }).click()
-  const [syncRes] = await Promise.all([
-    page.waitForResponse(res => res.url().includes('/api/sync.php') && res.request().method() === 'POST'),
-    page.getByRole('menuitem', { name: /Sinkronisasi/ }).click(),
-  ])
-  expect(syncRes.ok()).toBe(true)
-  const syncBody = await syncRes.json()
-  if (syncBody.failed?.length > 0) {
-    throw new Error(`sync failed entries: ${JSON.stringify(syncBody.failed)}`)
-  }
 }
 
-async function trainerFillAndSync(page, sekolahId, status = 'Hadir') {
-  await trainerFillMultipleAndSync(page, [{ sekolahId, status }])
+async function trainerFill(page, sekolahId, status = 'Hadir') {
+  await trainerFillMultiple(page, [{ sekolahId, status }])
 }
 
 test.describe('TA.B.4: admin attendance management', () => {
@@ -142,7 +133,7 @@ test.describe('TA.B.4: admin attendance management', () => {
     )
     await addActiveAssignment(page, csrf, sekolahBId, cabangBId)
 
-    await trainerFillMultipleAndSync(page, [
+    await trainerFillMultiple(page, [
       { sekolahId: sekolahAId, status: 'Hadir' },
       { sekolahId: sekolahBId, status: 'Hadir' },
     ])
@@ -182,7 +173,7 @@ test.describe('TA.B.4: admin attendance management', () => {
     )
     await addActiveAssignment(page, csrf, sekolahId, CABANG_A)
 
-    await trainerFillAndSync(page, sekolahId, 'Hadir')
+    await trainerFill(page, sekolahId, 'Hadir')
 
     await switchRole(page, 'superadmin')
     csrf = await primeCsrf(page)

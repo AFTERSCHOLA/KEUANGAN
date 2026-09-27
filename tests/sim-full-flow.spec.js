@@ -354,32 +354,26 @@ test('sim full flow: superadmin -> cabang+admin -> sekolah -> siswa -> trainer -
   await page.getByRole('button', { name: 'Ya, Simpan' }).click()
   await page.waitForTimeout(800)
   await clearOverlays(page)
-  // Pre-sync backend state: attendance is local-first by design
-  // (upsert + outbox, src/lib/store.js:292-308 + LEDGER_KEYS:11) — the server
-  // row only exists after manual Sinkronisasi. Document both states.
+  // DC.B.4 (D-DC1): saves post direct — the server row exists right
+  // after Ya, Simpan with no Sinkronisasi step (queue removed). The
+  // absence of the menu item is itself asserted below.
   try {
     const csrf = await primeCsrf(page)
     const abs = await readViaApi(page, 'absensi', csrf)
     const hit = abs.filter(a => a.sekolahId === sekolahId && (a.tanggal || '').slice(0, 10) === localToday)
-    console.log(`pre-sync backend: ${hit.length} absensi row(s) today for Sim school (expected 0 — local-first).`)
-  } catch (e) { logFinding(`Step8 pre-sync backend check failed: ${e.message}`) }
-  // Drive the sync step like a real trainer: Akun menu -> Sinkronisasi (N).
+    console.log(`post-save backend: ${hit.length} absensi row(s) today for Sim school (expected >=1 — direct write).`)
+    if (!hit.length) logFinding('Absensi saved in UI but no matching row via GET /api/read.php?entity=absensi for today+sekolah.')
+  } catch (e) { logFinding(`Step8 post-save backend check failed: ${e.message}`) }
   await page.getByLabel('Akun').first().click()
-  const syncItem = page.getByRole('menuitem', { name: /Sinkronisasi/ })
-  if (await syncItem.count()) {
-    console.log('sync menu label:', await syncItem.textContent())
-    await syncItem.click()
-    await page.waitForTimeout(2500)
-    console.log('OK step8: Sinkronisasi clicked, checking server rows post-sync.')
-  } else {
-    logFinding('Sinkronisasi menu item missing for trainer — attendance stays local-only (AccountMenu.jsx:70-79).')
-  }
+  await expect(page.getByRole('menuitem', { name: /Sinkronisasi/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  console.log('OK step8: no Sinkronisasi item (queue removed), checking server rows post-save.')
   try {
     const csrf = await primeCsrf(page)
     const abs = await readViaApi(page, 'absensi', csrf)
     const hit = abs.filter(a => a.sekolahId === sekolahId && (a.tanggal || '').slice(0, 10) === localToday)
-    console.log(`OK step8 backend post-sync: ${hit.length} absensi row(s) today for Sim school; siswaList len=${hit[0]?.siswaList?.length ?? 'n/a'}`)
-    if (!hit.length) logFinding('Absensi saved + synced in UI but no matching row via GET /api/read.php?entity=absensi for today+sekolah.')
+    console.log(`OK step8 backend post-save: ${hit.length} absensi row(s) today for Sim school; siswaList len=${hit[0]?.siswaList?.length ?? 'n/a'}`)
+    if (!hit.length) logFinding('Absensi saved in UI but no matching row via GET /api/read.php?entity=absensi for today+sekolah.')
   } catch (e) { logFinding(`Step8 backend check failed: ${e.message}`) }
 
   // Riwayat + weekly certification probe

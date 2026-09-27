@@ -148,22 +148,12 @@ test('AP.B.2 assignment delete preserves attendance history and honor math', asy
   await page.getByRole('button', { name: 'Hadir', exact: true }).click()
   await page.getByRole('button', { name: 'Simpan Absensi' }).click()
   await expect(page.getByText('Tersimpan')).toBeVisible({ timeout: 15000 })
+  // DC.B.4 (D-DC1): direct save — Tersimpan means server-persisted and the
+  // Sinkronisasi item is removed (its disabled-skip dance deleted with it).
+  // Close the Akun menu so uiLogout's toggle below starts closed.
   await page.getByLabel('Akun').first().click()
-  const syncItem = page.getByRole('menuitem', { name: /Sinkronisasi/ })
-  await expect(syncItem).toBeVisible({ timeout: 10000 })
-  // CS.A.2 spec-assumption fix (taste #14): the Hadir save above syncs
-  // directly (TA.B.2 design), so the outbox is empty and the menu item is
-  // correctly disabled — there is nothing to flush. Click only when items
-  // are actually pending; the API reads below stay falsifiable either way.
-  if (await syncItem.isEnabled()) {
-    await syncItem.click()
-    await page.waitForTimeout(3000)
-  } else {
-    console.log('## AP.B.2 sync skipped: outbox empty (direct-sync active)')
-    // The sync click would have closed the Akun menu via handle(); skipping
-    // leaves it open, which would invert uiLogout's toggle below — close it.
-    await page.getByLabel('Akun').first().click()
-  }
+  await expect(page.getByRole('menuitem', { name: /Sinkronisasi/ })).toHaveCount(0)
+  await page.getByLabel('Akun').first().click()
 
   // ---- 3. admin: beban>0, Hapus assignment, beban unchanged ----
   await clearOverlays(page)

@@ -1,69 +1,11 @@
-import { test, expect, loginViaApi } from './fixtures.js'
+import { test, expect } from './fixtures.js'
 
 const APP = 'http://localhost:5173'
 
-function clearStorage(page) {
-  return page.addInitScript(() => {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i)
-      if (key?.startsWith('afterschola_v4')) localStorage.removeItem(key)
-    }
-    localStorage.setItem('afterschola_v4_sekolah', JSON.stringify([
-      // Branch scope is server-derived since M-AUTH.5: seed the cache with
-      // the logged-in admin's own branch (cbg-test-pusat), otherwise
-      // readCached() filters the row and the offline-render leg sees nothing.
-      { id: 'skl-PST-cache', nama: 'Sekolah Cache', trainerIds: [], cabangId: 'cbg-test-pusat' },
-    ]))
-    // NOTE (2026-09-24): no fake `role` seed — identity is server-derived
-    // since M-AUTH.5; the caller logs in for real via loginViaApi first.
-    localStorage.setItem('afterschola_v4_syncLog', JSON.stringify([
-      { key: 'absensi', id: 'abs-offline-1', record: { id: 'abs-offline-1' }, queuedAt: Date.now() },
-    ]))
-  })
-}
-
-test('M7.2.1: offline cache renders and pending sync resolves online', async ({ page, pageErrors }) => {
-  // Real surface (2026-09-24): sync lives in the Akun avatar menu as a
-  // menuitem "Sinkronisasi (N)" with a count badge — not a header button.
-  await loginViaApi(page, 'adminCabang')
-  await clearStorage(page)
-  await page.route('**/api/read.php**', route => route.abort())
-  await page.goto(APP)
-  await page.waitForLoadState('domcontentloaded')
-  await page.getByLabel('Akun').click()
-  await expect(page.getByRole('menuitem', { name: 'Sinkronisasi (1)' })).toBeVisible()
-
-  await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Data Sekolah', exact: true }).click()
-  await expect(page.getByText('Sekolah Cache', { exact: true })).toBeVisible()
-
-  let syncPayload = null
-  await page.unroute('**/api/read.php**')
-  await page.route('**/api/read.php**', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'abs-server-1', tanggal: '2026-08-20' }]) })
-  })
-  await page.route('**/api/sync.php', async route => {
-    syncPayload = route.request().postDataJSON()
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ synced: 1, failed: [] }) })
-  })
-
-  await page.getByLabel('Akun').click()
-  await page.getByRole('menuitem', { name: 'Sinkronisasi (1)' }).click()
-  // handleSync() = syncPending() + hydrate: the menu closes on click, so
-  // reopen it to read the drained label.
-  await page.getByLabel('Akun').click()
-  await expect(page.getByRole('menuitem', { name: 'Sinkronisasi', exact: true })).toBeVisible()
-  expect(syncPayload.entries).toHaveLength(1)
-  expect(syncPayload.entries[0].id).toBe('abs-offline-1')
-
-  const snapshot = await page.evaluate(() => ({
-    pending: JSON.parse(localStorage.getItem('afterschola_v4_syncLog') || '[]'),
-    absensi: JSON.parse(localStorage.getItem('afterschola_v4_absensi') || '[]'),
-  }))
-  expect(snapshot.pending).toHaveLength(0)
-  expect(snapshot.absensi[0].id).toBe('abs-server-1')
-  expect(pageErrors).toHaveLength(0)
-})
+// DC.B.4 (D-DC1): the M7.2.1 offline-queue test is deleted with the queue
+// it contracted (upsert+syncLog+Sinkronisasi all removed; M7.2.1 offline
+// capture explicitly unsupported). Offline-render (cache shows when reads
+// fail) has no dedicated leg — logged as drift DL-3 for triage.
 
 test('M7.2.3: large photo compresses below 500KB and stays in IndexedDB', async ({ page, pageErrors }) => {
   await page.goto(APP)

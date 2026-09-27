@@ -463,9 +463,13 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
     logFinding('No weekly-certification button visible on TrainerHistory (maybe already certified or none this week).')
   }
 
-  // sync button visible for trainer
+  // DC.B.4 (D-DC1): the Sinkronisasi control is removed (every write
+  // posts direct) — assert absence instead of flagging presence.
   if (await page.getByRole('button', { name: /Sinkronisasi/ }).count()) {
-    logFinding('Sinkronisasi (server push) button shown to trainer role — harmless but inconsistent with least-privilege UI.')
+    logFinding('Sinkronisasi button still present after queue removal (AccountMenu).')
+  }
+  if (await page.getByRole('menuitem', { name: /Sinkronisasi/ }).count()) {
+    logFinding('Sinkronisasi menuitem still present after queue removal (AccountMenu).')
   }
 
   console.log('=== FINAL PAGE ERRORS ===', JSON.stringify(pageErrors, null, 2))
