@@ -1,7 +1,8 @@
 import { readCached, useBranch, usePeriod, getRoleContext } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { MONTHS, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
-import { financialData } from '../../lib/finance.js'
+import { financialData, billingForSekolah } from '../../lib/finance.js'
+import { findIssuedInvoiceForPeriod, invoiceTotal } from '../../lib/invoices.js'
 import { filterEntitiesByBranch } from '../../lib/branchScope.js'
 import ExecutiveSummary from '../reports/ExecutiveSummary.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
@@ -13,6 +14,40 @@ import PeriodFilter from '../../components/PeriodFilter.jsx'
 
 const CHART_W = 640
 const CHART_H = 220
+
+// ============================================================
+// EF.D.1 (F-EF6; D-EF7) — dashboard-last switch. Mirror persis dari
+// helper yang sama di FinanceReport.jsx (EDIT list EF.D.1 hanya
+// mencakup dua file ini; helper sengaja diduplikasi, bukan diekstrak ke
+// finance.js, supaya scope tetap sesuai milestone). Lihat komentar di
+// FinanceReport.jsx untuk penjelasan lengkap kenapa sekolah Frozen tidak
+// pernah disentuh dan kenapa fallback estimasi dipakai, bukan nol.
+// ============================================================
+export function pipelinePotensiForSekolah(sch, { periode, invoices, absensi, siswa }) {
+  if (!sch.metodePembayaran) return null
+  const issued = findIssuedInvoiceForPeriod(sch.id, periode, { invoices })
+  if (issued) return { value: invoiceTotal(issued), source: 'invoice' }
+  const est = billingForSekolah(sch, { absensi, siswa, periode })
+  return { value: est.total, source: 'estimasi' }
+}
+
+export function withPipelinePotensi(fd, { sekolah, periode, invoices, absensi, siswa }) {
+  let potensiSpp = 0
+  const sekolahFinance = fd.sekolahFinance.map(row => {
+    const sch = sekolah.find(s => s.id === row.id)
+    const override = sch ? pipelinePotensiForSekolah(sch, { periode, invoices, absensi, siswa }) : null
+    const targetSpp = override ? override.value : row.targetSpp
+    potensiSpp += targetSpp
+    return { ...row, targetSpp, potensiSource: override?.source || 'flat' }
+  })
+  return {
+    ...fd,
+    sekolahFinance,
+    potensiSpp,
+    belumTertagih: Math.max(0, potensiSpp - fd.pemasukanSpp),
+    lebihBayarSpp: Math.max(0, fd.pemasukanSpp - potensiSpp),
+  }
+}
 
 export default function OverviewCards() {
   const period = usePeriod()
@@ -38,13 +73,21 @@ export default function OverviewCards() {
 
   const noData = entities.sekolah.length === 0 && entities.siswa.length === 0 && entities.trainer.length === 0
 
+  const pipelineCtx = { sekolah: entities.sekolah, invoices: entities.invoices, absensi: entities.absensi, siswa: entities.siswa }
+
   const currentPeriode = period.periodeKey()
-  const current = financialData({ ...entities, periode: currentPeriode })
+  const current = withPipelinePotensi(
+    financialData({ ...entities, periode: currentPeriode }),
+    { ...pipelineCtx, periode: currentPeriode }
+  )
 
   const monthly = MONTHS.map((label, i) => {
     const monthNum = Number(MONTH_KEYS[i])
     const periode = periodeKey(monthNum, period.selectedYear)
-    const fd = financialData({ ...entities, periode })
+    const fd = withPipelinePotensi(
+      financialData({ ...entities, periode }),
+      { ...pipelineCtx, periode }
+    )
     return { label, periode, ...fd }
   })
 

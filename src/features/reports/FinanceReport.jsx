@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { readCached, usePeriod } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
-import { financialData } from '../../lib/finance.js'
+import { financialData, billingForSekolah } from '../../lib/finance.js'
+import { findIssuedInvoiceForPeriod, invoiceTotal } from '../../lib/invoices.js'
 import { shiftPeriode, monthLabel, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
 import PrintButton from '../../components/PrintButton.jsx'
 import {
@@ -63,6 +64,43 @@ function periodsBetween(start, end) {
   return periods
 }
 
+// ============================================================
+// EF.D.1 (F-EF6; D-EF7) — dashboard-last switch. Sekolah Tarif membaca
+// Potensi dari invoice pipeline (canonical, D-SB10) kalau sudah ada
+// invoice Terbit di periode ini; kalau belum, fallback ke estimasi
+// billingForSekolah() (read-only, sama prinsipnya dengan preview EF.A.1)
+// dengan label eksplisit — bukan silently ditagih penuh atau nol.
+// Sekolah Frozen (metodePembayaran null) TIDAK disentuh: targetSpp dari
+// financialData() sudah identik dengan billingForSekolah() flat branch,
+// jadi tidak ada override untuk sekolah itu (dashboard-last, F-CS6/CS.C.2
+// tetap berlaku untuk financialData() itu sendiri — fungsi ini murni
+// pembungkus di level komponen, tidak mengubah finance.js).
+export function pipelinePotensiForSekolah(sch, { periode, invoices, absensi, siswa }) {
+  if (!sch.metodePembayaran) return null
+  const issued = findIssuedInvoiceForPeriod(sch.id, periode, { invoices })
+  if (issued) return { value: invoiceTotal(issued), source: 'invoice' }
+  const est = billingForSekolah(sch, { absensi, siswa, periode })
+  return { value: est.total, source: 'estimasi' }
+}
+
+export function withPipelinePotensi(fd, { sekolah, periode, invoices, absensi, siswa }) {
+  let potensiSpp = 0
+  const sekolahFinance = fd.sekolahFinance.map(row => {
+    const sch = sekolah.find(s => s.id === row.id)
+    const override = sch ? pipelinePotensiForSekolah(sch, { periode, invoices, absensi, siswa }) : null
+    const targetSpp = override ? override.value : row.targetSpp
+    potensiSpp += targetSpp
+    return { ...row, targetSpp, potensiSource: override?.source || 'flat' }
+  })
+  return {
+    ...fd,
+    sekolahFinance,
+    potensiSpp,
+    belumTertagih: Math.max(0, potensiSpp - fd.pemasukanSpp),
+    lebihBayarSpp: Math.max(0, fd.pemasukanSpp - potensiSpp),
+  }
+}
+
 const REPORT_MODES = [
   { id: 'tunggal', label: 'Periode Tunggal' },
   { id: 'rentang', label: 'Rentang Kustom' },
@@ -91,14 +129,27 @@ export default function FinanceReport() {
   const absensiPengajar = readCached('absensiPengajar')
   const honorPayments = readCached('honorPayments')
   const sppPayments = readCached('sppPayments')
+  // EF.D.1 — invoice pipeline source untuk sekolah Tarif.
+  const invoices = readCached('invoices')
 
   const periode = period.periodeKey()
   const periodePrevBulan = shiftPeriode(periode, -1)
   const periodePrevTahun = shiftPeriode(periode, -12)
 
-  const data = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode })
-  const dataPrevBulan = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: periodePrevBulan })
-  const dataPrevTahun = financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: periodePrevTahun })
+  const pipelineCtx = { sekolah, invoices, absensi, siswa }
+
+  const data = withPipelinePotensi(
+    financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode }),
+    { ...pipelineCtx, periode }
+  )
+  const dataPrevBulan = withPipelinePotensi(
+    financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: periodePrevBulan }),
+    { ...pipelineCtx, periode: periodePrevBulan }
+  )
+  const dataPrevTahun = withPipelinePotensi(
+    financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: periodePrevTahun }),
+    { ...pipelineCtx, periode: periodePrevTahun }
+  )
 
   const comparisonRows = [
     { label: 'Potensi SPP', key: 'potensiSpp', tag: 'Memo' },
@@ -128,11 +179,16 @@ export default function FinanceReport() {
   }
 
   const rangeDataByPeriode = Object.fromEntries(
-    rangePeriods.map(p => [p, financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: p })])
+    rangePeriods.map(p => [p, withPipelinePotensi(
+      financialData({ sekolah, siswa, trainer, absensi, absensiPengajar, honorPayments, sppPayments, periode: p }),
+      { ...pipelineCtx, periode: p }
+    )])
   )
   const rangeTotals = Object.fromEntries(
     RANGE_ROWS.map(row => [row.key, rangePeriods.reduce((sum, p) => sum + rangeDataByPeriode[p][row.key], 0)])
   )
+
+  const hasEstimasi = data.sekolahFinance.some(s => s.potensiSource === 'estimasi')
 
   return (
     <div className="space-y-6 animate-fadeIn printable-report">
@@ -246,7 +302,10 @@ export default function FinanceReport() {
             <div className="space-y-1">
               <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Potensi SPP <span className="normal-case font-normal text-blue-200">(memo)</span></p>
               <h3 className="text-2xl font-extrabold text-yellow-300">{formatRupiah(data.potensiSpp)}</h3>
-              <p className="text-[10px] text-blue-200">Total Tagihan SPP</p>
+              <p className="text-[10px] text-blue-200">
+                Total Tagihan SPP
+                {hasEstimasi && ' — termasuk estimasi (invoice belum terbit)'}
+              </p>
             </div>
             <div className="space-y-1">
               <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Pemasukan SPP <span className="normal-case font-normal text-blue-200">(kas)</span></p>
@@ -372,7 +431,15 @@ export default function FinanceReport() {
                       <tr key={sch.id} className="hover:bg-slate-50/50">
                         <td className="py-4 px-6">
                           <p className="font-bold text-slate-800">{sch.nama}</p>
-                          <p className="text-xs text-slate-400">{sch.siswaCount} siswa</p>
+                          <p className="text-xs text-slate-400">
+                            {sch.siswaCount} siswa
+                            {sch.potensiSource === 'estimasi' && (
+                              <span className="ml-1.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">estimasi</span>
+                            )}
+                            {sch.potensiSource === 'invoice' && (
+                              <span className="ml-1.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">invoice</span>
+                            )}
+                          </p>
                         </td>
                         <td className="py-4 px-6 text-right font-medium text-slate-500">{formatRupiah(sch.targetSpp)}</td>
                         <td className="py-4 px-6 text-right font-bold text-blue-600">{formatRupiah(sch.realisasiSpp)}</td>
@@ -390,6 +457,7 @@ export default function FinanceReport() {
             {data.sekolahFinance.length > 0 && (
               <p className="px-6 pb-4 text-[11px] text-slate-400">
                 *Kolom "Telah Dibayar" &amp; "Sisa Kewajiban" dihitung per trainer (ledger honorPayments tidak berelasi langsung ke sekolah) — lihat tab Data Pembayaran untuk rincian per trainer.
+                {hasEstimasi && ' Baris berlabel "estimasi" belum memiliki invoice Terbit untuk periode ini — angka Potensi SPP-nya dihitung dari tarif per pertemuan, bukan dari invoice resmi.'}
               </p>
             )}
           </div>

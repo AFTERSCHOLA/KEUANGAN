@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { billingForSekolah, financialData } from '../finance.js'
+import { withPipelinePotensi } from '../../features/reports/FinanceReport.jsx'
 
 // SB.A.3 (F-SB1; D-SB7) — regression guard: financialData() tidak boleh
 // bergeser sedikit pun untuk data produksi (sekolah tanpa metodePembayaran)
@@ -215,5 +216,115 @@ describe('dashboard-last guard — CS.C.2', () => {
     })
     expect(flat.potensiSpp).toBe(withoutTariff.potensiSpp)
     expect(flat.sekolahFinance).toEqual(withoutTariff.sekolahFinance)
+  })
+})
+
+// EF.D.1 (F-EF6; D-EF7) — dashboard-last SWITCH guard. Berbeda dari
+// CS.C.2 di atas (yang memastikan financialData() TIDAK PERNAH berubah):
+// guard ini menguji withPipelinePotensi(), pembungkus di level komponen
+// yang menggantikan targetSpp HANYA untuk sekolah Tarif, dan HANYA
+// setelah EF.C.1 (generator per-meeting) tersedia. financialData() itu
+// sendiri tetap byte-identical (dibuktikan CS.C.2 tetap hijau tanpa
+// diubah) — exemplar 53,535,011 di sini murni angka fixture skala kecil,
+// bukan reproduksi eksak G5 (yang datanya production, bukan unit fixture).
+describe('EF.D.1 — pipeline switch guard', () => {
+  const periode = '2026-08'
+
+  function tarifSekolah(overrides = {}) {
+    return {
+      id: 'school-pipe', nama: 'SD Pipeline', spp: 100000, trainerIds: [],
+      metodePembayaran: {
+        basis: 'siswa', tarifPerPertemuan: 30000, trigger: 'per_pertemuan',
+        jumlahN: null, jumlahMinggu: null, sumberDana: 'sekolah',
+      },
+      ...overrides,
+    }
+  }
+
+  const siswaFixture = [
+    { id: 'p-s1', nama: 'P1', sekolahId: 'school-pipe', status: 'Aktif' },
+    { id: 'p-s2', nama: 'P2', sekolahId: 'school-pipe', status: 'Aktif' },
+  ]
+  const absensiFixture = [
+    { id: 'p-a1', sekolahId: 'school-pipe', periode, trainerStatus: 'Hadir' },
+    { id: 'p-a2', sekolahId: 'school-pipe', periode, trainerStatus: 'Hadir' },
+    { id: 'p-a3', sekolahId: 'school-pipe', periode, trainerStatus: 'Hadir' },
+  ]
+  // Estimasi billingForSekolah: 30000 × 3 pertemuan × 2 siswa aktif = 180000.
+  const ESTIMASI_TOTAL = 180000
+
+  it('sekolah Tarif TANPA invoice Terbit -> fallback estimasi (bukan flat, bukan nol)', () => {
+    const sekolah = [tarifSekolah()]
+    const fd = financialData({
+      sekolah, siswa: siswaFixture, trainer: [], absensi: absensiFixture,
+      honorPayments: [], sppPayments: [], periode,
+    })
+    // Pre-switch: financialData() sendiri masih flat (CS.C.2 tetap berlaku).
+    expect(fd.sekolahFinance[0].targetSpp).toBe(200000) // 2 aktif × 100000
+
+    const switched = withPipelinePotensi(fd, {
+      sekolah, periode, invoices: [], absensi: absensiFixture, siswa: siswaFixture,
+    })
+    expect(switched.sekolahFinance[0].targetSpp).toBe(ESTIMASI_TOTAL)
+    expect(switched.sekolahFinance[0].potensiSource).toBe('estimasi')
+    expect(switched.potensiSpp).toBe(ESTIMASI_TOTAL)
+    // Premature-switch harus GAGAL kalau seseorang salah asumsi fallback
+    // itu 0 atau tetap flat — dua kemungkinan gagal yang paling gampang kejadian.
+    expect(switched.sekolahFinance[0].targetSpp).not.toBe(0)
+    expect(switched.sekolahFinance[0].targetSpp).not.toBe(fd.sekolahFinance[0].targetSpp)
+  })
+
+  it('sekolah Tarif DENGAN invoice Terbit -> pakai grandTotal invoice, bukan estimasi', () => {
+    const sekolah = [tarifSekolah()]
+    const fd = financialData({
+      sekolah, siswa: siswaFixture, trainer: [], absensi: absensiFixture,
+      honorPayments: [], sppPayments: [], periode,
+    })
+    const invoices = [{
+      id: 'inv-pipe-1', sekolahId: 'school-pipe', periode, status: 'Terbit',
+      grandTotal: 999000, // sengaja beda jauh dari estimasi (180000) supaya ketauan kalau salah baca sumber
+    }]
+    const switched = withPipelinePotensi(fd, {
+      sekolah, periode, invoices, absensi: absensiFixture, siswa: siswaFixture,
+    })
+    expect(switched.sekolahFinance[0].targetSpp).toBe(999000)
+    expect(switched.sekolahFinance[0].potensiSource).toBe('invoice')
+    expect(switched.potensiSpp).toBe(999000)
+  })
+
+  it('invoice Draft (belum Terbit) TIDAK dipakai -> tetap fallback estimasi', () => {
+    const sekolah = [tarifSekolah()]
+    const fd = financialData({
+      sekolah, siswa: siswaFixture, trainer: [], absensi: absensiFixture,
+      honorPayments: [], sppPayments: [], periode,
+    })
+    const invoices = [{
+      id: 'inv-pipe-draft', sekolahId: 'school-pipe', periode, status: 'Draft',
+      grandTotal: 999000,
+    }]
+    const switched = withPipelinePotensi(fd, {
+      sekolah, periode, invoices, absensi: absensiFixture, siswa: siswaFixture,
+    })
+    expect(switched.sekolahFinance[0].targetSpp).toBe(ESTIMASI_TOTAL)
+    expect(switched.sekolahFinance[0].potensiSource).toBe('estimasi')
+  })
+
+  it('sekolah Frozen (metodePembayaran null) tidak pernah disentuh switch — flat tetap flat', () => {
+    const sekolahFrozen = [{ id: 'school-frozen-pipe', nama: 'SD Frozen', spp: 100000, trainerIds: [] }]
+    const siswaFrozen = [{ id: 'f-s1', nama: 'F1', sekolahId: 'school-frozen-pipe', status: 'Aktif' }]
+    const fd = financialData({
+      sekolah: sekolahFrozen, siswa: siswaFrozen, trainer: [], absensi: [],
+      honorPayments: [], sppPayments: [], periode,
+    })
+    const invoices = [{
+      id: 'inv-frozen-1', sekolahId: 'school-frozen-pipe', periode, status: 'Terbit',
+      grandTotal: 555555, // kalau switch keliru nyentuh Frozen, angka ini bakal muncul
+    }]
+    const switched = withPipelinePotensi(fd, {
+      sekolah: sekolahFrozen, periode, invoices, absensi: [], siswa: siswaFrozen,
+    })
+    expect(switched.sekolahFinance[0].targetSpp).toBe(100000) // flat asli, tidak berubah
+    expect(switched.sekolahFinance[0].potensiSource).toBe('flat')
+    expect(switched.potensiSpp).not.toBe(555555)
   })
 })
