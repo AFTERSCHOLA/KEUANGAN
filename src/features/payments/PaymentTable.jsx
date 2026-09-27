@@ -10,6 +10,7 @@ import {
 import { formatRupiah } from '../../lib/format.js'
 import { newHonorPayment, localDateString } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
+import { honorSettlement } from '../../lib/honor.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SlipHonor from '../reports/SlipHonor.jsx'
@@ -28,6 +29,21 @@ export default function PaymentTable() {
   const [confirmMsg, setConfirmMsg] = useState('')
   const [confirmOnConfirm, setConfirmOnConfirm] = useState(null)
   const [printEntry, setPrintEntry] = useState(null)
+  // EF.B.2 — deferral "Menunggu kas" per trainer, state LOKAL saja (tidak
+
+  // disimpan ke ledger/database — sesuai D-EF6 "display/scheduling only",
+  // hilang kalau halaman di-refresh). ASUMSI: dokumen tidak menentukan
+  // trigger otomatis, jadi ini manual toggle oleh admin.
+  const [deferredTrainerIds, setDeferredTrainerIds] = useState(() => new Set())
+
+  function toggleDeferral(trainerId) {
+    setDeferredTrainerIds(prev => {
+      const next = new Set(prev)
+      if (next.has(trainerId)) next.delete(trainerId)
+      else next.add(trainerId)
+      return next
+    })
+  }
 
   const sekolah = readCached('sekolah')
   const cabang = readCached('cabang')
@@ -45,7 +61,8 @@ export default function PaymentTable() {
   function cabangIdForTrainer(trainer) {
     const school = sekolah.find(s => (trainer.sekolahIds || []).includes(s.id))
     return school?.cabangId ?? null
-}
+  }
+
 
   // R4: satu-satunya sumber angka Beban/Dibayar/Sisa adalah finance.js.
   // Tidak ada sesi × tarif dihitung ulang di sini.
@@ -68,16 +85,17 @@ export default function PaymentTable() {
     // melunasi Beban Honor periode berjalan, terlepas kapan uangnya
     // secara fisik dibayarkan.
     upsert('honorPayments', newHonorPayment({
-  trainerId: selectedTrainer.id,
-  periode,
-  nominal: Number(nominal),
-  tanggalBayar: payForm.tanggalBayar,
-  cabangKode: cabangKodeForTrainer(selectedTrainer),
-  cabangId: cabangIdForTrainer(selectedTrainer),
-}))
+      trainerId: selectedTrainer.id,
+      periode,
+      nominal: Number(nominal),
+      tanggalBayar: payForm.tanggalBayar,
+      cabangKode: cabangKodeForTrainer(selectedTrainer),
+      cabangId: cabangIdForTrainer(selectedTrainer),
+    }))
     setModalOpen(false)
     refreshPayments()
   }
+
 
   function submitPayment() {
     if (!payForm.nominal || !payForm.tanggalBayar || !selectedTrainer) return
@@ -101,16 +119,17 @@ export default function PaymentTable() {
     setConfirmOnConfirm(() => () => {
       setSelectedTrainer(trainer)
       upsert('honorPayments', newHonorPayment({
-  trainerId: trainer.id,
-  periode,
-    nominal: sisa,
-    tanggalBayar: localDateString(),
-  cabangKode: cabangKodeForTrainer(trainer),
-  cabangId: cabangIdForTrainer(trainer),
-}))
+        trainerId: trainer.id,
+        periode,
+        nominal: sisa,
+        tanggalBayar: localDateString(),
+        cabangKode: cabangKodeForTrainer(trainer),
+        cabangId: cabangIdForTrainer(trainer),
+      }))
       refreshPayments()
     })
     setConfirmOpen(true)
+
   }
 
   function deletePayment(id) {
@@ -120,16 +139,16 @@ export default function PaymentTable() {
     setConfirmOnConfirm(() => async () => {
       const trainer = trainers.find(t => t.id === original.trainerId)
 
-const correction = {
-  ...newHonorPayment({
-    trainerId: original.trainerId,
-    periode: original.periode,
-    nominal: -Number(original.nominal),
-    tanggalBayar: localDateString(),
-    cabangKode: cabangKodeForTrainer(trainer),
-    cabangId: cabangIdForTrainer(trainer),
-  }),
-}
+      const correction = {
+        ...newHonorPayment({
+          trainerId: original.trainerId,
+          periode: original.periode,
+          nominal: -Number(original.nominal),
+          tanggalBayar: localDateString(),
+          cabangKode: cabangKodeForTrainer(trainer),
+          cabangId: cabangIdForTrainer(trainer),
+        }),
+      }
       const result = await correctLedgerEntry('honorPayments', original, correction)
       if (result.status === 'forbidden') {
         setConfirmMsg(result.message || 'Akses tidak diizinkan.')
@@ -143,6 +162,7 @@ const correction = {
   if (printEntry) {
     return <SlipHonor trainer={printEntry.trainer} payment={printEntry.payment} onBack={() => setPrintEntry(null)} />
   }
+
 
   if (trainers.length === 0) {
     return (
@@ -175,29 +195,41 @@ const correction = {
                 <th className="py-4 px-6">Trainer</th>
                 <th className="py-4 px-6">Sekolah Penugasan</th>
                 <th className="py-4 px-6 text-center">Kehadiran</th>
+
                 <th className="py-4 px-6 text-right">Tarif per Sesi</th>
                 <th className="py-4 px-6 text-right">Akumulasi Beban</th>
                 <th className="py-4 px-6 text-right text-emerald-600">Honor Dibayar</th>
                 <th className="py-4 px-6 text-right text-rose-600">Sisa Kewajiban</th>
+                {/* EF.B.2 — kolom status baru */}
+                <th className="py-4 px-6 text-center">Status</th>
                 <th className="py-4 px-6 text-center">Tindakan</th>
               </tr>
             </thead>
             <tbody className="divide-y text-sm">
               {trainers.map(t => {
                 const fin = financeByTrainerId[t.id] || { hadirSesi: 0, tarif: t.honor, bebanHonor: 0, dibayar: 0, sisaHonor: 0 }
+                // EF.B.2 — status Unpaid/Partially Paid/Paid + deferral note,
+                // pure derivation dari payable(fin.bebanHonor) vs fin.dibayar.
+                // Tidak menulis apa pun; deferredTrainerIds cuma state lokal.
+                const settlement = honorSettlement({
+                  payable: fin.bebanHonor,
+                  dibayar: fin.dibayar,
+                  deferred: deferredTrainerIds.has(t.id),
+                })
                 const sekolahNama = (t.sekolahIds || []).map(id => sekolah.find(s => s.id === id)).filter(Boolean).map(s => s.nama).join(', ')
                 // Pasangan entry asli + entry koreksinya (correctionOf) direpresentasikan
-// sebagai "dihapus" di UI, tapi tetap utuh di database sebagai audit trail
-// (ledger append-only — lihat honorPayments.php, tidak ada action delete).
-const correctedIds = new Set(
-  payments.filter(p => p.correctionOf).map(p => p.correctionOf)
-)
-const history = payments.filter(p =>
-  p.trainerId === t.id &&
-  p.periode === periode &&
-  !p.correctionOf &&
-  !correctedIds.has(p.id)
-)
+                // sebagai "dihapus" di UI, tapi tetap utuh di database sebagai audit trail
+                // (ledger append-only — lihat honorPayments.php, tidak ada action delete).
+                const correctedIds = new Set(
+                  payments.filter(p => p.correctionOf).map(p => p.correctionOf)
+                )
+                const history = payments.filter(p =>
+                  p.trainerId === t.id &&
+                  p.periode === periode &&
+                  !p.correctionOf &&
+                  !correctedIds.has(p.id)
+
+                )
                 const isExpanded = expandedTrainerId === t.id
                 return (
                   <Fragment key={t.id}>
@@ -215,6 +247,28 @@ const history = payments.filter(p =>
                           </span>
                           {formatRupiah(fin.sisaHonor)}
                         </span>
+                      </td>
+                      {/* EF.B.2 — badge status + tombol toggle deferral */}
+                      <td className="py-4 px-6 text-center">
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                          settlement.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
+                          settlement.status === 'Partially Paid' ? 'bg-amber-100 text-amber-700' :
+                          'bg-rose-100 text-rose-700'
+                        }`}>
+                          {settlement.status}
+                        </span>
+                        {settlement.deferral && (
+                          <div className="mt-1 text-[10px] text-slate-400 italic">Menunggu kas</div>
+                        )}
+                        {settlement.status !== 'Paid' && (
+
+                          <button
+                            onClick={() => toggleDeferral(t.id)}
+                            className="block mx-auto mt-1 text-[10px] text-slate-400 hover:text-blue-600 underline"
+                          >
+                            {deferredTrainerIds.has(t.id) ? 'Batal tandai' : 'Tandai menunggu kas'}
+                          </button>
+                        )}
                       </td>
                       <td className="py-4 px-6 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -236,9 +290,11 @@ const history = payments.filter(p =>
                     </tr>
                     {isExpanded && history.length > 0 && (
                       <tr className="bg-slate-50/70">
-                        <td colSpan="8" className="px-6 py-3">
+                        {/* EF.B.2 — colSpan 8 -> 9 karena kolom Status baru ditambahkan */}
+                        <td colSpan="9" className="px-6 py-3">
                           <div className="space-y-1.5">
                             {history.map(p => (
+
                               <div key={p.id} className="flex items-center justify-between bg-white rounded-lg border border-slate-100 px-3 py-2 text-xs">
                                 <span className="text-slate-500">{new Date(p.tanggalBayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                 <span className="font-bold text-emerald-600">{formatRupiah(p.nominal)}</span>
@@ -271,6 +327,7 @@ const history = payments.filter(p =>
         </div>
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase">Tanggal Bayar</label>
+
           <input type="date" value={payForm.tanggalBayar} onChange={e => setPayForm({ ...payForm, tanggalBayar: e.target.value })} className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600" />
         </div>
         {selectedTrainer && (() => {
