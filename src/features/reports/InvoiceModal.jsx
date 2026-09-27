@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
-import { formatRupiah, MONTHS, periodeKey } from '../../lib/format.js'
+import { formatRupiah, waNormalize, MONTHS, periodeKey } from '../../lib/format.js'
 import { localDateString } from '../../lib/constants.js'
-import { readCached, usePeriod, read } from '../../lib/store.js'
+import { readCached, usePeriod, read, getRoleContext, writeRemote } from '../../lib/store.js'
+import { ApiError } from '../../lib/api.js'
 import {
   invoicesForSekolah,
   invoiceSettlement,
@@ -39,6 +40,15 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   const [tick, setTick] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  // F12 (follow-up outreach, user-directed 2026-09-27): per-invoice editor
+  // state. Shape mirrors the exemplar Invoice sheet columns
+  // (penerima + WA + tanggal kirim + follow-up + keterangan).
+  const [fuEditing, setFuEditing] = useState(null)
+  const [fuForm, setFuForm] = useState({ penerima: '', wa: '', tanggalKirim: '', tanggalFollowUp: '', catatan: '' })
+  const [fuSaving, setFuSaving] = useState(false)
+  // Invoices are superadmin-write server-side; mirror that in UI (the
+  // endpoint 403s anyone else, but hiding avoids confusion).
+  const canEditFollowUp = getRoleContext().role === 'superadmin'
 
   if (!open || !sekolah) return null
 
@@ -106,6 +116,54 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
     setConfirmMsg('Buat & terbitkan invoice ini? Nomor resmi akan digenerate langsung dan tidak bisa diubah lagi.')
     setConfirmAction(() => doGenerate)
     setConfirmOpen(true)
+  }
+
+  function openFollowUp(inv) {
+    const fu = inv.followUp || {}
+    setFuForm({
+      penerima: fu.penerima || '',
+      wa: fu.wa || '',
+      tanggalKirim: fu.tanggalKirim || '',
+      tanggalFollowUp: fu.tanggalFollowUp || '',
+      catatan: fu.catatan || '',
+    })
+    setFuEditing(inv.id)
+  }
+
+  // F12 — full-payload replace through the existing superadmin update
+  // path (no shape validation server-side; nested object keeps billing
+  // fields untouched). Billing math never reads followUp.
+  async function saveFollowUp(inv) {
+    if (fuSaving) return
+    setFuSaving(true)
+    setErrorMsg('')
+    try {
+      const result = await writeRemote('invoices', {
+        ...inv,
+        followUp: {
+          penerima: fuForm.penerima.trim(),
+          wa: fuForm.wa.trim(),
+          tanggalKirim: fuForm.tanggalKirim || null,
+          tanggalFollowUp: fuForm.tanggalFollowUp || null,
+          catatan: fuForm.catatan.trim(),
+        },
+      })
+      if (result.status === 'forbidden') {
+        setErrorMsg(result.message || 'Tidak diizinkan mengubah invoice ini.')
+        return
+      }
+      if (result.status === 'conflict') {
+        setErrorMsg('Invoice ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
+        return
+      }
+      setFuEditing(null)
+      await read('invoices')
+      setTick(t => t + 1)
+    } catch (error) {
+      setErrorMsg(error instanceof ApiError ? error.message : 'Gagal menyimpan follow-up.')
+    } finally {
+      setFuSaving(false)
+    }
   }
 
   async function removeInvoice(inv) {
@@ -211,8 +269,15 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                 const carryLines = Array.isArray(inv.carryOverLines) ? inv.carryOverLines : []
                 const displayStatus = isLegacyDraft ? 'Draft (legacy)' : settlement.status
 
+                // F12 — follow-up display line (billing math never reads it).
+                const fu = inv.followUp || null
+                const fuLine = fu && (fu.penerima || fu.wa || fu.tanggalKirim || fu.tanggalFollowUp || fu.catatan)
+                  ? [`Penerima: ${fu.penerima || '—'}`, fu.wa ? `WA ${fu.wa}` : null, fu.tanggalKirim ? `Kirim ${fu.tanggalKirim}` : null, fu.tanggalFollowUp ? `Follow-up ${fu.tanggalFollowUp}` : null, fu.catatan || null].filter(Boolean).join(' · ')
+                  : null
+
                 return (
-                  <div key={inv.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2 text-xs">
+                  <div key={inv.id} className="bg-white border rounded-lg px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between">
                     <div>
                       <p className="font-bold text-slate-800">{inv.nomor || inv.nomorInvoice || 'Draft'}</p>
                       <p className="text-slate-400">{formatRupiah(inv.grandTotal ?? inv.total)} — {inv.periode || (inv.mode === 'semester' ? 'Semester' : 'Bulanan')}</p>
@@ -222,6 +287,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                           {settlement.credit > 0 && ` · Lebih bayar ${formatRupiah(settlement.credit)}`}
                         </p>
                       )}
+                      {fuLine && <p className="text-slate-500 mt-0.5">{fuLine}</p>}
                       {carryLines.length > 0 && (
                         <div className="mt-1 space-y-0.5">
                           {carryLines.map(line => (
@@ -242,8 +308,42 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                         displayStatus === 'Belum Lunas' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
                       }`}>{displayStatus}</span>
                       <button onClick={() => onPrint(inv, sekolah)} className="text-blue-600 hover:underline font-bold">Cetak</button>
+                      {canEditFollowUp && (
+                        <button onClick={() => (fuEditing === inv.id ? setFuEditing(null) : openFollowUp(inv))} className="text-slate-600 hover:underline font-bold">Follow-up</button>
+                      )}
                       <button onClick={() => removeInvoice(inv)} disabled={submitting} className="text-rose-500 hover:underline font-bold disabled:opacity-40">Hapus</button>
                     </div>
+                    </div>
+                    {canEditFollowUp && fuEditing === inv.id && (
+                      <div className="mt-2 border-t pt-2 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Penerima</label>
+                            <input value={fuForm.penerima} onChange={e => setFuForm({ ...fuForm, penerima: e.target.value })} placeholder="Nama penerima" className="w-full mt-0.5 rounded-lg border p-2 text-xs" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">No WA</label>
+                            <input value={fuForm.wa} onChange={e => setFuForm({ ...fuForm, wa: e.target.value })} onBlur={e => setFuForm({ ...fuForm, wa: waNormalize(e.target.value) })} placeholder="08…" className="w-full mt-0.5 rounded-lg border p-2 text-xs" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Tgl kirim</label>
+                            <input type="date" value={fuForm.tanggalKirim} onChange={e => setFuForm({ ...fuForm, tanggalKirim: e.target.value })} className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Tgl follow-up</label>
+                            <input type="date" value={fuForm.tanggalFollowUp} onChange={e => setFuForm({ ...fuForm, tanggalFollowUp: e.target.value })} className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Catatan</label>
+                          <input value={fuForm.catatan} onChange={e => setFuForm({ ...fuForm, catatan: e.target.value })} placeholder="Keterangan" className="w-full mt-0.5 rounded-lg border p-2 text-xs" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => saveFollowUp(inv)} disabled={fuSaving} className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-lg transition">Simpan Follow-up</button>
+                          <button onClick={() => setFuEditing(null)} disabled={fuSaving} className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-xs px-3.5 py-1.5 rounded-lg transition">Batal</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
