@@ -212,3 +212,69 @@ test('AP.B.1: manager actions follow status; edit persists; activate restores', 
     await cleanupAssignment(page, sekolahId)
   }
 })
+
+// DC.C.2 (F-DC3; D-DC3) — Asisten 2 persists server-side via asistenIds
+// and renders joined in the manager table. Self-contained: seeds its own
+// school + two assistant trainers (created/deleted as adminCabang, the
+// only role that may create trainers), host is the canonical trn-test-1.
+test('DC.C.2: Asisten 2 persists via asistenIds and renders joined', async ({ page, pageErrors }) => {
+  const suffix = String(Date.now()).slice(-6)
+  const sekolah = await seedSchoolAsSuperadmin(page, `SD PGC2 Sim ${suffix}`)
+  const sekolahId = sekolah.id
+  const asisten1Id = `trn-PGC2A-${suffix}`
+  const asisten2Id = `trn-PGC2B-${suffix}`
+  const asisten1Nama = `Asisten Satu PGC2 ${suffix}`
+  const asisten2Nama = `Asisten Dua PGC2 ${suffix}`
+
+  async function createAssistant(id, nama) {
+    await loginViaApi(page, 'adminCabang')
+    const csrf = await primeCsrf(page)
+    const res = await page.request.post('/api/trainer.php', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { id, nama, honor: 50000, tipePengajar: 'asisten', sekolahIds: [], action: 'create' },
+    })
+    if (!res.ok()) throw new Error(`create assistant failed: ${res.status()} ${await res.text()}`)
+  }
+
+  try {
+    await createAssistant(asisten1Id, asisten1Nama)
+    await createAssistant(asisten2Id, asisten2Nama)
+
+    await loginViaApi(page, 'superadmin')
+    await gotoApp(page)
+    await openTab(page, 'Penugasan Pengajar')
+    await page.getByRole('button', { name: 'Tambah Penugasan', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await dialog.locator('select').nth(0).selectOption(sekolahId)
+    await dialog.locator('select').nth(1).selectOption(TRAINER_ID)
+    await dialog.locator('select').nth(2).selectOption({ label: asisten1Nama })
+    // Asisten 2 is the 4th select (Sekolah, Instruktur, Asisten, Asisten 2).
+    await dialog.locator('select').nth(3).selectOption({ label: asisten2Nama })
+    await dialog.getByRole('button', { name: 'Simpan', exact: true }).click()
+
+    const row = page.locator('tbody tr', { hasText: `SD PGC2 Sim ${suffix}` }).first()
+    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row).toContainText(`${asisten1Nama}, ${asisten2Nama}`)
+
+    const readRes = await page.request.get('/api/read.php?entity=trainer')
+    expect(readRes.ok()).toBe(true)
+    const host = (await readRes.json()).find(t => t.id === TRAINER_ID)
+    const saved = (host.penugasanPengajar || []).find(a => a && a.sekolahId === sekolahId)
+    expect(saved).toBeTruthy()
+    expect(saved.asistenId).toBe(asisten1Id)
+    expect(saved.asistenIds).toEqual([asisten2Id])
+
+    expect(pageErrors).toEqual([])
+  } finally {
+    await cleanupAssignment(page, sekolahId)
+    for (const id of [asisten1Id, asisten2Id]) {
+      await loginViaApi(page, 'adminCabang')
+      const csrf = await primeCsrf(page)
+      await page.request.post('/api/trainer.php', {
+        headers: { 'X-CSRF-Token': csrf },
+        data: { id, action: 'delete' },
+      })
+    }
+  }
+})

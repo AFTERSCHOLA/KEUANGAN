@@ -18,6 +18,9 @@ export function newPenugasanRow({
   sekolahId = '',
   trainerId = '',
   asistenId = null,
+  // DC.C.2 (F-DC3; D-CS4/D-DC3) — additive 2nd-assistant key (max 2,
+  // server-gated in entities.php); legacy asistenId stays position 0.
+  asistenIds = null,
   cabangId = null,
   periodeMulai = localDateString(),
   periodeSelesai = null,
@@ -31,6 +34,7 @@ export function newPenugasanRow({
     sekolahId,
     trainerId,
     asistenId: asistenId || null,
+    asistenIds: Array.isArray(asistenIds) ? asistenIds.filter(id => typeof id === 'string' && id) : null,
     cabangId: cabangId || null,
     periodeMulai,
     periodeSelesai: periodeSelesai || null,
@@ -97,6 +101,18 @@ export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSe
   return null
 }
 
+// DC.C.1 (F-DC3; D-CS4/D-DC3) — union membership: legacy asistenId
+// counts as position 0, asistenIds adds positions 1-2. Mirrors the server
+// union in authorize.php trainerHasActiveAssignment() so client scope
+// checks and the gate agree on who an assignment covers.
+export function penugasanInvolvesTrainer(assignment, trainerId) {
+  if (!assignment || typeof trainerId !== 'string' || trainerId === '') return false
+  if (assignment.trainerId === trainerId) return true
+  if (assignment.asistenId === trainerId) return true
+  const extra = assignment.asistenIds
+  return Array.isArray(extra) && extra.includes(trainerId)
+}
+
 // Day names match TrainerDashboard.jsx DAY_NAMES (user-local calendar).
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
@@ -139,6 +155,9 @@ export function buildDailyTimetable({ trainers = [], sekolah = [], tanggal = '' 
           sekolahNama: sch.nama || '',
           trainerId: a.trainerId || null,
           asistenId: a.asistenId || null,
+          // DC.C.2 — carry the 2nd-assistant key so the timetable and
+          // its export mirror the manager table (union display).
+          asistenIds: Array.isArray(a.asistenIds) ? [...a.asistenIds] : null,
           hari,
           waktu: formatJadwalList([slot]),
         })

@@ -132,6 +132,8 @@ MICROTASK: Extend assistant tests
   OUTCOME: union reads + max-2 gate pinned in unit; Asisten 2 selectable end-to-end.
   VERIFY:  npx vitest run src/lib/__tests__/penugasan-slot.test.js -> union + max-2 green; playwright penugasan-manage leg -> Asisten 2 persists server-side
   DONE-IF: verify passes; only intended files changed
+
+  DC.C.1 → Verified: npx vitest run src/lib/__tests__/penugasan-slot.test.js -> 9 passed (7 existing + 2 union); form uses penugasanInvolvesTrainer (server-gate parity)
 ```
 
 ### DC.C.2 Offer second assistant in UI
@@ -146,6 +148,8 @@ MICROTASK: Offer second assistant in UI
   OUTCOME: an admin assigns two assistants to one slot from the UI; the timetable shows both.
   VERIFY:  npx playwright test tests/penugasan-manage.spec.js --workers=1 -> green incl. Asisten-2 leg, zero pageerror
   DONE-IF: verify passes; only intended files changed
+
+  DC.C.2 → Verified: npx playwright test tests/penugasan-manage.spec.js --workers=1 -> 3/3 green incl. DC.C.2 Asisten-2 leg (server asistenIds + joined render), zero pageerror; npm test -> 245 passed; npm run build -> green
 ```
 
 ---

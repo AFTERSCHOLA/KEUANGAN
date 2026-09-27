@@ -24,7 +24,9 @@ export default function PenugasanManager() {
   const [coverOrigin, setCoverOrigin] = useState(null) // assignment row being covered
   const [coverForm, setCoverForm] = useState({ substituteId: '', hari: '', jamMulai: '', jamSelesai: '', tanggal: localDateString() })
   const [coverConfirm, setCoverConfirm] = useState(false)
-  const [form, setForm] = useState({ sekolahId: '', trainerId: '', asistenId: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
+  // DC.C.2 (F-DC3; D-DC3) — asisten2Id feeds the additive asistenIds key
+  // (2nd assistant, max 2 server-gated); legacy asistenId stays position 0.
+  const [form, setForm] = useState({ sekolahId: '', trainerId: '', asistenId: '', asisten2Id: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
   // AP.B.1 (D-AP3) — edit targets one row inside its host record; cross-host
   // moves are out of scope (Sekolah/Instruktur selects lock in edit mode).
   const [editing, setEditing] = useState(null) // { hostId, assignmentId } | null
@@ -114,8 +116,15 @@ export default function PenugasanManager() {
     setAlertOpen(true)
   }
 
+  // DC.C.2 — union display: legacy asistenId (position 0) + asistenIds.
+  function asistenNames(r) {
+    const ids = [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean)
+    if (ids.length === 0) return '—'
+    return ids.map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Memuat...').join(', ')
+  }
+
   function openAdd() {
-    setForm({ sekolahId: '', trainerId: '', asistenId: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
+    setForm({ sekolahId: '', trainerId: '', asistenId: '', asisten2Id: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
     setEditing(null)
     setModalOpen(true)
   }
@@ -128,6 +137,7 @@ export default function PenugasanManager() {
       sekolahId: row.sekolahId || '',
       trainerId: row.trainerId || '',
       asistenId: row.asistenId || '',
+      asisten2Id: (Array.isArray(row.asistenIds) ? row.asistenIds[0] : null) || '',
       hari: row.hari || '',
       jamMulai: row.jamMulai || '',
       jamSelesai: row.jamSelesai || '',
@@ -165,6 +175,15 @@ export default function PenugasanManager() {
       showError('Asisten tidak boleh sama dengan instruktur.')
       return
     }
+    // DC.C.2 — 2nd assistant guards mirror the first (pinned copy idiom).
+    if (form.asisten2Id && form.asisten2Id === form.trainerId) {
+      showError('Asisten tidak boleh sama dengan instruktur.')
+      return
+    }
+    if (form.asisten2Id && form.asisten2Id === form.asistenId) {
+      showError('Asisten 1 dan Asisten 2 tidak boleh sama.')
+      return
+    }
     const host = trainerById.get(form.trainerId)
     if (!host) {
       showError('Instruktur tidak ditemukan. Muat ulang halaman dan coba lagi.')
@@ -181,6 +200,9 @@ export default function PenugasanManager() {
           ? {
               ...a,
               asistenId: form.asistenId || null,
+              // DC.C.2 — writes prefer the new key (D-CS4 additive rule);
+              // clearing Asisten 2 writes null (legacy position 0 kept).
+              asistenIds: form.asisten2Id ? [form.asisten2Id] : null,
               cabangId: sch?.cabangId || host?.cabangId || a.cabangId || null,
               hari: form.hari || null,
               jamMulai: form.jamMulai || null,
@@ -195,6 +217,7 @@ export default function PenugasanManager() {
           sekolahId: form.sekolahId,
           trainerId: form.trainerId,
           asistenId: form.asistenId || null,
+          asistenIds: form.asisten2Id ? [form.asisten2Id] : null,
           // Nested cabangId: send the school branch so same-branch rows validate
           // (entities.php:176-194); cross-branch rows correctly 422 instead of
           // silently landing (D-PG plan §4).
@@ -418,7 +441,7 @@ export default function PenugasanManager() {
                 <tr key={r.id} className="hover:bg-slate-50/50 transition">
                   <td className="py-4 px-6 font-bold text-slate-800">{sekolahById.get(r.sekolahId)?.nama || 'Sekolah tidak ditemukan'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || 'Trainer tidak ditemukan'}</td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Memuat...') : '—'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{asistenNames(r)}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{slotLabel(r)}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.periodeMulai || '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.periodeSelesai || 'Berlaku terus'}</td>
@@ -505,7 +528,7 @@ export default function PenugasanManager() {
           <label className="text-xs font-bold text-slate-400 uppercase">Instruktur</label>
           <select
             value={form.trainerId}
-            onChange={e => setForm({ ...form, trainerId: e.target.value, asistenId: '' })}
+            onChange={e => setForm({ ...form, trainerId: e.target.value, asistenId: '', asisten2Id: '' })}
             disabled={saving || editing !== null}
             title={editing !== null ? 'Instruktur tidak dapat dipindah pada mode edit' : undefined}
             className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
@@ -524,6 +547,18 @@ export default function PenugasanManager() {
           >
             <option value="">— Tanpa asisten —</option>
             {trainers.filter(t => t.id !== form.trainerId).map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Asisten 2 <span className="normal-case font-normal text-slate-400">(opsional)</span></label>
+          <select
+            value={form.asisten2Id}
+            onChange={e => setForm({ ...form, asisten2Id: e.target.value })}
+            disabled={saving}
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
+          >
+            <option value="">— Tanpa asisten 2 —</option>
+            {trainers.filter(t => t.id !== form.trainerId && t.id !== form.asistenId).map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
           </select>
         </div>
         <div>

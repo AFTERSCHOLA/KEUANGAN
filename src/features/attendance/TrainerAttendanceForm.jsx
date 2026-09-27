@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { readCached, writeRemote, getRoleContext } from '../../lib/store.js'
 import { getSafeIdentityContext } from '../../lib/auth.js'
 import { newAbsensiPengajar, localDateString } from '../../lib/constants.js'
+import { penugasanInvolvesTrainer } from '../../lib/penugasan.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 
 const STATUS_OPTIONS = ['Hadir', 'Izin', 'Alpa']
@@ -51,9 +52,9 @@ export default function TrainerAttendanceForm({ trainerId }) {
       const assignments = Array.isArray(t.penugasanPengajar) ? t.penugasanPengajar : []
       assignments.forEach(a => {
         if (!a || !a.sekolahId) return
-        const matchesTrainer = a.trainerId === trainerId || a.asistenId === trainerId
-          || (Array.isArray(a.asistenIds) && a.asistenIds.includes(trainerId))
-        if (!matchesTrainer) return
+        // DC.C.1 — union read via shared helper (legacy asistenId +
+        // asistenIds, same as the server gate).
+        if (!penugasanInvolvesTrainer(a, trainerId)) return
         if (a.aktif !== true) return
         if (!a.periodeMulai || tanggal < a.periodeMulai) return
         if (a.periodeSelesai != null && tanggal > a.periodeSelesai) return

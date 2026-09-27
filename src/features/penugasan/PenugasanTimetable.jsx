@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
-import { buildDailyTimetable, dayNameForTanggal } from '../../lib/penugasan.js'
+import { buildDailyTimetable, dayNameForTanggal, penugasanInvolvesTrainer } from '../../lib/penugasan.js'
 import { exportJadwalPenugasanCSV } from '../../lib/csv.js'
 import PrintButton from '../../components/PrintButton.jsx'
 
@@ -34,7 +34,8 @@ export default function PenugasanTimetable() {
   const rows = useMemo(() => {
     const all = buildDailyTimetable({ trainers, sekolah, tanggal })
     if (ctx.role === 'trainer' && ctx.trainerId) {
-      return all.filter(r => r.trainerId === ctx.trainerId || r.asistenId === ctx.trainerId)
+      // DC.C.2 — union scope: a 2nd assistant sees their own sessions.
+      return all.filter(r => penugasanInvolvesTrainer(r, ctx.trainerId))
     }
     return all
   }, [trainers, sekolah, tanggal, ctx.role, ctx.trainerId])
@@ -42,7 +43,8 @@ export default function PenugasanTimetable() {
   useEffect(() => {
   const missingIds = [...new Set(
     rows
-      .flatMap(r => [r.trainerId, r.asistenId])
+      // DC.C.2 — resolve 2nd-assistant names too.
+      .flatMap(r => [r.trainerId, r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])])
       .filter(id =>
         id &&
         !trainerById.has(id) &&
@@ -85,8 +87,9 @@ export default function PenugasanTimetable() {
   const displayRows = useMemo(() => rows.map(r => ({
   sekolah: r.sekolahNama,
   trainer: trainerById.get(r.trainerId)?.nama || crossScopeNames[r.trainerId] || 'Trainer tidak ditemukan',
-  asisten: r.asistenId
-    ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Trainer tidak ditemukan')
+  // DC.C.2 — union display mirrors the manager table.
+  asisten: [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length
+    ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Trainer tidak ditemukan').join(', ')
     : '—',
   waktu: r.waktu,
 })), [rows, trainerById, crossScopeNames])
@@ -140,7 +143,7 @@ export default function PenugasanTimetable() {
                 <tr key={`${r.assignmentId || r.trainerId}-${r.sekolahId}-${r.waktu}-${idx}`} className="hover:bg-slate-50/50 transition">
                   <td className="py-4 px-6 font-bold text-slate-800">{r.sekolahNama}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || crossScopeNames[r.trainerId] || 'Memuat...'}</td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{r.asistenId ? (trainerById.get(r.asistenId)?.nama || crossScopeNames[r.asistenId] || 'Memuat...') : '—'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{[r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Memuat...').join(', ') : '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.waktu}</td>
                 </tr>
               ))}

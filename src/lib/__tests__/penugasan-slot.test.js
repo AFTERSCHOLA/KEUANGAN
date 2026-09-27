@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { newPenugasanRow, validateRowDates } from '../penugasan.js'
+import { newPenugasanRow, validateRowDates, penugasanInvolvesTrainer } from '../penugasan.js'
 
 // CS.A.1 (F-CS1; D-CS1) — slot-pick auto-create revision.
 // Client legs pin the picked-triple vocabulary contract (parity with
@@ -116,6 +116,27 @@ describe('CS.A.1 slot-pick auto-create (COVER_SLOT)', () => {
     expect(
       phpMissingLinks({ existing: [origin], slotPicks: { 'skl-1': [null] } }),
     ).toEqual([])
+  })
+
+  it('DC.C.1 union: trainerId, legacy asistenId, and asistenIds positions all match', () => {
+    const row = {
+      sekolahId: 'skl-1', trainerId: 'trn-i', asistenId: 'trn-a0',
+      asistenIds: ['trn-a1', 'trn-a2'], periodeMulai: '2026-01-01', aktif: true,
+    }
+    expect(penugasanInvolvesTrainer(row, 'trn-i')).toBe(true)
+    expect(penugasanInvolvesTrainer(row, 'trn-a0')).toBe(true)
+    expect(penugasanInvolvesTrainer(row, 'trn-a1')).toBe(true)
+    expect(penugasanInvolvesTrainer(row, 'trn-a2')).toBe(true)
+    expect(penugasanInvolvesTrainer(row, 'trn-stranger')).toBe(false)
+    expect(penugasanInvolvesTrainer(row, '')).toBe(false)
+    expect(penugasanInvolvesTrainer(row, null)).toBe(false)
+  })
+
+  it('DC.C.1 union: legacy rows without asistenIds match exactly as before', () => {
+    const legacy = { sekolahId: 'skl-1', trainerId: 'trn-i', asistenId: null, periodeMulai: '2026-01-01', aktif: true }
+    expect(penugasanInvolvesTrainer(legacy, 'trn-i')).toBe(true)
+    expect(penugasanInvolvesTrainer(legacy, 'trn-a0')).toBe(false)
+    expect(penugasanInvolvesTrainer(null, 'trn-i')).toBe(false)
   })
 
   it('same scoped triple skips; different scoped triple creates', () => {
