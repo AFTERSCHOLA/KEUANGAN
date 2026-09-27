@@ -33,9 +33,9 @@ export function resolveCurrentAbsensiPengajar(records = []) {
 // columns = every calendar day of the month (empty days stay columns,
 // R-TA5 derived view). One cell may hold SEVERAL teachers (R-TA9).
 //
-// R-TA14/D-TA16: label I/A always follows `trainer.tipePengajar`
-// TERKINI (not a per-record snapshot) — a type change re-labels old
-// cells; that is accepted risk, not a bug.
+// R-TA14/D-TA16: label I/A follows the row's `peran` first (CS.B.2
+// D-CS3); live `trainer.tipePengajar` is display fallback only for rows
+// without peran and never overwrites stored history.
 // R-TA4: correction records supersede the original they point at via
 // `correctionOf` (same latest-wins rule as TrainerAttendanceAdmin.jsx
 // visibleRows) — a corrected row never appears twice in one cell.
@@ -63,7 +63,10 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
   const cellsBySchoolDay = new Map()
   ;current.forEach(r => {
     const t = trainersById.get(r.trainerId)
-    const label = t?.tipePengajar === 'asisten' ? 'A' : 'I'
+    // CS.B.2 (D-CS3) — session role rides on the row: an explicit peran
+    // wins over live tipePengajar (display fallback only, never rewrites
+    // history). Rows without peran label exactly as before.
+    const label = r.peran === 'A' ? 'A' : r.peran === 'I' ? 'I' : (t?.tipePengajar === 'asisten' ? 'A' : 'I')
     const entry = {
       nama: t?.nama || 'Trainer tidak ditemukan',
       label,

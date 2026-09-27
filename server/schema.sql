@@ -145,6 +145,19 @@ CREATE TABLE IF NOT EXISTS siswa (
     INDEX idx_siswa_cabang_updated (cabang_id, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- CS.B.2 (D-CS5) — minimal external-assistant person record (no login).
+-- Fresh databases get it from this baseline; existing databases via
+-- server/migrations/2026-09-27-cover-slot-eksternal.sql.
+CREATE TABLE IF NOT EXISTS eksternal (
+    id VARCHAR(191) NOT NULL PRIMARY KEY,
+    cabang_id VARCHAR(191) NOT NULL,
+    version INT UNSIGNED NOT NULL DEFAULT 1,
+    payload JSON NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_eksternal_cabang_updated (cabang_id, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS invoices (
     id VARCHAR(191) NOT NULL PRIMARY KEY,
     cabang_id VARCHAR(191) NOT NULL,

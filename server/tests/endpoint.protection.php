@@ -982,6 +982,131 @@ check('trainer A create absensiPengajar outside active assignment date range -> 
 
 
 // ============================================================
+// CS.B.1 — cover link (F-CS2; D-CS2): the cover row is the difference
+// between 403 and 201 for the same business event (Q1a).
+// ============================================================
+echo "\n--- absensiPengajar.php (CS.B.1 cover link) ---\n";
+$csbSch = 'skl-csb1-' . uniqid();
+$pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $csbSch,
+    ':c' => $branchA,
+    ':p' => json_encode(['id' => $csbSch, 'cabangId' => $branchA], JSON_UNESCAPED_UNICODE),
+]);
+$csbOriginTrn = 'trn-csb1-origin-' . uniqid();
+$csbOriginAssign = 'pgs-csb1-' . uniqid();
+$pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $csbOriginTrn,
+    ':c' => $branchA,
+    ':p' => json_encode([
+        'id' => $csbOriginTrn, 'cabangId' => $branchA,
+        'penugasanPengajar' => [[
+            'id' => $csbOriginAssign, 'sekolahId' => $csbSch, 'trainerId' => $csbOriginTrn,
+            'asistenId' => null, 'aktif' => true,
+            'periodeMulai' => '2026-01-01', 'periodeSelesai' => null,
+        ]],
+    ], JSON_UNESCAPED_UNICODE),
+]);
+// Snapshot trainer A's payload so the injected cover row below can be
+// removed again — later blocks must see the TA.B.2 assignment state.
+$csbTrnAStmt = $pdo->prepare('SELECT payload FROM trainer WHERE id = :id');
+$csbTrnAStmt->execute([':id' => $trnA['id']]);
+$csbTrnASnapshot = (string) $csbTrnAStmt->fetchColumn();
+
+$csbCoverWrite = [
+    'id' => 'absp-csb1-' . uniqid(),
+    'trainerId' => $trnA['id'],
+    'sekolahId' => $csbSch,
+    'tanggal' => '2026-06-15',
+    'status' => 'Hadir',
+    'cabangId' => $branchA,
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $csbCoverWrite, $cookieTrainerA, $csrfTrainerA);
+check('CS.B.1 substitute without cover link -> 403 (control)', $status === 403, "got $status");
+
+$csbTrnAPayload = json_decode($csbTrnASnapshot, true);
+$csbTrnAPayload['penugasanPengajar'][] = [
+    'id' => 'pgs-csb1-cover-' . uniqid(),
+    'sekolahId' => $csbSch, 'trainerId' => $trnA['id'],
+    'asistenId' => null, 'coverOf' => $csbOriginAssign,
+    'aktif' => true, 'periodeMulai' => '2026-01-01', 'periodeSelesai' => null,
+];
+$pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([
+    ':p' => json_encode($csbTrnAPayload, JSON_UNESCAPED_UNICODE), ':id' => $trnA['id'],
+]);
+$csbCoverWrite['id'] = 'absp-csb1-' . uniqid();
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $csbCoverWrite, $cookieTrainerA, $csrfTrainerA);
+check('CS.B.1 same write with cover link -> 201 (Q1a: school bills, substitute paid)', $status === 201, "got $status");
+
+// Dangling link fails closed even when the row exists.
+$csbTrnAPayload['penugasanPengajar'][count($csbTrnAPayload['penugasanPengajar']) - 1]['coverOf'] = 'pgs-does-not-exist';
+$pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([
+    ':p' => json_encode($csbTrnAPayload, JSON_UNESCAPED_UNICODE), ':id' => $trnA['id'],
+]);
+$csbCoverWrite['id'] = 'absp-csb1-' . uniqid();
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", $csbCoverWrite, $cookieTrainerA, $csrfTrainerA);
+check('CS.B.1 dangling coverOf -> 403 (no link, no pay)', $status === 403, "got $status");
+
+$pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([':p' => $csbTrnASnapshot, ':id' => $trnA['id']]);
+$pdo->exec("DELETE FROM absensi_pengajar WHERE id LIKE 'absp-csb1-%'");
+$pdo->exec("DELETE FROM trainer WHERE id = '$csbOriginTrn'");
+$pdo->exec("DELETE FROM sekolah WHERE id = '$csbSch'");
+
+
+// ============================================================
+// CS.B.2 — external assistants (F-CS5; D-CS5) + per-session role.
+// ============================================================
+echo "\n--- eksternal.php (CS.B.2 external person) ---\n";
+$extNew = ['id' => 'ext-csb2-' . uniqid(), 'nama' => 'Asisten Eksternal Sim', 'sekolahId' => $b2SekolahValid];
+
+[$status] = req('POST', "$base/server/api/eksternal.php", $extNew, $cookieTrainerA, $csrfTrainerA);
+check('CS.B.2 trainer creating external person -> 403 (reference-only)', $status === 403, "got $status");
+
+[$status, $extBody] = req('POST', "$base/server/api/eksternal.php", $extNew, $cookieAdminA, $csrfAdminA);
+check('CS.B.2 admin_cabang creating own-branch external -> 201', $status === 201, "got $status");
+check('CS.B.2 cabangId forced to own branch', ($extBody['cabangId'] ?? null) === $branchA, json_encode($extBody));
+$extId = $extNew['id'];
+
+[$status] = req('POST', "$base/server/api/eksternal.php", $extNew + ['cabangId' => $branchA], $cookieAdminA, $csrfAdminA);
+check('CS.B.2 admin_cabang sending cabangId -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/eksternal.php", ['id' => 'ext-csb2-' . uniqid(), 'sekolahId' => $b2SekolahValid], $cookieAdminA, $csrfAdminA);
+check('CS.B.2 external without nama -> 422', $status === 422, "got $status");
+
+echo "\n--- absensiPengajar.php (CS.B.2 external attendance + peran) ---\n";
+$extWriteBase = [
+    'trainerId' => $extId,
+    'sekolahId' => $b2SekolahValid,
+    'tanggal' => '2026-06-15',
+    'status' => 'Hadir',
+    'cabangId' => $branchA,
+    'peran' => 'A',
+];
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", ['id' => 'absp-csb2-' . uniqid()] + $extWriteBase, $cookieTrainerA, $csrfTrainerA);
+check('CS.B.2 external row without dicatatOleh -> 422 (recorder fails hard)', $status === 422, "got $status");
+
+[$status, $forgedBody] = req('POST', "$base/server/api/absensiPengajar.php", ['id' => 'absp-csb2-' . uniqid()] + $extWriteBase + ['dicatatOleh' => 'usr-someone-else'], $cookieTrainerA, $csrfTrainerA);
+check('CS.B.2 external row with forged recorder -> 422 (identity pinned at the shape gate, before scope)', $status === 422 && str_contains(json_encode($forgedBody), 'dicatatOleh'), "got $status " . json_encode($forgedBody));
+
+$extRowId = 'absp-csb2-' . uniqid();
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", ['id' => $extRowId] + $extWriteBase + ['dicatatOleh' => $trainerUserId], $cookieTrainerA, $csrfTrainerA);
+check('CS.B.2 external row with dicatatOleh=self in own scope -> 201', $status === 201, "got $status");
+$extStored = $pdo->prepare('SELECT payload FROM absensi_pengajar WHERE id = :id');
+$extStored->execute([':id' => $extRowId]);
+$extPayload = json_decode((string) $extStored->fetchColumn(), true);
+check('CS.B.2 stored row carries peran + dicatatOleh through', ($extPayload['peran'] ?? null) === 'A' && ($extPayload['dicatatOleh'] ?? null) === $trainerUserId, json_encode($extPayload));
+
+$extAdminRowId = 'absp-csb2-' . uniqid();
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", ['id' => $extAdminRowId] + $extWriteBase + ['dicatatOleh' => 'usr-test-admA'], $cookieAdminA, $csrfAdminA);
+check('CS.B.2 admin_cabang recording external in own branch -> 201', $status === 201, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensiPengajar.php", ['id' => 'absp-csb2-' . uniqid(), 'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid, 'tanggal' => '2026-06-15', 'status' => 'Hadir', 'cabangId' => $branchA, 'peran' => 'X'], $cookieTrainerA, $csrfTrainerA);
+check('CS.B.2 out-of-enum peran -> 422', $status === 422, "got $status");
+
+$pdo->exec("DELETE FROM absensi_pengajar WHERE id LIKE 'absp-csb2-%'");
+$pdo->exec("DELETE FROM eksternal WHERE id = '$extId'");
+
+
+// ============================================================
 // TA.B.4 — admin correction (R-TA4, append + correction_of pattern)
 // ============================================================
 echo "\n--- absensiPengajar.php (TA.B.4 correction) ---\n";

@@ -1,10 +1,18 @@
 import { useState, useMemo } from 'react'
 import { readCached, writeRemote, getRoleContext } from '../../lib/store.js'
+import { getSafeIdentityContext } from '../../lib/auth.js'
 import { newAbsensiPengajar, localDateString } from '../../lib/constants.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 
 const STATUS_OPTIONS = ['Hadir', 'Izin', 'Alpa']
 const KETERANGAN_OPTIONS = ['EXPO', 'Pengganti', 'Lainnya']
+// CS.B.2 (D-CS3) — per-session role. Stored on the attendance row (peran
+// I/A), never on live tipePengajar; the same person is I in one row and
+// A in another with no type change.
+const PERAN_OPTIONS = [
+  { label: 'Instruktur', value: 'I' },
+  { label: 'Asisten', value: 'A' },
+]
 
 // TA.B.3 (F-TA4, F-TA8; D-TA9, D-TA10; R-TA8) — trainer/asisten self
 // attendance form. Sekolah hanya berasal dari penugasanPengajar milik
@@ -16,6 +24,8 @@ export default function TrainerAttendanceForm({ trainerId }) {
   const [dataRev, setDataRev] = useState(0)
   const [tanggal, setTanggal] = useState(localDateString())
   const [sekolahId, setSekolahId] = useState('')
+  const [personId, setPersonId] = useState('') // '' = self; else external id
+  const [peran, setPeran] = useState('I')
   const [status, setStatus] = useState('Hadir')
   const [keterangan, setKeterangan] = useState('')
   const [catatan, setCatatan] = useState('')
@@ -25,13 +35,16 @@ export default function TrainerAttendanceForm({ trainerId }) {
 
   const sekolahAll = useMemo(() => readCached('sekolah'), [dataRev])
   const trainers = useMemo(() => readCached('trainer'), [dataRev])
+  const eksternals = useMemo(() => readCached('eksternal'), [dataRev])
   const trainer = trainers.find(t => t.id === trainerId)
   const ctx = getRoleContext()
+  const identity = getSafeIdentityContext()
 
   // Sekolah yang valid untuk tanggal terpilih: assignment aktif=true di
-  // trainer manapun yang mencantumkan trainerId ini sebagai trainerId
-  // ATAU asistenId, dan tanggal masuk periodeMulai..periodeSelesai
-  // (periodeSelesai null = ongoing, sama keputusan seperti server).
+  // trainer manapun yang mencantumkan trainerId ini sebagai trainerId,
+  // asistenId ATAU asistenIds (CS.B.2 D-CS4 union read), dan tanggal
+  // masuk periodeMulai..periodeSelesai (periodeSelesai null = ongoing,
+  // sama keputusan seperti server).
   const validSekolahForDate = useMemo(() => {
     const ids = new Set()
     trainers.forEach(t => {
@@ -39,6 +52,7 @@ export default function TrainerAttendanceForm({ trainerId }) {
       assignments.forEach(a => {
         if (!a || !a.sekolahId) return
         const matchesTrainer = a.trainerId === trainerId || a.asistenId === trainerId
+          || (Array.isArray(a.asistenIds) && a.asistenIds.includes(trainerId))
         if (!matchesTrainer) return
         if (a.aktif !== true) return
         if (!a.periodeMulai || tanggal < a.periodeMulai) return
@@ -48,6 +62,14 @@ export default function TrainerAttendanceForm({ trainerId }) {
     })
     return sekolahAll.filter(s => ids.has(s.id))
   }, [trainers, sekolahAll, trainerId, tanggal])
+
+  // CS.B.2 (D-CS5) — external picker, reference-only for trainers: only
+  // externals attached to the trainer's own valid schools for this date.
+  // Creation itself is admin-only (no create control exists in this form).
+  const validEksternalForDate = useMemo(() => {
+    const schoolIds = new Set(validSekolahForDate.map(s => s.id))
+    return (eksternals || []).filter(e => e && schoolIds.has(e.sekolahId))
+  }, [eksternals, validSekolahForDate])
 
   function handleTanggalChange(value) {
     setTanggal(value)
@@ -61,14 +83,21 @@ export default function TrainerAttendanceForm({ trainerId }) {
       setAlertOpen(true)
       return
     }
+    // CS.B.2 (D-CS3/D-CS5) — per-session role rides on the row; an
+    // external row must carry dicatatOleh = own user id (who claimed the
+    // 50k). Internal rows never carry a recorder.
+    const recordPersonId = personId || trainerId
+    const isExternal = personId !== ''
     const record = newAbsensiPengajar({
       tanggal,
       sekolahId,
-      trainerId,
+      trainerId: recordPersonId,
       status,
       keterangan: keterangan || null,
       catatan,
       cabangId: trainer?.cabangId || ctx.cabangId,
+      peran,
+      dicatatOleh: isExternal ? identity?.id || null : null,
     })
     try {
      const result = await writeRemote('absensiPengajar', record)
@@ -82,12 +111,14 @@ export default function TrainerAttendanceForm({ trainerId }) {
        setAlertOpen(true)
        return
      }
-     setSaved(true)
-     setStatus('Hadir')
-     setKeterangan('')
-     setCatatan('')
-     setSekolahId('')
-     setTimeout(() => setSaved(false), 2000)
+      setSaved(true)
+      setStatus('Hadir')
+      setKeterangan('')
+      setCatatan('')
+      setSekolahId('')
+      setPersonId('')
+      setPeran('I')
+      setTimeout(() => setSaved(false), 2000)
    } catch (error) {
      // Sebelumnya (upsert(), fire-and-forget) error apa pun di sini
      // gagal diam-diam — trainer kelihatan "berhasil" simpan padahal
@@ -133,6 +164,37 @@ export default function TrainerAttendanceForm({ trainerId }) {
           {validSekolahForDate.length === 0 && (
             <p className="text-[11px] text-rose-500 mt-1">Tidak ada penugasan aktif untuk tanggal ini. Minta Admin Cabang membuat penugasan.</p>
           )}
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Kehadiran untuk</label>
+          <select
+            value={personId}
+            onChange={e => { setPersonId(e.target.value); setSaved(false) }}
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
+          >
+            <option value="">Saya — {trainer?.nama || 'Trainer'}</option>
+            {validEksternalForDate.map(e => <option key={e.id} value={e.id}>{e.nama} (eksternal)</option>)}
+          </select>
+          {personId !== '' && (
+            <p className="text-[11px] text-slate-500 mt-1">Dicatat oleh: {trainer?.nama || 'Saya'} (otomatis)</p>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Peran sesi ini</label>
+          <div className="flex items-center gap-2 mt-1">
+            {PERAN_OPTIONS.map(p => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => { setPeran(p.value); setSaved(false) }}
+                className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${peran === p.value ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>

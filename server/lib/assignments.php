@@ -96,6 +96,47 @@ function validateSlotPick(PDO $pdo, string $sekolahId, ?array $pick): ?string
     return $vocabErr;
 }
 
+// CS.B.1 (F-CS2; D-CS2) — narrow cover gate for the trainer.php update
+// path (R-CS5: server is authoritative; whole-payload validateTrainer()
+// is unenforced on HTTP writes, so the check lives here, sharing the
+// findAssignmentById()/coverScopeOverlaps() predicates with entities.php
+// — same rules, no divergence). $oldRows is the pre-write payload array
+// (empty for create). Returns the pinned Indonesian error or null.
+//
+// Rules: a non-null coverOf must reference an existing assignment with
+// the same sekolahId + overlapping scope; coverOf is immutable once
+// written — it may only appear on brand-new row ids (re-pointing or
+// late-attaching means delete + create a new row, append-only analog).
+function validateCoverRows(PDO $pdo, array $newRows, array $oldRows): ?string
+{
+    if (!function_exists('findAssignmentById')) require_once __DIR__ . '/../validation/entities.php';
+    $oldById = [];
+    foreach ($oldRows as $old) {
+        if (is_array($old) && isset($old['id']) && is_string($old['id'])) $oldById[$old['id']] = $old;
+    }
+    foreach ($newRows as $row) {
+        if (!is_array($row)) continue;
+        $coverOf = $row['coverOf'] ?? null;
+        if ($coverOf === null) continue;
+        if (!is_string($coverOf) || trim($coverOf) === '') {
+            return 'Penugasan pengganti tidak valid: pengganti untuk harus merujuk pada penugasan yang ada.';
+        }
+        $rowId = $row['id'] ?? null;
+        $old = (is_string($rowId) && $rowId !== '') ? ($oldById[$rowId] ?? null) : null;
+        if ($old !== null && ($old['coverOf'] ?? null) !== $coverOf) {
+            return 'Penugasan pengganti tidak dapat diubah. Hapus dan buat penugasan pengganti baru.';
+        }
+        $origin = findAssignmentById($pdo, $coverOf);
+        if ($origin === null) {
+            return 'Penugasan pengganti tidak valid: pengganti untuk harus merujuk pada penugasan yang ada.';
+        }
+        if (!coverScopeOverlaps($row, $origin)) {
+            return 'Penugasan pengganti tidak valid: sekolah dan slot harus sama dengan penugasan asal.';
+        }
+    }
+    return null;
+}
+
 // ensure() writes post-commit with no entity-validation layer, so picks
 // are matched against the school vocabulary here (trainer.php instead
 // 422s out-of-vocabulary picks strictly via validateSlotPick above).

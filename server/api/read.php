@@ -16,6 +16,8 @@ $entity = $_GET['entity'] ?? null;
 $allEntities = [
     'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'settings', 'invoices',
     'sekolah', 'trainer', 'siswa', 'cabang',
+    // CS.B.2 (D-CS5) — external assistants read like other master data.
+    'eksternal',
 ];
 
 // Validate the entity name itself first (400) before any permission check,
@@ -64,12 +66,15 @@ $sekolahTrainerIds = [];
 // jadi scope trainer/asisten selalu kosong di jalur nyata (hanya lolos
 // test karena fixture-nya menyuntik data manual ke sekolah.payload
 // lewat SQL langsung, bukan lewat trainer.php).
+// CS.B.2 (D-CS5) — 'eksternal' joins the school-scoped set: trainers
+// read externals exactly like siswa (by the external's sekolahId).
 if (
     $user['role'] === 'trainer'
     && (
         in_array('siswa', $entities, true)
         || in_array('sekolah', $entities, true)
         || in_array('sppPayments', $entities, true)
+        || in_array('eksternal', $entities, true)
     )
 ) {
     $trainerRows = $pdo
@@ -263,6 +268,14 @@ if ($user['role'] === 'superadmin') {
 }
 
     if ($name === 'siswa') {
+        $sekolahId = $record['sekolahId'] ?? null;
+
+        $authorizationRecord['_sekolahTrainerIds'] =
+            $sekolahTrainerIds[$sekolahId] ?? [];
+    }
+
+    // CS.B.2 (D-CS5) — externals scope by their sekolahId, siswa-style.
+    if ($name === 'eksternal') {
         $sekolahId = $record['sekolahId'] ?? null;
 
         $authorizationRecord['_sekolahTrainerIds'] =

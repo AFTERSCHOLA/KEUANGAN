@@ -108,6 +108,53 @@ function isValidTimeHM(mixed $value): bool {
     return is_string($value) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value) === 1;
 }
 
+// CS.B.1 (F-CS2; D-CS2) — cover-link helpers. A cover assignment row
+// carries coverOf = origin assignment id + same sekolahId/slot scope.
+// Origin lookup scans every trainer payload (assignments live on the
+// host trainer's record, mirroring trainerHasActiveAssignment() in
+// server/auth/authorize.php). Returns the origin row array or null.
+function findAssignmentById(PDO $pdo, string $assignmentId): ?array {
+    $rows = $pdo->query('SELECT payload FROM trainer ORDER BY created_at, id')->fetchAll();
+    foreach ($rows as $row) {
+        $payload = json_decode((string) ($row['payload'] ?? ''), true);
+        if (!is_array($payload)) continue;
+        $assignments = $payload['penugasanPengajar'] ?? [];
+        if (!is_array($assignments)) continue;
+        foreach ($assignments as $assignment) {
+            if (is_array($assignment) && ($assignment['id'] ?? null) === $assignmentId) return $assignment;
+        }
+    }
+    return null;
+}
+
+// CS.B.1 (D-CS2) — scope overlap for a cover/origin pair. Unscoped
+// (null triple) on either side fans out over every slot, so it overlaps
+// anything in the same school; two scoped rows overlap only on exact
+// triple equality (same YAGNI rule as hasOverlappingActiveAssignment()
+// in server/lib/assignments.php — no interval overlap).
+function assignmentSlotKey(?array $assignment): string {
+    if ($assignment === null) return json_encode([null, null, null]);
+    $hari = $assignment['hari'] ?? null;
+    $mulai = $assignment['jamMulai'] ?? null;
+    $selesai = $assignment['jamSelesai'] ?? null;
+    if ($hari === '') $hari = null;
+    if ($mulai === '') $mulai = null;
+    if ($selesai === '') $selesai = null;
+    return json_encode([$hari, $mulai, $selesai]);
+}
+
+function isUnscopedSlotKey(string $slotKey): bool {
+    return $slotKey === json_encode([null, null, null]);
+}
+
+function coverScopeOverlaps(array $coverRow, array $originRow): bool {
+    if (($coverRow['sekolahId'] ?? null) !== ($originRow['sekolahId'] ?? null)) return false;
+    $coverKey = assignmentSlotKey($coverRow);
+    $originKey = assignmentSlotKey($originRow);
+    if (isUnscopedSlotKey($coverKey) || isUnscopedSlotKey($originKey)) return true;
+    return $coverKey === $originKey;
+}
+
 function validateSekolah(array $data, PDO $pdo): array {
     $errors = array_merge([], checkPayloadSize($data, 'sekolah'));
     if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'sekolah: id is required';
@@ -182,6 +229,39 @@ if (
                         !rowExists($pdo, 'trainer', $asistenId)
                     ) {
                         $errors[] = "trainer: penugasanPengajar[{$index}].asistenId does not reference an existing trainer";
+                    }
+                }
+
+                // CS.B.2 (F-CS3; D-CS4) — multi-assistant, additive.
+                // asistenIds null/absent reads as legacy (valid); when set
+                // it holds max 2 ids, each a known trainer OR external.
+                // Reads use the union (legacy asistenId counts as position
+                // 0); writes prefer this key. Legacy single-asistenId
+                // posture above is untouched (existence-only, no branch
+                // check); externals additionally agree with the assignment
+                // branch when the row carries one (§5 in-branch invariant).
+                if (array_key_exists('asistenIds', $assignment) && $assignment['asistenIds'] !== null) {
+                    $asistenIds = $assignment['asistenIds'];
+                    if (!is_array($asistenIds)) {
+                        $errors[] = "trainer: penugasanPengajar[{$index}].asistenIds must be an array";
+                    } elseif (count($asistenIds) > 2) {
+                        $errors[] = "trainer: penugasanPengajar[{$index}].asistenIds holds at most 2 assistants";
+                    } else {
+                        foreach ($asistenIds as $asistenPos => $asistenEntry) {
+                            if (!requireNonEmptyString($asistenEntry)) {
+                                $errors[] = "trainer: penugasanPengajar[{$index}].asistenIds[{$asistenPos}] must be a non-empty string";
+                            } elseif (!rowExists($pdo, 'trainer', $asistenEntry) && !rowExists($pdo, 'eksternal', $asistenEntry)) {
+                                $errors[] = "trainer: penugasanPengajar[{$index}].asistenIds[{$asistenPos}] does not reference an existing trainer or external assistant";
+                            } elseif (
+                                !rowExists($pdo, 'trainer', $asistenEntry)
+                                && $cabangId !== null
+                                && is_string($cabangId)
+                                && $cabangId !== ''
+                                && cabangIdOf($pdo, 'eksternal', $asistenEntry) !== $cabangId
+                            ) {
+                                $errors[] = "trainer: penugasanPengajar[{$index}].asistenIds[{$asistenPos}] does not match the assignment branch";
+                            }
+                        }
                     }
                 }
 
@@ -270,6 +350,29 @@ if ($cabangId !== null) {
                         if (!$match) $errors[] = $vocabErr;
                     }
                 }
+
+                // CS.B.1 (F-CS2; D-CS2) — cover link. Absent/null reads as
+                // a normal row (legacy rows stay valid). When present it
+                // must reference an existing assignment for the same
+                // sekolahId with overlapping scope; otherwise the row
+                // mints pay-eligibility from nothing. No cover link, no
+                // pay — the 403 stays for genuinely unassigned writes.
+                // (Overlap exclusion of cover rows against their origin
+                // lives in hasOverlappingActiveAssignment(), CS.A.1
+                // groundwork — validateTrainer never did overlap checks.)
+                $coverOf = $assignment['coverOf'] ?? null;
+                if ($coverOf !== null) {
+                    if (!is_string($coverOf) || trim($coverOf) === '') {
+                        $errors[] = "trainer: penugasanPengajar[{$index}].coverOf must be a non-empty string";
+                    } else {
+                        $origin = findAssignmentById($pdo, $coverOf);
+                        if ($origin === null) {
+                            $errors[] = "trainer: penugasanPengajar[{$index}].coverOf does not reference an existing assignment";
+                        } elseif (!coverScopeOverlaps($assignment, $origin)) {
+                            $errors[] = "trainer: penugasanPengajar[{$index}].coverOf must reference an assignment for the same sekolahId with overlapping scope";
+                        }
+                    }
+                }
             }
         }
     }
@@ -347,14 +450,32 @@ function validateAbsensi(array $data, PDO $pdo): array {
 const ABSENSI_PENGAJAR_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
 const ABSENSI_PENGAJAR_KETERANGAN_VALUES = ['EXPO', 'Pengganti', 'Lainnya'];
 
+// CS.B.2 (F-CS5; D-CS5) — person-kind resolution for attendance rows.
+// An id present in `trainer` is internal (wins even on a cross-table
+// collision — trainer ids are never minted for externals); otherwise an
+// id present in `eksternal` is an external assistant without a login.
+function isExternalPerson(PDO $pdo, mixed $id): bool {
+    if (!is_string($id) || trim($id) === '') return false;
+    if (rowExists($pdo, 'trainer', $id)) return false;
+    return rowExists($pdo, 'eksternal', $id);
+}
+
+const ABSENSI_PENGAJAR_PERAN_VALUES = ['I', 'A'];
+
 function validateAbsensiPengajar(array $data, PDO $pdo): array {
     $errors = array_merge([], checkPayloadSize($data, 'absensiPengajar'));
 
     if (!requireNonEmptyString($data['id'] ?? null)) {
         $errors[] = 'absensiPengajar: id is required';
     }
-    if (!requireNonEmptyString($data['trainerId'] ?? null) || !rowExists($pdo, 'trainer', $data['trainerId'])) {
-        $errors[] = 'absensiPengajar: trainerId does not reference an existing trainer';
+    $personId = $data['trainerId'] ?? null;
+    $isExternal = false;
+    if (!requireNonEmptyString($personId)) {
+        $errors[] = 'absensiPengajar: trainerId is required';
+    } elseif (!rowExists($pdo, 'trainer', $personId) && !rowExists($pdo, 'eksternal', $personId)) {
+        $errors[] = 'absensiPengajar: trainerId does not reference an existing trainer or external assistant';
+    } else {
+        $isExternal = isExternalPerson($pdo, $personId);
     }
     if (!requireNonEmptyString($data['sekolahId'] ?? null) || !rowExists($pdo, 'sekolah', $data['sekolahId'])) {
         $errors[] = 'absensiPengajar: sekolahId does not reference an existing sekolah';
@@ -381,7 +502,48 @@ function validateAbsensiPengajar(array $data, PDO $pdo): array {
         $errors[] = 'absensiPengajar: cabangId does not reference an existing cabang';
     }
 
+    // CS.B.2 (F-CS4/F-CS5; D-CS3/D-CS5) — per-session role + recorder.
+    // peran rides on the row (I/A); absent/null reads as legacy (valid,
+    // history byte-identical). dicatatOleh is required iff the row's
+    // person is external (who claimed the 50k); on internal rows a
+    // recorder must not be smuggled (R-CS4: silently writing unvalidated
+    // recorder is a defect). Caller-identity (dicatatOleh === self) is
+    // enforced at the write path (absensiPengajarWriteError), which sees
+    // the authenticated user — this validator is caller-agnostic.
+    if (array_key_exists('peran', $data) && $data['peran'] !== null) {
+        if (!in_array($data['peran'], ABSENSI_PENGAJAR_PERAN_VALUES, true)) {
+            $errors[] = "absensiPengajar: peran '" . var_export($data['peran'], true)
+                . "' is not one of " . implode(', ', ABSENSI_PENGAJAR_PERAN_VALUES);
+        }
+    }
+    $recorder = $data['dicatatOleh'] ?? null;
+    if ($isExternal) {
+        if (!requireNonEmptyString($recorder)) {
+            $errors[] = 'absensiPengajar: dicatatOleh is required when the row person is an external assistant';
+        }
+    } elseif ($recorder !== null) {
+        $errors[] = 'absensiPengajar: dicatatOleh is only valid for external-assistant rows';
+    }
+
     return $errors;
+}
+
+// CS.B.2 (D-CS5) — narrow write-path gate for server/api/absensiPengajar.php
+// (R-CS5: structural 422 before authorization 403 — a malformed record
+// must not leak scope info). Runs the caller-agnostic validator above,
+// then pins caller-identity: an external row's dicatatOleh must be the
+// authenticated caller's own user id (no forging someone else as the
+// recorder who claimed the 50k). Returns the Indonesian error or null.
+function absensiPengajarWriteError(array $record, PDO $pdo, array $user): ?string {
+    $errors = validateAbsensiPengajar($record, $pdo);
+    if ($errors !== []) return implode('; ', $errors);
+    if (isExternalPerson($pdo, $record['trainerId'] ?? null)) {
+        $me = $user['id'] ?? null;
+        if (!is_string($me) || $me === '' || ($record['dicatatOleh'] ?? null) !== $me) {
+            return 'absensiPengajar: dicatatOleh harus berisi id pengguna yang mencatat';
+        }
+    }
+    return null;
 }
 
 function validateHonorPayment(array $data, PDO $pdo): array {
@@ -444,6 +606,38 @@ function validateInvoice(array $data, PDO $pdo): array {
     return $errors;
 }
 
+// CS.B.2 (F-CS5; D-CS5) — minimal external-assistant person record:
+// { nama, kontak, sekolahId, cabangId }, no login account. cabangId is
+// REQUIRED and must agree with the referenced sekolah's branch (same
+// ownership posture as siswa) — the admin_cabang own-branch / superadmin
+// gate lives in authorize.php + eksternal.php, not here.
+function validateEksternal(array $data, PDO $pdo): array {
+    $errors = array_merge([], checkPayloadSize($data, 'eksternal'));
+    if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'eksternal: id is required';
+    if (!requireNonEmptyString($data['nama'] ?? null)) $errors[] = 'eksternal: nama is required';
+    if (array_key_exists('kontak', $data) && $data['kontak'] !== null && !is_string($data['kontak'])) {
+        $errors[] = 'eksternal: kontak must be a string';
+    }
+    $sekolahId = $data['sekolahId'] ?? null;
+    $sekolahCabangId = null;
+    if (!requireNonEmptyString($sekolahId)) {
+        $errors[] = 'eksternal: sekolahId is required';
+    } elseif (!rowExists($pdo, 'sekolah', $sekolahId)) {
+        $errors[] = 'eksternal: sekolahId does not reference an existing sekolah';
+    } else {
+        $sekolahCabangId = cabangIdOf($pdo, 'sekolah', $sekolahId);
+    }
+    $cabangId = $data['cabangId'] ?? null;
+    if (!requireNonEmptyString($cabangId)) {
+        $errors[] = 'eksternal: cabangId is required (ownership)';
+    } elseif (!rowExists($pdo, 'cabang', $cabangId)) {
+        $errors[] = 'eksternal: cabangId does not reference an existing cabang';
+    } elseif ($sekolahCabangId !== null && $cabangId !== $sekolahCabangId) {
+        $errors[] = 'eksternal: cabangId does not match the branch of the referenced sekolah';
+    }
+    return $errors;
+}
+
 /** @return array<int,string> */
 function validateRecord(string $entity, array $data, PDO $pdo): array {
     return match ($entity) {
@@ -455,6 +649,7 @@ function validateRecord(string $entity, array $data, PDO $pdo): array {
         'honorPayments' => validateHonorPayment($data, $pdo),
         'sppPayments' => validateSppPayment($data, $pdo),
         'invoices' => validateInvoice($data, $pdo),
+        'eksternal' => validateEksternal($data, $pdo),
         default => ["{$entity}: no validator defined for this entity"],
     };
 }

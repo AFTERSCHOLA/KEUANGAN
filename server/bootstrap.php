@@ -193,6 +193,8 @@ function entityConfig(string $entity): array {
         'invoices' => ['table' => 'invoices', 'path' => 'invoices.php'],
         'sekolah' => ['table' => 'sekolah', 'path' => 'sekolah.php'],
         'trainer' => ['table' => 'trainer', 'path' => 'trainer.php'],
+        // CS.B.2 (D-CS5) — minimal external-assistant person record.
+        'eksternal' => ['table' => 'eksternal', 'path' => 'eksternal.php'],
         'siswa' => ['table' => 'siswa', 'path' => 'siswa.php'],
         'cabang' => ['table' => 'cabang', 'path' => 'cabang.php'],
 

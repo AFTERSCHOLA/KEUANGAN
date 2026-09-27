@@ -25,6 +25,8 @@ const READABLE_SERVER_KEYS = new Set([
   'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments',
   'sekolah', 'trainer', 'siswa', 'cabang',
   'invoices',
+  // CS.B.2 (D-CS5) — external assistants sync like other master data.
+  'eksternal',
 ])
 
 function notifyStoreChanged() {
@@ -111,6 +113,8 @@ function isWithinScope(key, record, ctx) {
       case 'honorPayments': return trainerIds.has(record.trainerId) || record.cabangId === ctx.cabangId
       case 'invoices': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
       case 'absensiPengajar': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
+      // CS.B.2 (D-CS5) — externals scope by their sekolahId, siswa-style.
+      case 'eksternal': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
       default: return false
     }
   }
@@ -129,6 +133,9 @@ function isWithinScope(key, record, ctx) {
       case 'honorPayments': return record.trainerId === ctx.trainerId
       case 'invoices': return false
       case 'absensiPengajar': return record.trainerId === ctx.trainerId && trainerHasActiveAssignmentClient(ctx.trainerId, record.sekolahId, record.tanggal)
+      // CS.B.2 (D-CS5) — trainers read externals in assigned schools
+      // (reference-only for the attendance picker).
+      case 'eksternal': return schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
       default: return false
     }
   }
@@ -148,6 +155,7 @@ export function getKeys() {
     settings: `${STORE_KEY}_settings`,
     cabang: `${STORE_KEY}_cabang`,
     users: `${STORE_KEY}_users`,
+    eksternal: `${STORE_KEY}_eksternal`,
   }
 }
 
@@ -321,6 +329,8 @@ const WRITE_ENDPOINTS = {
   users: '/api/users.php',
   invoices: '/api/invoices.php',
   honorPayments: '/api/honorPayments.php',
+  // CS.B.2 (D-CS5) — external-person master-data writes.
+  eksternal: '/api/eksternal.php',
   // TA.B.2 fix — self-submit absensi tenaga pengajar langsung sync,
   // bukan lewat antrian manual (queueSync/syncPending). Sebelumnya
   // upsert() cuma nge-queue lokal; kalau belum di-flush manual, admin
@@ -341,6 +351,12 @@ export function prepareWritePayload(key, record, ctx) {
       return copy
 
     case 'sekolah':
+      if (role === 'admin_cabang') delete copy.cabangId
+      return copy
+
+    // CS.B.2 (D-CS5) — same cabangId authority as sekolah: admin_cabang
+    // never sends it (server forces from session), superadmin explicit.
+    case 'eksternal':
       if (role === 'admin_cabang') delete copy.cabangId
       return copy
 

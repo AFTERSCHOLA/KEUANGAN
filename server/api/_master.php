@@ -184,7 +184,9 @@ function masterDelete(string $entity, array $user, bool $isCabang = false): neve
     }
 
     if ($isCabang) {
-        foreach (['sekolah', 'trainer', 'siswa', 'absensi', 'spp_payments', 'honor_payments', 'invoices'] as $table) {
+        // CS.B.2 (D-CS5) — 'eksternal' added: a branch holding external
+        // assistants cannot be deleted out from under them.
+        foreach (['sekolah', 'trainer', 'siswa', 'absensi', 'spp_payments', 'honor_payments', 'invoices', 'eksternal'] as $table) {
             $stmt = $pdo->prepare("SELECT 1 FROM {$table} WHERE cabang_id = :cabang_id LIMIT 1");
             $stmt->execute([':cabang_id' => $id]);
             if ($stmt->fetchColumn() !== false) {

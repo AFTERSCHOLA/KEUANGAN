@@ -20,6 +20,10 @@ export default function PenugasanManager() {
   useEffect(() => subscribeStore(bump), [bump])
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [coverModalOpen, setCoverModalOpen] = useState(false)
+  const [coverOrigin, setCoverOrigin] = useState(null) // assignment row being covered
+  const [coverForm, setCoverForm] = useState({ substituteId: '', hari: '', jamMulai: '', jamSelesai: '', tanggal: localDateString() })
+  const [coverConfirm, setCoverConfirm] = useState(false)
   const [form, setForm] = useState({ sekolahId: '', trainerId: '', asistenId: '', hari: '', jamMulai: '', jamSelesai: '', periodeMulai: localDateString(), ongoing: true, periodeSelesai: '', aktif: true })
   // AP.B.1 (D-AP3) — edit targets one row inside its host record; cross-host
   // moves are out of scope (Sekolah/Instruktur selects lock in edit mode).
@@ -259,6 +263,102 @@ export default function PenugasanManager() {
     await replaceRows(hostId, a => (a && a.id === assignmentId ? { ...a, aktif: true } : a))
   }
 
+  // CS.B.1 (F-CS2; D-CS2) — cover creation. A cover is an explicit row on
+  // the SUBSTITUTE's payload with coverOf = origin id + same sekolahId /
+  // slot scope; the school bills through the cover's legacy session row
+  // while the substitute's absensiPengajar row passes the gate through
+  // the link (Q1a). Slot defaults to the origin slot, validated against
+  // the school vocabulary exactly like the main flow.
+  function openCover(row) {
+    setCoverOrigin(row)
+    setCoverForm({
+      substituteId: '',
+      hari: row.hari || '',
+      jamMulai: row.jamMulai || '',
+      jamSelesai: row.jamSelesai || '',
+      tanggal: localDateString(),
+    })
+    setCoverConfirm(false)
+    setCoverModalOpen(true)
+  }
+
+  function coverFormError() {
+    if (!coverOrigin) return 'Penugasan asal tidak ditemukan.'
+    if (!coverForm.substituteId) return 'Pengganti wajib dipilih.'
+    if (!coverForm.tanggal) return 'Tanggal wajib diisi.'
+    const sch = sekolahById.get(coverOrigin.sekolahId)
+    return validateRowDates({
+      sekolahId: coverOrigin.sekolahId,
+      trainerId: coverForm.substituteId,
+      periodeMulai: coverForm.tanggal,
+      periodeSelesai: null,
+      hari: coverForm.hari || null,
+      jamMulai: coverForm.jamMulai || null,
+      jamSelesai: coverForm.jamSelesai || null,
+      sekolahJadwalList: sch?.jadwalList,
+    })
+  }
+
+  function requestCoverConfirm() {
+    const err = coverFormError()
+    if (err) {
+      showError(err)
+      return
+    }
+    setCoverConfirm(true)
+  }
+
+  async function saveCover() {
+    if (saving || !coverOrigin) return
+    const err = coverFormError()
+    if (err) {
+      showError(err)
+      return
+    }
+    const sch = sekolahById.get(coverOrigin.sekolahId)
+    const host = trainerById.get(coverForm.substituteId)
+    if (!host) {
+      showError('Pengganti tidak ditemukan. Muat ulang halaman dan coba lagi.')
+      return
+    }
+    setSaving(true)
+    try {
+      const existing = Array.isArray(host.penugasanPengajar) ? host.penugasanPengajar : []
+      const row = {
+        ...newPenugasanRow({
+          sekolahId: coverOrigin.sekolahId,
+          trainerId: coverForm.substituteId,
+          asistenId: null,
+          cabangId: sch?.cabangId || host?.cabangId || null,
+          hari: coverForm.hari || null,
+          jamMulai: coverForm.jamMulai || null,
+          jamSelesai: coverForm.jamSelesai || null,
+          periodeMulai: coverForm.tanggal,
+          periodeSelesai: null,
+          aktif: true,
+        }),
+        coverOf: coverOrigin.id,
+      }
+      const result = await writeRemote('trainer', { ...host, penugasanPengajar: [...existing, row] })
+      if (result.status === 'forbidden') {
+        showError(result.message || 'Kamu tidak punya izin untuk menyimpan penugasan ini.')
+        return
+      }
+      if (result.status === 'conflict') {
+        showError('Data trainer ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
+        return
+      }
+      setCoverModalOpen(false)
+      setCoverConfirm(false)
+      setCoverOrigin(null)
+      bump()
+    } catch (error) {
+      showError(error?.message || 'Gagal menyimpan penugasan pengganti. Coba lagi.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // AP.B.1 — Hapus removes the array entry only. absensi_pengajar rows
   // live in their own table, so history and honor math are untouched.
   async function removeRow(hostId, assignmentId) {
@@ -337,13 +437,22 @@ export default function PenugasanManager() {
                         Edit
                       </button>
                       {r.aktif === true ? (
-                        <button
-                          onClick={() => deactivate(r.hostId, r.id)}
-                          disabled={saving}
-                          className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
-                        >
-                          Nonaktifkan
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openCover(r)}
+                            disabled={saving}
+                            className="bg-blue-100 hover:bg-blue-200 disabled:opacity-60 text-blue-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
+                          >
+                            Buat Pengganti
+                          </button>
+                          <button
+                            onClick={() => deactivate(r.hostId, r.id)}
+                            disabled={saving}
+                            className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-lg transition shadow-sm active:scale-95"
+                          >
+                            Nonaktifkan
+                          </button>
+                        </>
                       ) : (
                         <>
                           <button
@@ -491,6 +600,85 @@ export default function PenugasanManager() {
           <button onClick={() => setModalOpen(false)} disabled={saving} className="flex-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
         </div>
       </Modal>
+
+      <Modal open={coverModalOpen} onClose={() => !saving && setCoverModalOpen(false)} title="Buat Penugasan Pengganti">
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Pengganti untuk</label>
+          <p className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-slate-50 text-slate-700 font-semibold">
+            {coverOrigin ? `${sekolahById.get(coverOrigin.sekolahId)?.nama || 'Sekolah tidak ditemukan'} · ${trainerById.get(coverOrigin.trainerId)?.nama || 'Trainer tidak ditemukan'} · ${slotLabel(coverOrigin)}` : '—'}
+          </p>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Pengganti</label>
+          <select
+            value={coverForm.substituteId}
+            onChange={e => setCoverForm({ ...coverForm, substituteId: e.target.value })}
+            disabled={saving}
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
+          >
+            <option value="">-- Pilih Pengganti --</option>
+            {trainers.map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Slot <span className="normal-case font-normal text-slate-400">(opsional — Semua slot bila kosong)</span></label>
+          <div className="flex gap-2 mt-1">
+            <select
+              value={coverForm.hari}
+              onChange={e => setCoverForm({ ...coverForm, hari: e.target.value, jamMulai: e.target.value ? coverForm.jamMulai : '', jamSelesai: e.target.value ? coverForm.jamSelesai : '' })}
+              disabled={saving}
+              aria-label="Hari"
+              className="flex-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
+            >
+              <option value="">Semua hari</option>
+              {PENUGASAN_HARI.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <input
+              type="time"
+              value={coverForm.jamMulai}
+              onChange={e => setCoverForm({ ...coverForm, jamMulai: e.target.value })}
+              disabled={saving || !coverForm.hari}
+              aria-label="Jam Mulai"
+              title="Jam Mulai"
+              className="flex-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60"
+            />
+            <input
+              type="time"
+              value={coverForm.jamSelesai}
+              onChange={e => setCoverForm({ ...coverForm, jamSelesai: e.target.value })}
+              disabled={saving || !coverForm.hari}
+              aria-label="Jam Selesai"
+              title="Jam Selesai"
+              className="flex-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase">Tanggal</label>
+          <input
+            type="date"
+            value={coverForm.tanggal}
+            onChange={e => setCoverForm({ ...coverForm, tanggal: e.target.value })}
+            disabled={saving}
+            className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60"
+          />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button onClick={requestCoverConfirm} disabled={saving} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm py-2.5 rounded-xl transition shadow-sm">
+            {saving ? 'Menyimpan...' : 'Buat'}
+          </button>
+          <button onClick={() => setCoverModalOpen(false)} disabled={saving} className="flex-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-sm py-2.5 rounded-xl transition">Batal</button>
+        </div>
+      </Modal>
+      <ConfirmDialog
+        open={coverConfirm}
+        onCancel={() => setCoverConfirm(false)}
+        onConfirm={saveCover}
+        title="Buat Penugasan Pengganti"
+        body="Buat penugasan pengganti untuk sesi ini? Sekolah ditagih, pengajar pengganti dibayar (Q1a)."
+        confirmLabel="Buat"
+        danger={false}
+      />
 
       <AlertDialog open={alertOpen} onOk={() => setAlertOpen(false)} title="Peringatan" body={alertMsg} />
       <ConfirmDialog

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { summarizeTrainerAttendance, buildTrainerMatrix, formatMatrixCell } from '../trainerAttendance.js'
+import { newAbsensiPengajar, newEksternal } from '../constants.js'
 
 // TA.C.1 VERIFY (unit half): ownership + periode isolation for the
 // personal summary. UI isolation is pinned separately by
@@ -89,6 +90,54 @@ describe('buildTrainerMatrix (TA.C.2)', () => {
     const tridaya = rows.find(r => r.sekolahId === 'skl-tridaya')
     expect(tridaya.cells['2026-09-10']).toHaveLength(1)
     expect(tridaya.cells['2026-09-10'][0].status).toBe('Izin')
+  })
+})
+
+// CS.B.2 (F-CS4/F-CS5; D-CS3/D-CS5) — role-on-row + external-recorder.
+// One person holds peran I in one session row and peran A in another
+// with no type change; an external without a login has a Present row
+// carrying who recorded it. Matrix labels read the row first.
+describe('per-session role + external recorder (CS.B.2)', () => {
+  const trainer = [
+    { id: 'trn-vazira', nama: 'Vazira', tipePengajar: 'instruktur' },
+  ]
+  const sekolah = [{ id: 'skl-1', nama: 'Sekolah Satu' }]
+
+  it('Vazira-style I-then-A rows label independently of a later tipePengajar flip', () => {
+    const absensiPengajar = [
+      newAbsensiPengajar({ id: 'v1', trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-03', status: 'Hadir', cabangId: 'cbg-1', peran: 'I' }),
+      newAbsensiPengajar({ id: 'v2', trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-05', status: 'Hadir', cabangId: 'cbg-1', peran: 'A' }),
+    ]
+    // Later type flip to asisten must not rewrite stored history.
+    const flipped = [{ id: 'trn-vazira', nama: 'Vazira', tipePengajar: 'asisten' }]
+    const { rows } = buildTrainerMatrix({ absensiPengajar, sekolah, trainer: flipped, periode: '2026-09' })
+    const school = rows.find(r => r.sekolahId === 'skl-1')
+    expect(school.cells['2026-09-03'][0].label).toBe('I')
+    expect(school.cells['2026-09-05'][0].label).toBe('A')
+  })
+
+  it('rows without peran keep the legacy live-type labels byte-identically', () => {
+    const absensiPengajar = [
+      newAbsensiPengajar({ id: 'l1', trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-03', status: 'Hadir', cabangId: 'cbg-1' }),
+    ]
+    const { rows } = buildTrainerMatrix({ absensiPengajar, sekolah, trainer, periode: '2026-09' })
+    expect(rows.find(r => r.sekolahId === 'skl-1').cells['2026-09-03'][0].label).toBe('I')
+  })
+
+  it('external factory row carries dicatatOleh; internal rows carry none', () => {
+    const ext = newEksternal({ sekolahId: 'skl-1', nama: 'Budi Sim', cabangId: 'cbg-1' })
+    expect(ext.id).toMatch(/^ext-/)
+    const row = newAbsensiPengajar({
+      trainerId: ext.id, sekolahId: 'skl-1', tanggal: '2026-09-03',
+      status: 'Hadir', cabangId: 'cbg-1', peran: 'A', dicatatOleh: 'usr-recorder-1',
+    })
+    expect(row.peran).toBe('A')
+    expect(row.dicatatOleh).toBe('usr-recorder-1')
+    const internal = newAbsensiPengajar({
+      trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-03',
+      status: 'Hadir', cabangId: 'cbg-1', peran: 'I',
+    })
+    expect(internal.dicatatOleh).toBeNull()
   })
 })
 

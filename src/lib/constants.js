@@ -351,6 +351,12 @@ export function newAbsensiPengajar({
   keterangan = null,
   catatan = '',
   cabangId,
+  // CS.B.2 (D-CS3/D-CS5) — per-session role + external recorder. Both
+  // default null (legacy rows stay valid); attendance stays per-person
+  // rows — no asisten field is added here. dicatatOleh is required iff
+  // the row's person is an external assistant (who claimed the 50k).
+  peran = null,
+  dicatatOleh = null,
 }) {
   return {
     id: id || `${tanggal}_${sekolahId}_${trainerId}_pengajar`,
@@ -362,6 +368,22 @@ export function newAbsensiPengajar({
     keterangan,
     catatan,
     cabangId,
+    peran,
+    dicatatOleh,
+  }
+}
+
+// CS.B.2 (D-CS5) — minimal external-assistant person record (no login).
+// Created by admin_cabang (own branch) or superadmin only; trainers see
+// it reference-only. Shape mirrors the server gate in
+// server/validation/entities.php::validateEksternal.
+export function newEksternal({ sekolahId = '', nama = '', kontak = '', cabangId = null } = {}) {
+  return {
+    id: generateId('ext'),
+    nama,
+    kontak: kontak || '',
+    sekolahId,
+    cabangId: cabangId || null,
   }
 }
 

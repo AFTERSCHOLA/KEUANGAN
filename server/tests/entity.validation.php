@@ -287,6 +287,103 @@ assertContains('merujuk pada jadwal', validateTrainer($badHari, $pdo), 'PS.A.1 h
 
 echo "PS.A.1 slot-scope schema check passed\n";
 
+// CS.B.1 (F-CS2; D-CS2) — cover link: a substitute row carrying coverOf
+// validates only against a real same-school overlapping origin, and the
+// absensiPengajar gate passes through the link (403 without it).
+$csbOriginHostId = 'trn-csb-origin-' . bin2hex(random_bytes(3));
+$csbSubId = 'trn-csb-sub-' . bin2hex(random_bytes(3));
+$csbSubDirectId = 'trn-csb-subdirect-' . bin2hex(random_bytes(3));
+$csbOriginId = 'pgs-csb-origin-' . bin2hex(random_bytes(3));
+foreach ([$csbOriginHostId, $csbSubId, $csbSubDirectId] as $csbTrainerId) {
+    $pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)')->execute([
+        ':id' => $csbTrainerId,
+        ':cabang_id' => $cabangId,
+        ':payload' => json_encode(['id' => $csbTrainerId, 'cabangId' => $cabangId], JSON_UNESCAPED_UNICODE),
+    ]);
+}
+$csbOriginRow = [
+    'id' => $csbOriginId,
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $csbOriginHostId,
+    'asistenId' => null,
+    'hari' => 'Rabu',
+    'jamMulai' => '14:15',
+    'jamSelesai' => '15:15',
+    'periodeMulai' => '2026-01-01',
+    'periodeSelesai' => null,
+    'aktif' => true,
+];
+$pdo->prepare('UPDATE trainer SET payload = :payload WHERE id = :id')->execute([
+    ':id' => $csbOriginHostId,
+    ':payload' => json_encode(['id' => $csbOriginHostId, 'cabangId' => $cabangId, 'penugasanPengajar' => [$csbOriginRow]], JSON_UNESCAPED_UNICODE),
+]);
+
+$csbBase = ['id' => $csbSubId, 'cabangId' => $cabangId, 'penugasanPengajar' => []];
+$csbCoverRow = [
+    'sekolahId' => $slotSekolahId,
+    'trainerId' => $csbSubId,
+    'asistenId' => null,
+    'coverOf' => $csbOriginId,
+    'hari' => 'Rabu',
+    'jamMulai' => '14:15',
+    'jamSelesai' => '15:15',
+    'periodeMulai' => '2026-09-01',
+    'periodeSelesai' => null,
+    'aktif' => true,
+];
+
+$csbValid = $csbBase;
+$csbValid['penugasanPengajar'] = [$csbCoverRow];
+assertSame([], validateTrainer($csbValid, $pdo), 'CS.B.1 cover with valid same-school overlapping origin validates');
+
+$csbDangling = $csbBase;
+$csbDangling['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId, 'trainerId' => $csbSubId, 'asistenId' => null,
+    'coverOf' => 'pgs-does-not-exist',
+]];
+assertContains('does not reference an existing assignment', validateTrainer($csbDangling, $pdo), 'CS.B.1 cover with missing origin rejected');
+
+$csbForeign = $csbBase;
+$csbForeign['penugasanPengajar'] = [[
+    'sekolahId' => $sekolahId, 'trainerId' => $csbSubId, 'asistenId' => null,
+    'coverOf' => $csbOriginId,
+]];
+assertContains('same sekolahId', validateTrainer($csbForeign, $pdo), 'CS.B.1 cover for another school than its origin rejected');
+
+$csbScopeMiss = $csbBase;
+$csbScopeMiss['penugasanPengajar'] = [[
+    'sekolahId' => $slotSekolahId, 'trainerId' => $csbSubId, 'asistenId' => null,
+    'coverOf' => $csbOriginId,
+    'hari' => 'Rabu', 'jamMulai' => '16:00', 'jamSelesai' => '17:00',
+]];
+assertContains('same sekolahId', validateTrainer($csbScopeMiss, $pdo), 'CS.B.1 cover with non-overlapping slot scope rejected');
+
+// Gate legs: persist the substitute payload, then prove the link is the
+// difference between pass and 403.
+$pdo->prepare('UPDATE trainer SET payload = :payload WHERE id = :id')->execute([
+    ':id' => $csbSubId,
+    ':payload' => json_encode($csbValid, JSON_UNESCAPED_UNICODE),
+]);
+fixtureCheck(
+    trainerHasActiveAssignment($csbSubId, $slotSekolahId, '2026-09-26', $pdo) === true,
+    'CS.B.1 substitute with a cover link passes the absensiPengajar gate'
+);
+fixtureCheck(
+    trainerHasActiveAssignment($csbSubDirectId, $slotSekolahId, '2026-09-26', $pdo) === false,
+    'CS.B.1 same write without any assignment or cover still fails (403 stays)'
+);
+// A dangling cover persisted past validation (drift) must fail closed.
+$pdo->prepare('UPDATE trainer SET payload = :payload WHERE id = :id')->execute([
+    ':id' => $csbSubDirectId,
+    ':payload' => json_encode($csbDangling + ['id' => $csbSubDirectId], JSON_UNESCAPED_UNICODE),
+]);
+fixtureCheck(
+    trainerHasActiveAssignment($csbSubDirectId, $slotSekolahId, '2026-09-26', $pdo) === false,
+    'CS.B.1 dangling coverOf fails closed at the gate (no link, no pay even when the row exists)'
+);
+
+echo "CS.B.1 cover-link check passed\n";
+
 // SB.B.1 — seed a real siswa so validateSppPayment()'s siswaId reference
 // check has something valid to point at.
 $siswaId = 'sw-sb1-' . bin2hex(random_bytes(4));
@@ -480,7 +577,124 @@ try {
     fixtureCheck(hasError($errors, 'cabangId is required'), 'absensiPengajar without cabangId should be rejected (unlike legacy absensi)');
 
     echo "TA.B.1 absensiPengajar schema check passed\n";
+
+    // ================= CS.B.2 — per-session role + externals (D-CS3/D-CS4/D-CS5) =================
+    $extId = 'ext-csb2-' . bin2hex(random_bytes(4));
+    $pdo->prepare('INSERT INTO eksternal (id, cabang_id, payload) VALUES (:id, :cabang_id, :payload)')->execute([
+        ':id' => $extId,
+        ':cabang_id' => $cabangId,
+        ':payload' => json_encode([
+            'id' => $extId, 'nama' => 'Asisten Eksternal Sim', 'kontak' => '6281',
+            'sekolahId' => $sekolahId, 'cabangId' => $cabangId,
+        ], JSON_UNESCAPED_UNICODE),
+    ]);
+
+    $pengajarBase = [
+        'trainerId' => $trainerId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-26',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+    ];
+
+    // Vazira-style: same person I in one row, A in another — both validate.
+    $errors = validateAbsensiPengajar($pengajarBase + ['id' => 'absp-csb2-' . bin2hex(random_bytes(3)), 'peran' => 'I'], $pdo);
+    fixtureCheck($errors === [], 'absensiPengajar with peran=I should validate, got: ' . implode('; ', $errors));
+    $errors = validateAbsensiPengajar($pengajarBase + ['id' => 'absp-csb2-' . bin2hex(random_bytes(3)), 'peran' => 'A'], $pdo);
+    fixtureCheck($errors === [], 'absensiPengajar with peran=A should validate, got: ' . implode('; ', $errors));
+
+    $errors = validateAbsensiPengajar($pengajarBase + ['id' => 'absp-csb2-' . bin2hex(random_bytes(3)), 'peran' => 'X'], $pdo);
+    fixtureCheck(hasError($errors, 'peran'), 'absensiPengajar with out-of-enum peran should be rejected');
+
+    // External without recorder fails hard; with recorder validates.
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-csb2-' . bin2hex(random_bytes(3)),
+        'trainerId' => $extId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-26',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+        'peran' => 'A',
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'dicatatOleh'), 'external row without dicatatOleh should be rejected');
+
+    $errors = validateAbsensiPengajar([
+        'id' => 'absp-csb2-' . bin2hex(random_bytes(3)),
+        'trainerId' => $extId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-26',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+        'peran' => 'A',
+        'dicatatOleh' => 'usr-recorder-1',
+    ], $pdo);
+    fixtureCheck($errors === [], 'external row with dicatatOleh should validate, got: ' . implode('; ', $errors));
+
+    // Recorder smuggled onto an internal row is a defect.
+    $errors = validateAbsensiPengajar($pengajarBase + ['id' => 'absp-csb2-' . bin2hex(random_bytes(3)), 'dicatatOleh' => 'usr-recorder-1'], $pdo);
+    fixtureCheck(hasError($errors, 'dicatatOleh'), 'internal row carrying dicatatOleh should be rejected');
+
+    // Caller-identity: recorder must be self.
+    $writeErr = absensiPengajarWriteError([
+        'id' => 'absp-csb2-' . bin2hex(random_bytes(3)),
+        'trainerId' => $extId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-26',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+        'peran' => 'A',
+        'dicatatOleh' => 'usr-someone-else',
+    ], $pdo, ['id' => 'usr-recorder-1', 'role' => 'trainer', 'trainerId' => $trainerId]);
+    fixtureCheck($writeErr !== null, 'external row with another user as dicatatOleh should fail the write gate');
+    $writeErr = absensiPengajarWriteError([
+        'id' => 'absp-csb2-' . bin2hex(random_bytes(3)),
+        'trainerId' => $extId,
+        'sekolahId' => $sekolahId,
+        'tanggal' => '2026-09-26',
+        'cabangId' => $cabangId,
+        'status' => 'Hadir',
+        'peran' => 'A',
+        'dicatatOleh' => 'usr-recorder-1',
+    ], $pdo, ['id' => 'usr-recorder-1', 'role' => 'trainer', 'trainerId' => $trainerId]);
+    fixtureCheck($writeErr === null, 'external row with dicatatOleh=self should pass the write gate, got: ' . $writeErr);
+
+    // validateEksternal: valid, missing nama, branch mismatch.
+    $errors = validateEksternal([
+        'id' => 'ext-csb2-' . bin2hex(random_bytes(3)),
+        'nama' => 'Budi Sim', 'kontak' => null,
+        'sekolahId' => $sekolahId, 'cabangId' => $cabangId,
+    ], $pdo);
+    fixtureCheck($errors === [], 'valid eksternal should validate, got: ' . implode('; ', $errors));
+    $errors = validateEksternal([
+        'id' => 'ext-csb2-' . bin2hex(random_bytes(3)),
+        'nama' => '', 'sekolahId' => $sekolahId, 'cabangId' => $cabangId,
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'nama'), 'eksternal without nama should be rejected');
+    $errors = validateEksternal([
+        'id' => 'ext-csb2-' . bin2hex(random_bytes(3)),
+        'nama' => 'Budi Sim', 'sekolahId' => $sekolahId, 'cabangId' => $otherCabangId,
+    ], $pdo);
+    fixtureCheck(hasError($errors, 'cabangId'), 'eksternal with mismatched cabangId should be rejected');
+
+    // asistenIds: union of legacy + new key, max 2.
+    $multiBase = ['id' => $trainerId, 'cabangId' => $cabangId, 'penugasanPengajar' => []];
+    $multiOk = $multiBase;
+    $multiOk['penugasanPengajar'] = [[
+        'sekolahId' => $sekolahId, 'trainerId' => $trainerId,
+        'asistenId' => $assistant1Id, 'asistenIds' => [$assistant2Id, $extId],
+        'cabangId' => $cabangId,
+    ]];
+    assertSame([], validateTrainer($multiOk, $pdo), 'CS.B.2 asistenIds with 2 known ids (trainer + external) validates');
+    $multiMany = $multiBase;
+    $multiMany['penugasanPengajar'] = [[
+        'sekolahId' => $sekolahId, 'trainerId' => $trainerId,
+        'asistenIds' => [$assistant1Id, $assistant2Id, $extId],
+    ]];
+    assertContains('at most 2', validateTrainer($multiMany, $pdo), 'CS.B.2 asistenIds with 3 entries rejected');
+
+    echo "CS.B.2 role + external validation check passed\n";
 } finally {
+    $pdo->prepare('DELETE FROM eksternal WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM invoices WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM siswa WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM sekolah WHERE cabang_id IN (:c1, :c2)')->execute([':c1' => $cabangId, ':c2' => $otherCabangId]);

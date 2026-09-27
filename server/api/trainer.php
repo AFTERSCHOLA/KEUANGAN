@@ -124,6 +124,28 @@ if ($method === 'POST' || $method === 'PUT') {
         }
     }
 
+    // CS.B.1 (F-CS2; D-CS2) — server-authoritative cover gate (R-CS5).
+    // PenugasanManager writes rows via this full-array replace path, so
+    // origin-existence + immutability are enforced here before masterWrite
+    // (whole-payload entity validation stays unenforced on HTTP writes —
+    // legacy posture, unchanged). Dangling or re-pointed coverOf 422s.
+    if (isset($data['penugasanPengajar']) && is_array($data['penugasanPengajar'])) {
+        $csbOldRows = [];
+        if ($action === 'update') {
+            $csbPrev = database()->prepare('SELECT payload FROM trainer WHERE id = :id');
+            $csbPrev->execute([':id' => $data['id'] ?? null]);
+            $csbProW = $csbPrev->fetch();
+            $csbPp = $csbProW !== false ? json_decode((string) $csbProW['payload'], true) : null;
+            if (is_array($csbPp) && isset($csbPp['penugasanPengajar']) && is_array($csbPp['penugasanPengajar'])) {
+                $csbOldRows = $csbPp['penugasanPengajar'];
+            }
+        }
+        $csbCoverError = validateCoverRows(database(), $data['penugasanPengajar'], $csbOldRows);
+        if ($csbCoverError !== null) {
+            jsonResponse(['error' => $csbCoverError], 422);
+        }
+    }
+
     masterWrite('trainer', $user, record: $data, overrides: ['cabangId' => $cabangId], action: $action);
 } elseif ($method === 'DELETE') {
     if ($role !== 'admin_cabang') {

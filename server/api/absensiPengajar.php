@@ -44,6 +44,14 @@ if (($data['action'] ?? 'write') === 'correct') {
     // "Record membutuhkan id". Fix: ambil dari $data['record'].
     $record = requireRecord($data['record'] ?? []);
 
+    // CS.B.2 — corrections mint new rows, so the same role/recorder
+    // shape gate applies (a correction cannot smuggle an unvalidated
+    // peran or a missing/forged dicatatOleh past the write path).
+    $csbCorrectError = absensiPengajarWriteError($record, database(), $user);
+    if ($csbCorrectError !== null) {
+        jsonResponse(['error' => $csbCorrectError], 422);
+    }
+
     // Authorize against the NEW record's cabangId (where the correction
     // is being written), the same way masterWrite() re-checks both old
     // and new branch on a cabangId-changing update. A correction cannot
@@ -73,6 +81,16 @@ if (($data['action'] ?? 'write') === 'correct') {
 // record shouldn't leak whether it would've been in-scope or not.
 $record = requireRecord($data);
 
+// CS.B.2 (D-CS3/D-CS5) — per-session role + external recorder shape gate
+// (R-CS5: server is authoritative). peran must enum I/A when present;
+// dicatatOleh is required iff the row's person is external and must be
+// the caller themselves (no forging someone else as the recorder).
+// Legacy rows without both keys pass byte-identically.
+$csbWriteError = absensiPengajarWriteError($record, database(), $user);
+if ($csbWriteError !== null) {
+    jsonResponse(['error' => $csbWriteError], 422);
+}
+
 // R-TA6/R-TA8 enforcement lives in authorize.php:
 // - trainerOwnsAttendance(): $record['trainerId'] must match the caller's
 //   own trainerId (a trainer cannot write another trainer's/asisten's
@@ -80,6 +98,9 @@ $record = requireRecord($data);
 // - trainerHasActiveAssignment(): $record['sekolahId'] must be one this
 //   trainer/asisten is actively assigned to, and $record['tanggal'] must
 //   fall inside that assignment's aktif date range.
+// - CS.B.1 (D-CS2): a cover row passes through its coverOf origin link.
+// - CS.B.2 (D-CS5): an external row passes with dicatatOleh=self in own
+//   school+date scope.
 requireAuthorization('write', 'absensiPengajar', $record, $user);
 
 insertLedger('absensiPengajar', $record);

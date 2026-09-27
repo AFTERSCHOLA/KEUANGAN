@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+// CS.B.1 (D-CS2) — cover-link origin resolution lives in
+// server/validation/entities.php (pure, no side effects on load).
+require_once __DIR__ . '/../validation/entities.php';
+
 const CANONICAL_SERVER_ROLES = ['superadmin', 'admin_cabang', 'trainer'];
 
 function validServerRole(mixed $role): bool {
@@ -13,9 +17,14 @@ function roleCanReadEntity(string $role, string $entity): bool {
         // 'settings' intentionally excluded — global settings/tariffs are
         // Superadmin-only per PRODUCTION_PLAN.md section 5 (decision: kept
         // closed entirely, not filtered).
-        'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'invoices', 'audit_log',
+        // CS.B.2 (D-CS5) — 'eksternal' added: admin_cabang writes own
+        // branch only via the generic branch-scoped path below.
+        'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'invoices', 'audit_log', 'eksternal',
     ], true);
-    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments'], true);
+    // CS.B.2 (D-CS5) — trainer may READ externals in assigned schools
+    // (reference-only for the attendance picker); external-person create
+    // stays denied (reference-only; deferred inline creation).
+    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'eksternal'], true);
     return false;
 }
 
@@ -70,8 +79,13 @@ function trainerHasActiveAssignment(string $trainerId, string $sekolahId, string
             $assignedSekolahId = $assignment['sekolahId'] ?? null;
             if ($assignedSekolahId !== $sekolahId) continue;
 
+            // CS.B.2 (D-CS4) — multi-assistant union read: legacy
+            // asistenId counts as position 0, asistenIds adds positions
+            // 1-2. Reads use the union; writes prefer the new key.
+            $asistenIds = $assignment['asistenIds'] ?? null;
             $matchesTrainer = ($assignment['trainerId'] ?? null) === $trainerId
-                || ($assignment['asistenId'] ?? null) === $trainerId;
+                || ($assignment['asistenId'] ?? null) === $trainerId
+                || (is_array($asistenIds) && in_array($trainerId, $asistenIds, true));
             if (!$matchesTrainer) continue;
 
             if (($assignment['aktif'] ?? null) !== true) continue;
@@ -84,6 +98,30 @@ function trainerHasActiveAssignment(string $trainerId, string $sekolahId, string
             if ($periodeSelesai !== null) {
                 if (!is_string($periodeSelesai) || $periodeSelesai === '') continue;
                 if ($tanggal > $periodeSelesai) continue;
+            }
+
+            // CS.B.1 (F-CS2; D-CS2) — cover path. A row carrying coverOf
+            // is NOT pay-eligible on its own: it passes only through a
+            // live origin (existing assignment, same sekolahId +
+            // overlapping scope, aktif, date-covering). Normal rows
+            // (coverOf absent/null) return here exactly as before — no
+            // cover link, no pay, the 403 stays for genuinely unassigned
+            // writes. Malformed origins fail closed (skip, not match).
+            $coverOf = $assignment['coverOf'] ?? null;
+            if ($coverOf !== null) {
+                if (!is_string($coverOf) || trim($coverOf) === '') continue;
+                $origin = findAssignmentById($pdo, $coverOf);
+                if ($origin === null) continue;
+                if (!coverScopeOverlaps($assignment, $origin)) continue;
+                if (($origin['aktif'] ?? null) !== true) continue;
+                $originMulai = $origin['periodeMulai'] ?? null;
+                if (!is_string($originMulai) || $originMulai === '') continue;
+                if ($tanggal < $originMulai) continue;
+                $originSelesai = $origin['periodeSelesai'] ?? null;
+                if ($originSelesai !== null) {
+                    if (!is_string($originSelesai) || $originSelesai === '') continue;
+                    if ($tanggal > $originSelesai) continue;
+                }
             }
 
             return true;
@@ -137,6 +175,13 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
         // Siswa mengikuti scope sekolahnya.
         // read.php mengisi _sekolahTrainerIds dari assignment
         // yang tersimpan di DB, bukan dari request client.
+        return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
+    }
+
+    if ($resource === 'eksternal') {
+        // CS.B.2 (D-CS5) — external persons are school-scoped exactly
+        // like siswa (read.php enriches _sekolahTrainerIds from the
+        // external's sekolahId). Reference-only: read-only branch here.
         return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
     }
 
@@ -203,15 +248,41 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         if ($resource === 'absensi' && $action === 'write') return trainerOwnsAttendance($data, $user);
         if ($resource === 'absensi' && $action === 'certify') return trainerOwnsAttendance($data, $user);
         if ($resource === 'absensiPengajar' && $action === 'write') {
-            if (!trainerOwnsAttendance($data, $user)) {
-                return false;
-            }
             $sekolahId = $data['sekolahId'] ?? null;
             $tanggal = $data['tanggal'] ?? null;
             if (!is_string($sekolahId) || !is_string($tanggal)) {
                 return false;
             }
+            // CS.B.2 (D-CS5) — external-attendance lane. The row's person
+            // is an external without a login, so ownership cannot match:
+            // the recorder proves presence instead. Allowed iff the
+            // caller records as themselves (dicatatOleh === own user id)
+            // AND holds own school+date scope for that session (they were
+            // there). The endpoint's 422 shape gate pins recorder identity
+            // first; this lane is the backstop for the sync.php
+            // authorize-only path, where a forged recorder fails as 403.
+            if (isExternalPerson(database(), $data['trainerId'] ?? null)) {
+                $me = $user['id'] ?? null;
+                if (!is_string($me) || $me === '' || ($data['dicatatOleh'] ?? null) !== $me) {
+                    return false;
+                }
+                return trainerHasActiveAssignment($user['trainerId'] ?? '', $sekolahId, $tanggal, database());
+            }
+            if (!trainerOwnsAttendance($data, $user)) {
+                return false;
+            }
+            // R-CS4: a recorder on an internal row is a defect — the
+            // endpoint 422s it, and this lane refuses it too so the
+            // sync.php path (authorize-only) cannot smuggle one in.
+            if (($data['dicatatOleh'] ?? null) !== null) {
+                return false;
+            }
             return trainerHasActiveAssignment($data['trainerId'], $sekolahId, $tanggal, database());
+        }
+        // CS.B.2 (D-CS5) — trainer external-person create stays denied
+        // (reference-only; deferred inline creation, taste #33).
+        if ($resource === 'eksternal') {
+            return false;
         }
         // Trainer sengaja TIDAK punya jalur 'correct' di sini — koreksi
         // absensiPengajar adalah scope Admin Cabang/Superadmin saja
