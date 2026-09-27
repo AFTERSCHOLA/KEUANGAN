@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { readCached, upsert } from '../../lib/store.js'
+import { readCached, read, writeRemote } from '../../lib/store.js'
+import { apiRequest, ApiError } from '../../lib/api.js'
 import { newAbsensi, localDateString } from '../../lib/constants.js'
 import { findIssuedInvoiceForPeriod } from '../../lib/invoices.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
@@ -77,7 +78,10 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
     setConfirmOpen(true)
   }
 
-  function doSave() {
+  // DC.B.1 (F-DC2; D-DC1) — direct save, no queue: new records create,
+  // edits update by id (server absensi.php update action). Mirrors the
+  // TrainerAttendanceForm forbidden/conflict paths.
+  async function doSave() {
     setConfirmOpen(false)
     const periode = tanggal.slice(0, 7)
     const invoices = readCached('invoices')
@@ -135,7 +139,29 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
   setAlertOpen(true)
 }
 
-    upsert('absensi', record)
+    try {
+      if (editingRecord) {
+        await apiRequest('/api/absensi.php', { method: 'POST', body: { ...record, action: 'update' } })
+        await read('absensi')
+      } else {
+        const result = await writeRemote('absensi', record)
+        if (result.status === 'forbidden') {
+          setAlertMsg(result.message || 'Kamu tidak punya izin mencatat absensi ini.')
+          setAlertOpen(true)
+          return
+        }
+        if (result.status === 'conflict') {
+          setAlertMsg('Sudah ada catatan absensi untuk tanggal/sekolah ini. Muat ulang halaman.')
+          setAlertOpen(true)
+          return
+        }
+      }
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Gagal menyimpan. Periksa koneksi lalu coba lagi.'
+      setAlertMsg(msg)
+      setAlertOpen(true)
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
 

@@ -1,5 +1,10 @@
 <?php
 declare(strict_types=1);
+
+// DC.B.3 (D-DC1) — LEGACY endpoint, retained only. The client no longer
+// queues or flushes (every write posts direct to its entity endpoint),
+// so nothing in src/ calls this. Kept for old cached/PWA installs;
+// do not build new callers (see DRIFT_CLOSE_PLAN.md D-DC1).
 require_once __DIR__ . '/../bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tidak diizinkan'], 405);

@@ -5,10 +5,8 @@ import { apiRequest, ApiError } from './api.js'
 const STORE_KEY = 'afterschola_v4'
 const STORE_EVENT = 'afterschola_v4_changed'
 
-// Append-only ledgers, synced in a batch via /api/sync.php (M3.3). A
-// background queue-and-flush pattern is safe for these because inserts
-// are the only operation — there's no update/delete to lose track of.
-const LEDGER_KEYS = new Set(['absensi', 'absensiPengajar', 'sppPayments', 'honorPayments'])
+// DC.B.3 (D-DC1) — ledgers write direct (writeRemote / apiRequest custom
+// actions). No queue, no batch flush; the queue-and-flush pattern is gone.
 
 // Everything server-readable via the generic /api/read.php?entity=...
 // (M3.3) — the 3 ledgers above, plus the 4 full-CRUD entities that have
@@ -224,14 +222,9 @@ export async function read(key) {
       throw new Error(`read ${key}: invalid response`)
     }
 
-    const pending = pendingRecordsForKey(key)
-    const remoteById = new Map(remote.map(record => [record.id, record]))
-
-    for (const record of pending) {
-      remoteById.set(record.id, record)
-    }
-
-    const merged = [...remoteById.values()]
+    // DC.B.3 (D-DC1) — no pending overlay: every write is direct, so
+    // the server list is the whole truth.
+    const merged = [...remote]
 
     writeRaw(key, merged)
     notifyStoreChanged()
@@ -312,7 +305,6 @@ export function upsert(key, record) {
   }
   writeRaw(key, records)
   notifyStoreChanged()
-  queueSync(key, saved)
 }
 
 // ============================================
@@ -329,6 +321,11 @@ const WRITE_ENDPOINTS = {
   users: '/api/users.php',
   invoices: '/api/invoices.php',
   honorPayments: '/api/honorPayments.php',
+  // DC.B.1/DC.B.2 (D-DC1) — queue dropped: every ledger writer goes
+  // direct through writeRemote (create) or apiRequest custom actions
+  // (absensi update/verify/certify, honorPayments append — see endpoints).
+  absensi: '/api/absensi.php',
+  sppPayments: '/api/sppPayments.php',
   // CS.B.2 (D-CS5) — external-person master-data writes.
   eksternal: '/api/eksternal.php',
   // TA.B.2 fix — self-submit absensi tenaga pengajar langsung sync,
@@ -465,83 +462,11 @@ writeRaw(key, records)
   }
 }
 
-// ============================================
-// LEDGER SYNC LAYER (absensi / sppPayments / honorPayments only)
-// ============================================
+// DC.B.3 (D-DC1) — queue removed: the LEDGER SYNC LAYER
+// (queueSync/syncPending/sync-log) is deleted. Every ledger writer posts
+// direct (writeRemote / apiRequest custom actions); the server
+// /api/sync.php endpoint is retained legacy-only for old cached clients.
 
-const SYNC_LOG_KEY = `${STORE_KEY}_syncLog`
-
-function readSyncLog() {
-  try {
-    const json = localStorage.getItem(SYNC_LOG_KEY)
-    const parsed = json ? JSON.parse(json) : []
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeSyncLog(entries) {
-  localStorage.setItem(SYNC_LOG_KEY, JSON.stringify(entries))
-  notifyStoreChanged()
-}
-
-function pendingRecordsForKey(key) {
-  return readSyncLog()
-    .filter(entry => entry.key === key && entry.record && entry.id)
-    .map(entry => entry.record)
-}
-
-function queueSync(key, record) {
-  if (!LEDGER_KEYS.has(key) || !record?.id) return
-  const log = readSyncLog()
-  const next = log.filter(e => !(e.key === key && e.id === record.id))
-  next.push({ key, id: record.id, record, queuedAt: Date.now() })
-  writeSyncLog(next)
-}
-
-export function getSyncStatus() {
-  const log = readSyncLog()
-  return { pending: log.length, entries: log }
-}
-
-export async function syncPending() {
-  const log = readSyncLog()
-  if (log.length === 0) return { synced: 0, pending: 0 }
-  try {
-    const result = await apiRequest('/api/sync.php', {
-      method: 'POST',
-      body: { entries: log },
-    })
-    const failedIds = new Set((result.failed || []).map(item => item.id))
-    const failedDetail = new Map((result.failed || []).map(item => [item.id, item]))
-    const remaining = log
-      .filter(entry => failedIds.has(entry.id))
-      .map(entry => {
-        const detail = failedDetail.get(entry.id)
-        return {
-          ...entry,
-          failedAt: Date.now(),
-          failedStatus: detail?.status ?? null,
-          failedError: detail?.error ?? 'Server menolak entri',
-        }
-      })
-    writeSyncLog(remaining)
-    return { synced: log.length - remaining.length, pending: remaining.length }
-  } catch (error) {
-    if (error instanceof ApiError) {
-      const remaining = log.map(entry => ({
-        ...entry,
-        failedAt: Date.now(),
-        failedStatus: error.status ?? null,
-        failedError: error.message ?? 'Permintaan gagal',
-      }))
-      writeSyncLog(remaining)
-      return { synced: 0, pending: remaining.length }
-    }
-    return { synced: 0, pending: log.length }
-  }
-}
 
 export async function pullRemote(key) {
   if (!READABLE_SERVER_KEYS.has(key)) return false

@@ -10,6 +10,12 @@ requireCsrf();
 $data = requestJson();
 $action = $data['action'] ?? 'append';
 
+// DC.B.2 (F-DC2; D-DC1) — queue dropped: the client writes via writeRemote,
+// which sends action=create for fresh ids. A create here IS an append
+// (fresh generateId, never a resend of an existing row); action=update
+// stays 400 because payments are append-only (corrections use 'correct').
+if ($action === 'create') $action = 'append';
+
 if ($action === 'correct') {
     $record = $data['record'] ?? null;
     $correctionOf = $data['correctionOf'] ?? null;

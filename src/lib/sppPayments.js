@@ -1,6 +1,6 @@
 // Ledger pembayaran SPP siswa — mirror pola honorPayments (append-only).
 // Koreksi lewat entry baru, bukan hapus/edit di tempat.
-import { readCached, write, upsert } from './store.js'
+import { readCached, write, writeRemote } from './store.js'
 import { generateId } from './constants.js'
 
 export function newSppPayment({
@@ -51,20 +51,13 @@ export function sppPaymentsForPeriode(periode) {
 /**
  * Tambah entry baru ke ledger (append-only — tidak ada fungsi "update"/"hapus").
  *
- * FIX (bug: SPP lunas hilang setelah refresh): sebelumnya ini manggil
- * write('sppPayments', [...all, payment]) langsung. write() cuma nulis ke
- * localStorage — TIDAK PERNAH masuk queueSync(), jadi payment baru gak
- * pernah beneran ke-push ke server lewat /api/sync.php. Angka SPP
- * langsung kelihatan bener di UI (localStorage keisi), tapi begitu
- * hydrateServerData() jalan lagi (refresh), read('sppPayments') narik
- * data dari server (yang gak pernah nerima payment ini) dan localStorage
- * ketimpa balik ke kondisi sebelum dibayar. upsert() menangani scope
- * check + write + notify + queueSync sekaligus — pola yang sama seperti
- * yang sudah dipakai AttendanceForm.jsx untuk 'absensi'.
+ * DC.B.2 (F-DC2; D-DC1) — direct write: payment langsung POST ke server
+ * saat submit (dulu antre lewat queueSync + tombol Sinkronisasi; antrean
+ * dihapus). writeRemote menggabungkan hasil ke cache + notify.
  */
-export function addSppPayment(payment) {
-  upsert('sppPayments', payment)
-  return payment
+export async function addSppPayment(payment) {
+  const result = await writeRemote('sppPayments', payment)
+  return { payment, status: result.status, message: result.message ?? null }
 }
 
 /** Turunkan sppLunas dari jumlah nominal ledger terhadap tarif sekolah. */

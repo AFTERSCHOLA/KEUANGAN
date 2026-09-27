@@ -4,9 +4,10 @@ import {
   usePeriod,
   read,
   getRoleContext,
-  upsert,
+  writeRemote,
   correctLedgerEntry,
 } from '../../lib/store.js'
+import { ApiError } from '../../lib/api.js'
 import { formatRupiah } from '../../lib/format.js'
 import { newHonorPayment, localDateString } from '../../lib/constants.js'
 import { financialData } from '../../lib/finance.js'
@@ -79,19 +80,32 @@ export default function PaymentTable() {
     setModalOpen(true)
   }
 
-  function writePayment(nominal) {
+  // DC.B.2 (F-DC2; D-DC1) — direct append, no queue (server
+  // honorPayments.php append action; fresh ids never collide).
+  async function writePayment(nominal) {
     // periode = periode akuntansi yang sedang dipilih di sidebar (bukan
     // hasil parsing tanggalBayar) — "Lunaskan" & pembayaran manual sama-sama
     // melunasi Beban Honor periode berjalan, terlepas kapan uangnya
     // secara fisik dibayarkan.
-    upsert('honorPayments', newHonorPayment({
-      trainerId: selectedTrainer.id,
-      periode,
-      nominal: Number(nominal),
-      tanggalBayar: payForm.tanggalBayar,
-      cabangKode: cabangKodeForTrainer(selectedTrainer),
-      cabangId: cabangIdForTrainer(selectedTrainer),
-    }))
+    try {
+      const result = await writeRemote('honorPayments', newHonorPayment({
+        trainerId: selectedTrainer.id,
+        periode,
+        nominal: Number(nominal),
+        tanggalBayar: payForm.tanggalBayar,
+        cabangKode: cabangKodeForTrainer(selectedTrainer),
+        cabangId: cabangIdForTrainer(selectedTrainer),
+      }))
+      if (result.status === 'forbidden') {
+        setConfirmMsg(result.message || 'Akses tidak diizinkan.')
+        setConfirmOpen(true)
+        return
+      }
+    } catch (error) {
+      setConfirmMsg(error instanceof ApiError ? error.message : 'Gagal menyimpan. Periksa koneksi lalu coba lagi.')
+      setConfirmOpen(true)
+      return
+    }
     setModalOpen(false)
     refreshPayments()
   }
@@ -116,16 +130,27 @@ export default function PaymentTable() {
     if (sisa <= 0) return
     const bulanLabel = new Date(`${periode}-01`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
     setConfirmMsg(`Bayar sisa ${formatRupiah(sisa)} kepada ${trainer.nama} untuk ${bulanLabel}?`)
-    setConfirmOnConfirm(() => () => {
+    setConfirmOnConfirm(() => async () => {
       setSelectedTrainer(trainer)
-      upsert('honorPayments', newHonorPayment({
-        trainerId: trainer.id,
-        periode,
-        nominal: sisa,
-        tanggalBayar: localDateString(),
-        cabangKode: cabangKodeForTrainer(trainer),
-        cabangId: cabangIdForTrainer(trainer),
-      }))
+      try {
+        const result = await writeRemote('honorPayments', newHonorPayment({
+          trainerId: trainer.id,
+          periode,
+          nominal: sisa,
+          tanggalBayar: localDateString(),
+          cabangKode: cabangKodeForTrainer(trainer),
+          cabangId: cabangIdForTrainer(trainer),
+        }))
+        if (result.status === 'forbidden') {
+          setConfirmMsg(result.message || 'Akses tidak diizinkan.')
+          setConfirmOpen(true)
+          return
+        }
+      } catch (error) {
+        setConfirmMsg(error instanceof ApiError ? error.message : 'Gagal menyimpan. Periksa koneksi lalu coba lagi.')
+        setConfirmOpen(true)
+        return
+      }
       refreshPayments()
     })
     setConfirmOpen(true)

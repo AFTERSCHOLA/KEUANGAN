@@ -12,7 +12,7 @@ import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import SidebarLayout from './components/SidebarLayout.jsx'
 import AccountMenu from './components/AccountMenu.jsx'
-import { usePeriod, getUiState, setUiState, getSettings, setSettings as persistSettings, getSyncStatus, syncPending, subscribeStore, hydrateServerData } from './lib/store'
+import { usePeriod, getUiState, setUiState, getSettings, setSettings as persistSettings, hydrateServerData } from './lib/store'
 import { fetchLogoCurrent, loadPhotoDataUrl } from './lib/photoStorage.js'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
 import TrainerHistory from './features/attendance/TrainerHistory.jsx'
@@ -152,22 +152,14 @@ useEffect(() => {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [backupModalOpen, setBackupModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus())
-  const [syncing, setSyncing] = useState(false)
-
-  useEffect(() => {
-    const refreshSync = () => setSyncStatus(getSyncStatus())
-    const unsubscribe = subscribeStore(refreshSync)
-    // M-AUTH.3: hydrate ONLY when an identity is present. An anonymous
-    // bootstrap must not pull protected records, and the listener below
-    // is what calls hydrateServerData() the first time a login lands.
-    return unsubscribe
-  }, [])
-
+  // M-AUTH.3: hydrate ONLY when an identity is present. An anonymous
+  // bootstrap must not pull protected records.
+  // DC.B.3 (D-DC1) — no sync state: every write posts direct, so login
+  // hydrate is a plain refresh with nothing to flush.
   useEffect(() => {
     if (!currentUser) return
     let cancelled = false
-    hydrateServerData().then(() => { if (!cancelled) setSyncStatus(getSyncStatus()) })
+    hydrateServerData()
     return () => { cancelled = true }
   }, [currentUser?.id])
 
@@ -196,14 +188,6 @@ useEffect(() => {
       })
     return () => { cancelled = true }
   }, [currentUser?.id])
-
-  async function handleSync() {
-    setSyncing(true)
-    await syncPending()
-    await hydrateServerData()
-    setSyncStatus(getSyncStatus())
-    setSyncing(false)
-  }
 
   function setActiveTab(tabId) {
     setActiveTabState(tabId)
@@ -275,9 +259,6 @@ if (currentUser?.mustChangePassword) {
         tabs={visibleTabs}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        onSync={handleSync}
-        syncing={syncing}
-        syncPending={syncStatus.pending}
         onOpenBackup={() => setBackupModalOpen(true)}
         onOpenSettings={() => setSettingsModalOpen(true)}
         onLogout={async () => { await logout(); setActiveTab('overview') }}
@@ -297,9 +278,6 @@ if (currentUser?.mustChangePassword) {
             tabs={visibleTabs}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
-            onSync={handleSync}
-            syncing={syncing}
-            syncPending={syncStatus.pending}
             onOpenBackup={() => setBackupModalOpen(true)}
             onOpenSettings={() => setSettingsModalOpen(true)}
             onLogout={async () => { await logout(); setActiveTab('overview') }}
@@ -329,9 +307,6 @@ if (currentUser?.mustChangePassword) {
             </div>
             <AccountMenu
               username={currentUser?.username || 'Akun'}
-              syncPending={syncStatus.pending}
-              syncing={syncing}
-              onSync={handleSync}
               onOpenBackup={() => setBackupModalOpen(true)}
               onOpenSettings={() => setSettingsModalOpen(true)}
               onLogout={async () => { await logout(); setActiveTab('overview') }}

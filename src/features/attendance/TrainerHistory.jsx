@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { readCached, upsert, usePeriod, read } from '../../lib/store'
+import { readCached, usePeriod, read } from '../../lib/store'
+import { apiRequest } from '../../lib/api.js'
 import { loadPhotoDataUrl } from '../../lib/photoStorage.js'
 
 function isoWeekKey(dateStr) {
@@ -44,9 +45,17 @@ export default function TrainerHistory({ trainerId }) {
     return () => { cancelled = true }
   }, [myRecords])
 
-  function handleCertifyWeek() {
-    const now = new Date().toISOString()
-    uncertifiedThisWeek.forEach(r => upsert('absensi', { ...r, konfirmasiTrainer: now }))
+  // DC.B.1 (F-DC2; D-DC1) — self-certify stamps server-side (absensi.php
+  // certify action derives konfirmasiTrainer from its own clock).
+  async function handleCertifyWeek() {
+    try {
+      await Promise.all(uncertifiedThisWeek.map(r =>
+        apiRequest('/api/absensi.php', { method: 'POST', body: { id: r.id, action: 'certify' } })
+      ))
+      await read('absensi')
+    } catch {
+      // Offline/denied: rows stay uncertified (no queue to flush).
+    }
     setTick(t => t + 1)
   }
 

@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { readCached, correctLedgerEntry, usePeriod, subscribeStore, read } from '../../lib/store'
-import { newAbsensiPengajar, generateId } from '../../lib/constants'
+import { generateId } from '../../lib/constants'
 import Modal from '../../components/Modal.jsx'
-import { resolveCurrentAbsensiPengajar } from '../../lib/trainerAttendance.js'
+import { resolveCurrentAbsensiPengajar, buildPengajarCorrection } from '../../lib/trainerAttendance.js'
 
 // TA.B.4 — admin-side list + correction UI for `absensiPengajar`
 // (self-attendance records written by trainers via TrainerAttendanceForm,
@@ -101,15 +101,13 @@ export default function TrainerAttendanceAdmin() {
     setError('')
 
     const original = correcting
-    const correction = newAbsensiPengajar({
+    // DC.A.1 (F-DC1; D-DC2) — role rides unchanged so a text-only
+    // correction never reprices pay.
+    const correction = buildPengajarCorrection(original, {
       id: generateId('absp'),
-      trainerId: original.trainerId,
-      sekolahId: original.sekolahId,
-      tanggal: original.tanggal,
       status: form.status,
       keterangan: form.keterangan || null,
       catatan: form.catatan,
-      cabangId: original.cabangId,
     })
 
     const result = await correctLedgerEntry('absensiPengajar', original, correction)

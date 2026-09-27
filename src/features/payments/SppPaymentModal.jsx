@@ -45,7 +45,8 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
 
   if (!open || !siswa) return null
 
-  function submit() {
+  // DC.B.2 (F-DC2; D-DC1) — direct save, no queue.
+  async function submit() {
     if (!periodeSelected || !nominal || !tanggalBayar || !metode || !diterimaOleh) {
       setAlertMsg('Lengkapi periode, nominal, tanggal, metode, dan penerima.')
       setAlertOpen(true)
@@ -63,7 +64,23 @@ export default function SppPaymentModal({ open, onClose, siswaId, sekolah, perio
   cabangKode,
   cabangId: sekolahSiswa?.cabangId,
 })
-    addSppPayment(payment)
+    try {
+      const result = await addSppPayment(payment)
+      if (result.status === 'forbidden') {
+        setAlertMsg(result.message || 'Akses tidak diizinkan.')
+        setAlertOpen(true)
+        return
+      }
+      if (result.status === 'conflict') {
+        setAlertMsg('Pembayaran ini sudah tercatat. Muat ulang halaman.')
+        setAlertOpen(true)
+        return
+      }
+    } catch {
+      setAlertMsg('Gagal menyimpan. Periksa koneksi lalu coba lagi.')
+      setAlertOpen(true)
+      return
+    }
     recomputeSppLunasForSiswa(siswaId)
     if (onSaved) onSaved()
   }

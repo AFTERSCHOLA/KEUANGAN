@@ -717,6 +717,71 @@ check(
     "got $status"
 );
 
+// --- absensi.php (update + certify, DC.B.1): queue-drop needs a server
+// path for edits/verify-stamps/certify-stamps that the INSERT-only write
+// path 409s and sync.php silently skipped (alreadyApplied) ---
+echo "\n--- absensi.php (update + certify, DC.B.1) ---\n";
+$dcbSchool = 'skl-dcb-' . uniqid();
+$pdo->prepare(
+    'INSERT INTO sekolah (id, cabang_id, payload)
+     VALUES (:id, :cabang_id, :payload)'
+)->execute([
+    ':id' => $dcbSchool,
+    ':cabang_id' => $branchA,
+    ':payload' => json_encode(['id' => $dcbSchool, 'cabangId' => $branchA, 'nama' => 'SD DCB Sim'], JSON_UNESCAPED_UNICODE),
+]);
+$dcbAbs = [
+    'id' => 'abs-dcb-' . uniqid(),
+    'cabangId' => $branchA,
+    'sekolahId' => $dcbSchool,
+    'trainerId' => $trnA['id'],
+    'tanggal' => '2026-09-04',
+    'periode' => '2026-09',
+    'trainerStatus' => 'Hadir',
+    'siswaList' => [],
+    'catatan' => 'awal',
+];
+[$status] = req('POST', "$base/server/api/absensi.php", $dcbAbs, $cookieAdminA, $csrfAdminA);
+check('DC.B.1 seed legacy absensi row -> 201', $status === 201, "got $status");
+
+$dcbUpd = array_merge($dcbAbs, ['action' => 'update', 'catatan' => 'ralat']);
+[$status] = req('POST', "$base/server/api/absensi.php", $dcbUpd);
+check('anonymous update -> 401', $status === 401, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensi.php", $dcbUpd, $cookieAdminB, csrfFor($base, $cookieAdminB, 'admin_b'));
+check('admin B updating branch A record -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/absensi.php", ['id' => 'abs-missing-' . uniqid(), 'cabangId' => $branchA, 'action' => 'update'], $cookieAdminA, $csrfAdminA);
+check('updating non-existent record -> 422', $status === 422, "got $status");
+
+$dcbBad = $dcbUpd;
+unset($dcbBad['sekolahId']);
+[$status] = req('POST', "$base/server/api/absensi.php", $dcbBad, $cookieAdminA, $csrfAdminA);
+check('update dropping required sekolahId -> 422', $status === 422, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/absensi.php", $dcbUpd, $cookieAdminA, $csrfAdminA);
+check('admin A updating own-branch record -> 200', $status === 200, "got $status");
+$dcbRow = $pdo->query("SELECT payload FROM absensi WHERE id = '" . $dcbAbs['id'] . "'")->fetch();
+check('updated catatan persisted server-side', json_decode($dcbRow['payload'], true)['catatan'] === 'ralat', substr(json_encode($dcbRow), 0, 160));
+
+$csrfTrainerAHere = csrfFor($base, $cookieTrainerA, 'trainer_a');
+$dcbCert = ['id' => $dcbAbs['id'], 'action' => 'certify'];
+[$status] = req('POST', "$base/server/api/absensi.php", $dcbCert);
+check('anonymous certify -> 401', $status === 401, "got $status");
+
+[$status, $body] = req('POST', "$base/server/api/absensi.php", $dcbCert, $cookieTrainerA, $csrfTrainerAHere);
+check('trainer A certifying own row -> 200', $status === 200, "got $status");
+check('response konfirmasiTrainer looks like a server ISO timestamp', is_string($body['konfirmasiTrainer'] ?? null) && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $body['konfirmasiTrainer']), json_encode($body));
+
+[$status, $body] = req('POST', "$base/server/api/absensi.php", $dcbCert + ['konfirmasiTrainer' => '2000-01-01T00:00:00Z'], $cookieTrainerA, $csrfTrainerAHere);
+check('client-supplied konfirmasiTrainer is ignored, not trusted', $status === 200 && ($body['konfirmasiTrainer'] ?? null) !== '2000-01-01T00:00:00Z', json_encode($body));
+
+$dcbAbsB = array_merge($dcbAbs, ['id' => 'abs-dcb-' . uniqid(), 'trainerId' => $trnB['id']]);
+[$status] = req('POST', "$base/server/api/absensi.php", $dcbAbsB, $cookieAdminA, $csrfAdminA);
+check('DC.B.1 seed second row for trainer B -> 201', $status === 201, "got $status");
+[$status] = req('POST', "$base/server/api/absensi.php", ['id' => $dcbAbsB['id'], 'action' => 'certify'], $cookieTrainerA, $csrfTrainerAHere);
+check('trainer A certifying trainer B row -> 403', $status === 403, "got $status");
+
 echo "\n--- TA.A.3 assignment scope ---\n";
 
 // Trainer A hanya boleh membaca sekolah yang assignment-nya

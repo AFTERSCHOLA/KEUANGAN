@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 
 /**
  * Avatar dropdown for the page header.
- * Shows the first letter of the username and a sync-pending badge.
- * Items: Sync, Backup & Restore, Pengaturan, Keluar.
+ * Shows the first letter of the username.
+ * Items: Backup & Restore, Pengaturan, Keluar.
+ * (DC.B.3: manual Sinkronisasi removed — every write posts direct.)
  */
 export default function AccountMenu({
   username,
-  syncPending = 0,
-  syncing = false,
-  onSync,
   onOpenBackup,
   onOpenSettings,
   onLogout,
@@ -50,11 +48,6 @@ export default function AccountMenu({
         className="relative w-10 h-10 rounded-full bg-blue-900 text-yellow-300 font-extrabold text-sm border-2 border-yellow-400 hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition shrink-0"
       >
         {initial}
-        {syncPending > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
-            {syncPending}
-          </span>
-        )}
       </button>
 
       {open && (
@@ -67,16 +60,6 @@ export default function AccountMenu({
             <p className="text-sm font-bold text-slate-800 truncate">{username}</p>
           </div>
           <div className="py-1">
-            <MenuItem
-              onClick={() => handle(onSync)}
-              disabled={syncing || syncPending === 0}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M5.5 9A7 7 0 0117 6.5L20 9M19 15a7 7 0 01-11.5 2.5L5 15" />
-                </svg>
-              }
-              label={syncing ? 'Menyinkronkan...' : `Sinkronisasi${syncPending > 0 ? ` (${syncPending})` : ''}`}
-            />
             <MenuItem
               onClick={() => handle(onOpenBackup)}
               icon={

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { summarizeTrainerAttendance, buildTrainerMatrix, formatMatrixCell } from '../trainerAttendance.js'
+import { summarizeTrainerAttendance, buildTrainerMatrix, formatMatrixCell, buildPengajarCorrection } from '../trainerAttendance.js'
 import { newAbsensiPengajar, newEksternal } from '../constants.js'
 
 // TA.C.1 VERIFY (unit half): ownership + periode isolation for the
@@ -138,6 +138,31 @@ describe('per-session role + external recorder (CS.B.2)', () => {
       status: 'Hadir', cabangId: 'cbg-1', peran: 'I',
     })
     expect(internal.dicatatOleh).toBeNull()
+  })
+})
+
+// DC.A.1 (F-DC1; D-DC2) — correction carries role. A text-only admin
+// correction must preserve peran/dicatatOleh so honor prices identically
+// before and after; legacy rows without peran stay null.
+describe('buildPengajarCorrection (DC.A.1)', () => {
+  it('text-only correction on an (A) row keeps peran A + recorder', () => {
+    const original = { id: 'o1', trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-05', periode: '2026-09', status: 'Hadir', keterangan: null, catatan: '', cabangId: 'cbg-1', peran: 'A', dicatatOleh: 'usr-recorder-1' }
+    const out = buildPengajarCorrection(original, { id: 'c1', status: 'Hadir', keterangan: 'EXPO', catatan: 'ralat' })
+    expect(out.peran).toBe('A')
+    expect(out.dicatatOleh).toBe('usr-recorder-1')
+    expect(out.trainerId).toBe('trn-vazira')
+    expect(out.sekolahId).toBe('skl-1')
+    expect(out.tanggal).toBe('2026-09-05')
+    expect(out.periode).toBe('2026-09')
+    expect(out.keterangan).toBe('EXPO')
+  })
+
+  it('legacy row without peran corrects to null, never invents a role', () => {
+    const original = { id: 'o2', trainerId: 'trn-x', sekolahId: 'skl-1', tanggal: '2026-09-06', periode: '2026-09', status: 'Hadir', cabangId: 'cbg-1' }
+    const out = buildPengajarCorrection(original, { id: 'c2', status: 'Izin', keterangan: null, catatan: '' })
+    expect(out.peran).toBeNull()
+    expect(out.dicatatOleh).toBeNull()
+    expect(out.status).toBe('Izin')
   })
 })
 

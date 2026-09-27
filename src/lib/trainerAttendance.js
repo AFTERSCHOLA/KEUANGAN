@@ -97,6 +97,27 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
 
   return { periode, dates, rows }
 }
+// DC.A.1 (F-DC1; D-DC2) — pure correction builder. The admin dialog edits
+// only status/keterangan/catatan; identity + scope + session role ride
+// unchanged from the original so a text-only correction never reprices
+// pay (honor reads row peran first). Caller supplies the new id +
+// cabangId-validated context; server re-validates enums + recorder rules.
+export function buildPengajarCorrection(original, { id, status, keterangan = null, catatan = '' }) {
+  const tanggal = original?.tanggal ?? ''
+  return {
+    id,
+    tanggal,
+    periode: typeof tanggal === 'string' ? tanggal.slice(0, 7) : '',
+    trainerId: original?.trainerId,
+    sekolahId: original?.sekolahId,
+    status,
+    keterangan,
+    catatan,
+    cabangId: original?.cabangId,
+    peran: original?.peran ?? null,
+    dicatatOleh: original?.dicatatOleh ?? null,
+  }
+}
 export function summarizeTrainerAttendance({ absensiPengajar = [], trainerId, periode }) {
   const mine = resolveCurrentAbsensiPengajar(
    (absensiPengajar || []).filter(

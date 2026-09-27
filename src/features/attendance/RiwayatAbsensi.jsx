@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { readCached, upsert, usePeriod, read } from '../../lib/store'
+import { readCached, usePeriod, read } from '../../lib/store'
+import { apiRequest } from '../../lib/api.js'
 import { buildReviewQueue } from '../../lib/attendance'
 import { getRole, canVerify } from '../../lib/role'
 
@@ -62,9 +63,16 @@ export default function RiwayatAbsensi({ onLoadForCorrection }) {
   function hadirCount(record) {
     return (record.siswaList || []).filter(s => s.status === 'Hadir').length
   }
-  function handleVerify(record) {
+  // DC.B.1 (F-DC2; D-DC1) — verify stamps server-side (absensi.php
+  // verify action derives by/at from session; client values never trusted).
+  async function handleVerify(record) {
     if (!canVerify(role)) return
-    upsert('absensi', { ...record, statusVerifikasi: { by: role, at: new Date().toISOString() } })
+    try {
+      await apiRequest('/api/absensi.php', { method: 'POST', body: { id: record.id, action: 'verify' } })
+      await read('absensi')
+    } catch {
+      // Offline/denied: cache keeps the pre-verify state (no queue to flush).
+    }
     setTick(t => t + 1)
   }
 
