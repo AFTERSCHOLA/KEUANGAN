@@ -2,7 +2,7 @@
 
 **Companion to `docs/COVER_SLOT_PLAN.md`.** Decomposes the slot-pick revision + cover path + per-session role into strictly ordered microtasks. Each microtask must VERIFY before the next begins; a failing check becomes a bounded follow-up, not a widened edit (taste #3/#4). Later work does not start until gates pass. No app code changes in this pair yet — this chain is the build order for implementers.
 
-**Source of truth for findings/decisions:** `COVER_SLOT_PLAN.md` §3 (F-CS1–F-CS7) and §4 (D-CS1–D-CS8) + §6 (R-CS1–R-CS7). The chain below does not restate plan prose; each `FINDS`/`RULES` line cites the registry. Violated invariant for the whole chain (taste bug rule, one hypothesis): *a cover session bills the school but pays nobody because the assignment gate has no cover path, and the slot model has no explicit pick — F-CS1/F-CS2*; CS.A–CS.C is the single slice that tests it.
+**Source of truth for findings/decisions:** `COVER_SLOT_PLAN.md` §3 (F-CS1–F-CS8) and §4 (D-CS1–D-CS9) + §6 (R-CS1–R-CS7). The chain below does not restate plan prose; each `FINDS`/`RULES` line cites the registry. Violated invariant for the whole chain (taste bug rule, one hypothesis): *a cover session bills the school but pays nobody because the assignment gate has no cover path, and the slot model has no explicit pick — F-CS1/F-CS2*; CS.A–CS.C is the single slice that tests it.
 
 ```text
 MICROTASK: <one verb + one noun>
@@ -146,6 +146,37 @@ MICROTASK: Default new links to Semua slot
   DONE-IF: verify passes; only intended files changed
 
   CS.D.1 → Verified: temp E2E (removed after passing) -> naive create shows Semua slot pre-checked, server holds exactly 1 unscoped aktif row; npx playwright test tests/auto-penugasan-create.spec.js tests/auto-penugasan-delete.spec.js tests/auto-penugasan-livejadwal.spec.js --workers=1 -> 3 passed; r3-verify 4/4, ki1-trainer-cabangid 2/2, trainer-honor-input 1/1 (second-batch flakes pass in isolation — wedged-renderer pattern, pre-existing); e2e.spec.js #3 fails pre-existing at HEAD (M-AF5.1 Hapus Sekolah confirm unhandled by the test, proven on stashed tree) and the full-file run is pollution-sensitive (fixed names, no hermetic cleanup) — reported Unverified/inconclusive per taste #28, follow-up owned by the e2e-hygiene thread, not this gate
+```
+
+### CS.D.2 Label covered sessions in timetable views
+
+```text
+MICROTASK: Label covered sessions in timetable views
+  EDIT:    src/lib/penugasan.js (thread coverOf through timetable rows; add coverMarksForRows pairing helper),
+           src/features/penugasan/PenugasanTimetable.jsx (Pengganti/Digantikan badges + export mirror text),
+           src/lib/__tests__/penugasan-timetable.test.js (threading + pairing pins)
+  FINDS:   F-CS8; D-CS9
+  RULES:   R-CS1, R-CS2; display-only (no state change, cover gate untouched); export mirrors visible text (D-PG6); cover-free fixtures byte-identical
+  DEPENDS: CS.D.1
+  OUTCOME: a covered slot shows who substitutes and marks the origin replaced, in the table and the CSV.
+  DONE-IF: verify passes; only intended files changed
+
+  CS.D.2 → Verified: npx vitest run src/lib/__tests__/penugasan-timetable.test.js -> threading + pairing pins green; temp E2E (removed after passing) -> seeded origin + cover renders `Sub (Pengganti)` badge and `Digantikan oleh` origin mark; npx playwright test tests/penugasan-timetable.spec.js tests/penugasan-export.spec.js --workers=1 -> 3 passed, zero pageerror (cover-free export byte-identical)
+```
+
+### CS.D.3 Admin manager for external assistants
+
+```text
+MICROTASK: Admin manager for external assistants
+  EDIT:    src/features/admin/EksternalManager.jsx (new, list + Tambah + Hapus; school select; pinned copy),
+           src/App.jsx (Asisten Eksternal tab, admin roles only — trainers stay reference-only)
+  FINDS:   F-CS5; D-CS5
+  RULES:   R-CS1, R-CS2, R-CS3, R-CS5; mirror PenugasanManager table + Modal/AlertDialog/ConfirmDialog idioms, classNames verbatim; no role broadening (trainer lane renders khusus-Admin + server 403s); no server change (eksternal.php + validateEksternal + store wiring already shipped)
+  DEPENDS: CS.D.2
+  OUTCOME: an admin adds an external assistant end-to-end from the UI; trainers keep picker-only access.
+  DONE-IF: verify passes; only intended files changed
+
+  CS.D.3 → Verified: temp E2E (removed after passing) -> empty-name pinned copy, created record server-persisted with school scope, delete confirm copy + server removal; npm run build -> 95 modules green
 ```
 
 ---

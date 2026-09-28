@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState, useCallback } from 'react'
 import { readCached, usePeriod, subscribeStore, read } from '../../lib/store.js'
+import { shiftPeriode } from '../../lib/constants.js'
 import { summarizeTrainerAttendance } from '../../lib/trainerAttendance.js'
 
 // TA.C.1 (F-TA4, F-TA5; D-TA13, D-TA15; R-TA5, R-TA6) — ringkasan
@@ -16,7 +17,10 @@ export default function TrainerAttendanceSummary({ trainerId }) {
   const bump = useCallback(() => setTick(t => t + 1), [])
   useEffect(() => subscribeStore(bump), [bump])
 
-  const periode = periodeKey()
+  // BUG2 (D-BUG2) — local period stepping so previous months are
+  // reachable without touching the global period (other tabs unaffected).
+  const [periodeOverride, setPeriodeOverride] = useState(null)
+  const periode = periodeOverride || periodeKey()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const absensiPengajar = useMemo(() => readCached('absensiPengajar'), [tick])
 
@@ -43,6 +47,24 @@ export default function TrainerAttendanceSummary({ trainerId }) {
           <p className="text-xs text-slate-500">
             Ringkasan absensi Anda periode <b>{periode}</b> — {summary.count} record
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Bulan sebelumnya"
+            onClick={() => setPeriodeOverride(p => shiftPeriode(p || periodeKey(), -1))}
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            aria-label="Bulan berikutnya"
+            onClick={() => setPeriodeOverride(p => shiftPeriode(p || periodeKey(), 1))}
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 transition"
+          >
+            ›
+          </button>
         </div>
       </div>
 

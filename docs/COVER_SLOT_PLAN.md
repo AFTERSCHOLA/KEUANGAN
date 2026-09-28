@@ -44,6 +44,7 @@
 | F-CS5 | **External assistants have no write path and no recorder audit.** No login, no entity, no attendance attribution; a trainer-claimed `Present` would mint 50k without a trail. | `constants.js:345-366`; `EVALUATION_LOG.md` assistant-external analysis + recorder risk note |
 | F-CS6 | **Dashboard-first is a trap while the generator is still flat.** Potensi 53,535,011 vs tariff-only ≈73.45M; the canonical generator still bills flat. | `finance.js:89-94` vs `billingForSekolah`; `invoiceGenerator.php:106-135`; `EXEMPLAR_MIGRATION.md` P1–P2, F7; `SPP_BILLING_PLAN.md` D-SB10 |
 | F-CS7 | **Naive link yields zero rows vs team expectation (Fail A1).** Ticking a school with no slot boxes sends `[]`, and D-CS1 "No pick, no row" creates nothing — the trainer's `Absensi Saya` stays blocked with the pinned "no active assignment" guidance. The team expects all-slots inheritance. | `TrainerList.jsx:120` (`slotPicks[sId] \|\| []`); `assignments.php:235-250`; `TrainerAttendanceForm.jsx:165-167`; team Bug 4 report |
+| F-CS8 | **Covered sessions are invisible in timetable views (team Bug 8).** A covered slot renders the origin row and the substitute row with no distinction — the admin reads the original assignment as unchanged. The origin must stay `aktif` (the cover validity gate requires it), so the fix is display-only. | `PenugasanTimetable.jsx` (no coverOf threading); `authorize.php:103-115` (origin must stay aktif); team Bug 8 report |
 
 ## 4. Decision set (D-CS)
 
@@ -57,6 +58,7 @@
 | D-CS6 | **Role-first honor (concrete pick).** `peran 'A'` → flat 50k per D2 (whoever fills the slot, incl. externals); `peran 'I'` → the row owner's `trainer.honor` per R-TA3 (Senior/Newbie tiers, no hardcode). No `peran` on legacy rows → legacy path unchanged (R-SB3 analog: history byte-identical). | Locked |
 | D-CS7 | **Dashboard-last sequencing (guard, not build).** The dashboard keeps the flat Potensi source until the SPP_BILLING chain ships the per-meeting generator upgrade (SB.B/SB.C, D-SB10). This chain adds a regression guard pinning both figures (Potensi 53,535,011 + tariff-only ≈73.45M on the exemplar fixture) so a premature source switch fails loudly. Generator work itself is deferred with owner (§10), never duplicated here. | Locked |
 | D-CS8 | **Naive-link defaults to Semua slot (concrete pick, recorded 2026-09-28).** Checking a school seeds `[null]` (the Semua slot box renders pre-checked, honest default); an explicitly emptied entry (`[]`) still means no rows. The save maps a missing entry to `[null]`. Server D-CS1 semantics stay byte-identical (Locked, untouched) — the change is client-default only; `[]` remains reachable via direct API writes. | Locked |
+| D-CS9 | **Cover display labels (concrete pick, recorded 2026-09-28, display-only).** Timetable rows carry `coverOf`; cover rows render `Nama (Pengganti)` + Pengganti badge, origins with an active same-school+same-waktu cover render `Nama (Digantikan oleh …)` + Digantikan badge. CSV export mirrors the same text (D-PG6). No state change: origins stay `aktif`, the cover validity gate untouched. | Locked |
 
 ## 5. Data model (extensions, additive only)
 

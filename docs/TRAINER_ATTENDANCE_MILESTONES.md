@@ -3,7 +3,7 @@
 **Companion to `docs/TRAINER_ATTENDANCE_PLAN.md`.**  
 Memecah implementasi Absensi Tenaga Pengajar menjadi microtask yang berurutan. Setiap microtask harus VERIFY sebelum microtask berikutnya dimulai. Kegagalan menjadi follow-up terbatas dan tidak otomatis memperlebar scope.
 
-**Source of truth:** `TRAINER_ATTENDANCE_PLAN.md` §3 (F-TA1–F-TA9), §4 (D-TA1–D-TA16), dan §10 (R-TA1–R-TA14).
+**Source of truth:** `TRAINER_ATTENDANCE_PLAN.md` §3 (F-TA1–F-TA9), §4 (D-TA1–D-TA16), dan §10 (R-TA1–R-TA15).
 
 **Catatan status:** D-TA14 (sumber perhitungan honor) **Locked (berpindah)** — checkpoint TA.C.2b disetujui 2026-09-23, lihat `docs/TA_C2B_VALIDATION.md`. Seluruh chain TA.A–TA.D.1 **DONE**; TA.D.2 (dokumen ini) menutup write-back.
 
@@ -463,6 +463,32 @@ VERIFY: document inspection:
         -> git diff hanya berisi perubahan yang dimaksud.
 
 DONE-IF: verify passes; only intended files changed
+```
+
+### TA.D.3 Restore previous-period history (team Bug 2)
+
+```text
+MICROTASK: Restore previous-period history
+
+EDIT: src/lib/store.js (trainer absensiPengajar read scope ownership-only,
+        matching server authorize read lane; write gate stays server-side),
+      src/features/attendance/TrainerAttendanceSummary.jsx (local
+        prev/next-month stepping, global period untouched)
+
+FINDS: F-TA4, F-TA7; D-TA11, D-TA13
+
+RULES: R-TA4, R-TA6, R-TA7; read scope never stricter than the server
+       (taste #61); local period state only (no global side effects);
+       R-TA6 ownership preserved (trainer A/B isolation untouched)
+
+DEPENDS: TA.D.2
+
+OUTCOME: a trainer browses previous months and keeps seeing own history
+         after assignments are edited, deactivated, or deleted.
+
+DONE-IF: verify passes; only intended files changed
+
+TA.D.3 → Verified: temp E2E (removed after passing) -> prev-month step reveals older-period row; row stays visible after its assignment is deleted; npx playwright test tests/trainer-attendance-summary.spec.js tests/trainer-attendance-form.spec.js --workers=1 -> 7 passed, zero pageerror (ownership isolation intact)
 ```
 
 ---

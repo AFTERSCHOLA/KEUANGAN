@@ -130,7 +130,11 @@ function isWithinScope(key, record, ctx) {
       case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
       case 'honorPayments': return record.trainerId === ctx.trainerId
       case 'invoices': return false
-      case 'absensiPengajar': return record.trainerId === ctx.trainerId && trainerHasActiveAssignmentClient(ctx.trainerId, record.sekolahId, record.tanggal)
+      // BUG2 (D-BUG2) — read scope is ownership-only, matching the server
+      // authorize read lane (trainerOwnsRecord, no assignment-date gate):
+      // history must survive deleted/deactivated/edited assignments. The
+      // assignment gate stays on the WRITE path (authorize.php).
+      case 'absensiPengajar': return record.trainerId === ctx.trainerId
       // CS.B.2 (D-CS5) — trainers read externals in assigned schools
       // (reference-only for the attendance picker).
       case 'eksternal': return schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
-import { buildDailyTimetable, dayNameForTanggal, penugasanInvolvesTrainer } from '../../lib/penugasan.js'
+import { buildDailyTimetable, dayNameForTanggal, penugasanInvolvesTrainer, coverMarksForRows } from '../../lib/penugasan.js'
 import { exportJadwalPenugasanCSV } from '../../lib/csv.js'
 import PrintButton from '../../components/PrintButton.jsx'
 
@@ -81,18 +81,31 @@ export default function PenugasanTimetable() {
 
   const hari = dayNameForTanggal(tanggal)
 
+  // BUG8 (D-BUG8) — cover marks shared by the table and the CSV export.
+  const coverMarks = useMemo(() => coverMarksForRows(rows), [rows])
+  function trainerName(id) {
+    return trainerById.get(id)?.nama || crossScopeNames[id] || 'Trainer tidak ditemukan'
+  }
+  function trainerCellText(r) {
+    const base = trainerName(r.trainerId)
+    if (coverMarks.isCoverRow(r)) return `${base} (Pengganti)`
+    const subs = coverMarks.coveredBy(r)
+    if (subs.length > 0) return `${base} (Digantikan oleh ${subs.map(trainerName).join(', ')})`
+    return base
+  }
+
   // PG.C.1 (D-PG6, D-PG7) — export payload mirrors the visible table
   // exactly (same filtered array + same name resolution); scope filtered
   // upstream, so the file can never contain rows the table hides.
   const displayRows = useMemo(() => rows.map(r => ({
   sekolah: r.sekolahNama,
-  trainer: trainerById.get(r.trainerId)?.nama || crossScopeNames[r.trainerId] || 'Trainer tidak ditemukan',
+  trainer: trainerCellText(r),
   // DC.C.2 — union display mirrors the manager table.
   asisten: [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length
     ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Trainer tidak ditemukan').join(', ')
     : '—',
   waktu: r.waktu,
-})), [rows, trainerById, crossScopeNames])
+})), [rows, trainerById, crossScopeNames, coverMarks])
 
   function handleExportCSV() {
     exportJadwalPenugasanCSV(displayRows, tanggal)
@@ -142,7 +155,15 @@ export default function PenugasanTimetable() {
               {rows.map((r, idx) => (
                 <tr key={`${r.assignmentId || r.trainerId}-${r.sekolahId}-${r.waktu}-${idx}`} className="hover:bg-slate-50/50 transition">
                   <td className="py-4 px-6 font-bold text-slate-800">{r.sekolahNama}</td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{trainerById.get(r.trainerId)?.nama || crossScopeNames[r.trainerId] || 'Memuat...'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">
+                    {trainerCellText(r)}
+                    {coverMarks.isCoverRow(r) && (
+                      <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Pengganti</span>
+                    )}
+                    {coverMarks.coveredBy(r).length > 0 && (
+                      <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Digantikan</span>
+                    )}
+                  </td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{[r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Memuat...').join(', ') : '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.waktu}</td>
                 </tr>

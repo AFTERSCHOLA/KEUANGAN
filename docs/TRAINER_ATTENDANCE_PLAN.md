@@ -354,6 +354,7 @@ Integrasi harus tetap menjaga audit trail dan invariant ledger yang sudah berlak
 - **R-TA12** — Implementasi baru tidak boleh mengubah angka historis `honorPayments` tanpa bukti regresi eksplisit.
 - **R-TA13** — `asistenId` pada Penugasan bersifat nullable; validator tidak boleh menolak penugasan instruktur tanpa asisten.
 - **R-TA14** — Label `I`/`A` pada rekap matriks selalu mengikuti `trainer.tipePengajar` terkini (bukan snapshot), sesuai D-TA16; ini bukan bug dan tidak boleh "diperbaiki" tanpa keputusan eksplisit untuk menambah field snapshot.
+- **R-TA15** — Read scope untuk absensi milik sendiri adalah ownership-only (`trainerId` cocok), mengikuti lane read server; validitas penugasan hanya mengawal write, tidak pernah menyembunyikan riwayat (Locked 2026-09-28, TA.D.3).
 
 ---
 

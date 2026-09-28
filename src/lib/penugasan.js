@@ -149,6 +149,34 @@ export function findOverlappingPair(rows = []) {
   return null
 }
 
+// BUG8 (D-BUG8) — cover marks for timetable rows (display-only).
+// A row carrying coverOf is the substitute (Pengganti); an origin row
+// whose id is some same-school+same-waktu row's coverOf is covered
+// (Digantikan oleh …). Pure so views and the CSV export share one owner.
+//
+// Returns { subsByOrigin: Map<assignmentId, string[] trainerIds>,
+// isCoverRow(row): bool, coveredBy(row): string[] }.
+export function coverMarksForRows(rows = []) {
+  const list = Array.isArray(rows) ? rows : []
+  const subsByOrigin = new Map()
+  list.forEach(r => {
+    if (!r || typeof r !== 'object' || !r.coverOf) return
+    const peers = list.filter(o => o && typeof o === 'object'
+      && o.assignmentId === r.coverOf
+      && o.sekolahId === r.sekolahId
+      && o.waktu === r.waktu)
+    if (peers.length === 0) return
+    if (!subsByOrigin.has(r.coverOf)) subsByOrigin.set(r.coverOf, [])
+    const names = subsByOrigin.get(r.coverOf)
+    if (r.trainerId && !names.includes(r.trainerId)) names.push(r.trainerId)
+  })
+  return {
+    subsByOrigin,
+    isCoverRow: r => !!(r && typeof r === 'object' && r.coverOf),
+    coveredBy: r => (r && typeof r === 'object' && r.assignmentId && subsByOrigin.get(r.assignmentId)) || [],
+  }
+}
+
 // DC.C.1 (F-DC3; D-CS4/D-DC3) — union membership: legacy asistenId
 // counts as position 0, asistenIds adds positions 1-2. Mirrors the server
 // union in authorize.php trainerHasActiveAssignment() so client scope
@@ -195,10 +223,20 @@ export function buildDailyTimetable({ trainers = [], sekolah = [], tanggal = '' 
       if (a.periodeSelesai != null && String(a.periodeSelesai).trim() !== '' && tanggal > String(a.periodeSelesai)) return
       const sch = schoolById.get(a.sekolahId)
       if (!sch) return
-      const slots = (sch.jadwalList || []).filter(e => e && e.dayOfWeek === hari)
+      // BUG3 (D-PS4): the slot predicate gains the assignment scope —
+      // unscoped (null triple) fans out over every slot that weekday, a
+      // scoped assignment renders only its exact slots. Exact string
+      // equality only (YAGNI, no interval matching).
+      const slots = (sch.jadwalList || []).filter(e => e && e.dayOfWeek === hari
+        && (!a.hari || e.dayOfWeek === a.hari)
+        && (!a.jamMulai || e.time === a.jamMulai)
+        && (!a.jamSelesai || e.endTime === a.jamSelesai))
       slots.forEach(slot => {
         out.push({
           assignmentId: a.id || null,
+          // BUG8 (D-BUG8): cover link rides along so views can label
+          // substitute rows Pengganti and mark covered origins Digantikan.
+          coverOf: a.coverOf || null,
           sekolahId: sch.id,
           sekolahNama: sch.nama || '',
           trainerId: a.trainerId || null,

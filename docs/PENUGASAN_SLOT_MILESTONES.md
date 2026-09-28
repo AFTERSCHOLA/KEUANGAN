@@ -76,6 +76,8 @@ MICROTASK: Filter timetable by scope
   OUTCOME: picking the scoped weekday lists 1 row for the scoped assignment where the unscoped control lists 2.
   VERIFY:  npx vitest run src/lib/__tests__/penugasan-timetable.test.js + npx playwright test tests/penugasan-slot-timetable.spec.js --workers=1 -> seeded school with 2 Rabu slots (14:00, 14:15) + one assignment scoped Rabu 14:15-15:15 yields exactly 1 row with Waktu 14:15–15:15; unscoped twin yields 2 rows; other weekday yields zero; zero pageerror
   DONE-IF: verify passes; only intended files changed
+
+  PS.B.1 → Verified: npx vitest run src/lib/__tests__/penugasan-timetable.test.js -> 8 passed (fan-out preserved + scoped-triple narrows to 1 row, hari-only keeps the day, non-matching scope yields zero, coverOf threads through, Pengganti/Digantikan pairing); npx playwright test tests/penugasan-slot-timetable.spec.js --workers=1 -> 1 passed (scoped host 1 row 09:00–10:00, unscoped twin 2 rows, today-weekday slots, zero pageerror). Implemented 2026-09-28 against team Bug 3 (was planned, never shipped — no spec file existed).
 ```
 
 ### PS.B.2 Harden and write back
