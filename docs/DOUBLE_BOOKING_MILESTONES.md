@@ -74,6 +74,8 @@ MICROTASK: Pin e2e regression and write back
   OUTCOME: the cross-host guard is regression-pinned end-to-end and the source docs reflect what actually shipped.
   VERIFY:  npx playwright test tests/penugasan-crosshost.spec.js --workers=1 -> green zero pageerror (admin creates row for instructor A; overlapping same-person row for instructor B rejected with pinned copy in UI + via direct POST 422; distinct-person same-slot saves; refresh persists exactly one overlapping occupant); npx playwright test tests/penugasan-manage.spec.js tests/penugasan-attendance-unblock.spec.js --workers=1 -> green (PG.D acceptance re-run); npm test -> green; npm run build -> green; node -e ID check -> every F-DB/D-DB/R-DB cited below exists in DOUBLE_BOOKING_PLAN.md
   DONE-IF: verify passes; only intended files changed
+
+  DB.A.3 → Verified: npx playwright test tests/penugasan-crosshost.spec.js --workers=1 -> 2 passed, zero pageerror (UI pinned-copy + server-clean + refresh single-occupant; API 422 + distinct-200 + persistence); full penugasan loop (crosshost + manage + timetable + export + slot-timetable + attendance-unblock) -> 10 passed; npm test -> 46 files / 278 passed; php endpoint.protection -> 274/0 (DB.A.1 leg); npm run build -> green; node -e ID check -> defined 20 / cited 19 / missing 0. Mid-task the suite exposed a poisoned test DB (endpoint.protection's restore hard-replace had removed cbg-test-pusat); recovered via sanctioned npm run db:reset, spec green after. No unrelated failures observed
 ```
 
 ---

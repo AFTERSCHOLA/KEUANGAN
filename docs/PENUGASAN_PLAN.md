@@ -105,7 +105,7 @@ Nav item `Penugasan Pengajar` (admin/superadmin only; trainer never sees the wri
 |---|---|---|
 | Bug C exact-message retry (`Cabang wajib dipilih` vs server 422 vs stale `Invalid Branch`) | Operator + `SchoolList.jsx`/`sekolah.php` thread | Needs runtime evidence (dialog text + `POST /api/sekolah.php` body); this chain must not patch it blind (taste #13) |
 | Bug B multi-account direction repro | `MULTI_ACCOUNT_SYNC.md` MAS follow-up | Lowest priority per instruction; needs per-role `read.php?entity=sekolah` capture |
-| Cross-host asisten double-booking (same asisten, same slot, two instructors) | Future plan amendment | Needs a cross-host server scan; PG.D scope is same-host only per recorded decision 2026-09-28 |
+| Cross-host asisten double-booking (same asisten, same slot, two instructors) | `DOUBLE_BOOKING_PLAN.md` / `DOUBLE_BOOKING_MILESTONES.md` Gate DB (DONE 2026-09-28, same-school occupant reading) — P1/P2/P5 readings owned in its §10 | Needed a cross-host server scan; PG.D scope was same-host only per recorded decision 2026-09-28 |
 | Per-assignment time overrides | Future plan amendment | Schema change; explicitly out of R-PG4 |
 | Weekday enforcement on attendance | Future decision | Would change R-TA8; needs explicit business sign-off like TA.C.2b |
 

@@ -1,6 +1,6 @@
 # Double-Booking Cross-Host Plan — Same Person, Same School+Slot, Two Hosts
 
-**Status:** DRAFT 2026-09-28 — Gates DB.A open (no Verified lines yet; see `docs/DOUBLE_BOOKING_MILESTONES.md`).
+**Status:** DONE 2026-09-28 — Gate DB.A closed (Verified per microtask in `docs/DOUBLE_BOOKING_MILESTONES.md`; crosshost e2e 2/2 + full penugasan loop 10/10 + `npm test` 46/278 + endpoint.protection 274/0 + `npm run build` green; closure row appended to `SCOPE_EXPANSION_MILESTONES.md` Gate DB).
 **Position:** Temporary scope-expansion chain per taste #40. It does **not** replace `IMPLEMENTATION_PLAN.md`, `SCOPE_EXPANSION_PLAN.md`, `SCOPE_EXPANSION_PRIVILEGES.md`, `TRAINER_ATTENDANCE_PLAN.md` / `TRAINER_ATTENDANCE_MILESTONES.md`, `PENUGASAN_PLAN.md` / `PENUGASAN_MILESTONES.md` (Gate PG.D closed 2026-09-28, same-host guard), `PENUGASAN_SLOT_PLAN.md`, `AUTO_PENUGASAN_PLAN.md`, or `COVER_SLOT_PLAN.md` / `COVER_SLOT_MILESTONES.md`. It extends PG.D across host payloads via re-plan, not a silent widening of `validateNoOverlappingAssignments`. When Gate DB.A closes, §11 records completion back on the source docs.
 **Contract order:** `docs/UNIVERSAL.md` (primary contract, read first) → `docs/IMPLEMENTATION_PLAN.md` Part 2 → `docs/SCOPE_EXPANSION_PLAN.md` + `docs/SCOPE_EXPANSION_PRIVILEGES.md` (scope-expansion first-reads) → `docs/PENUGASAN_PLAN.md` §3 (F-PG5) + §4 (D-PG9) + §6 (R-PG8) → `docs/PENUGASAN_MILESTONES.md` Gate PG.D → `docs/COVER_SLOT_PLAN.md` §4 (D-CS2 cover path) → this file.
 

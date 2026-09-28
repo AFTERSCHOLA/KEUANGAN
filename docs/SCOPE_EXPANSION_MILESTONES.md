@@ -493,4 +493,35 @@ Changed: `src/lib/trainerAttendance.js` (+`buildPengajarCorrection`), `src/lib/p
 
 Sign-off decisions: (1) D-DC1 queue-drop with offline-unsupported consequence (M7.2.1 superseded above); (2) D-DC2 correction carries role (dialog control deferred to team pick); (3) D-DC3 two-track (tests extended + picker shipped); (4) D-DC4 pipeline proven on screen; (5) default-project 24 failures dispositioned — 1 fixed (AP.A.1), 19 pre-existing/pollution with stash-or-mechanism evidence (e2e monolith duplicate-name + timeout drift, m512 13-tab, m73, student-delete, ki1-2 nav-timeout class, export/R3.4/sim cascade), 4 same-signature timeouts carried as environmental flake; (6) destructive 5 failures: auth #6/#10/#11 (HY.5.1b flake cohort + lockout cascade), phase567 (blocked: Temp seed scripts missing — rewritten DC.B.4 legs unverified), stress-sim (cascade suspect) — all Unverified with owners, no code implication; (7) ground truth wins ties (tests fixed, not web — except D3b/AP.A.1 app bugs, microtasked and fixed).
 
+## Gate DB — Double-Booking Cross-Host Closure Summary (taste #40 temporary gate)
+
+**Status: DONE (DB.A.1–DB.A.3, 2026-09-28).** Chain lengkap ada di
+`docs/DOUBLE_BOOKING_PLAN.md` + `docs/DOUBLE_BOOKING_MILESTONES.md`
+(tidak ada renumbering rantai di dokumen ini — pair tersebut adalah gate
+doc sementara per taste #40).
+
+Verified: `tests/penugasan-crosshost.spec.js` (2/2 passed, zero
+pageerror — UI pinned-copy + server-clean + refresh single-occupant;
+direct-POST 422 + distinct-person 200 + persistence) + full penugasan
+loop 10/10 (crosshost + manage + timetable + export + slot-timetable +
+attendance-unblock) + `npm test` (46 files / 278 passed) +
+`php server/tests/endpoint.protection.php` (274 checks, 0 failed) +
+`npm run build` green + node -e ID check (defined 20 / cited 19 /
+missing 0). Mid-task the suite exposed a poisoned test DB
+(endpoint.protection restore hard-replace had removed `cbg-test-pusat`);
+recovered via sanctioned `npm run db:reset`; no unrelated failures.
+
+Changed: `server/lib/assignments.php` (+ pure `penugasanOccupants()` /
+`findCrossHostConflict()` — PG.D predicate + occupant intersect),
+`server/api/trainer.php` (same-branch cross-host 422 scan after the PG.D
+gate, before `masterWrite`), `src/lib/penugasan.js` (+
+`findCrossHostPair()` client mirror), `src/features/penugasan/
+PenugasanManager.jsx` (pre-check over other cached hosts, same pinned
+copy), regression `src/lib/__tests__/penugasan-crosshost.test.js`
+(bridge + client + 8 parity fixtures) + `tests/
+penugasan-crosshost.spec.js` (persisted). Team Bug 7 cross-host
+same-school occupant reading closed; P1 (link-add bypass), P2
+(cross-school same-person), P5 (interval overlap) owned as deferred in
+`DOUBLE_BOOKING_PLAN.md` §10; slot-capacity stays rejected (D-DB1).
+
 **End of Microtask Chains**
