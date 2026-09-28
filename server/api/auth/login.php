@@ -40,5 +40,11 @@ $pdo = database();
 $update = $pdo->prepare('UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = NOW() WHERE id = :id');
 $update->execute([':id' => $row['id']]);
 $identity = loginSession($identity);
+// D-RM1/D-RM2 — opt-in persistent login. Absent/false reads exactly as
+// today (no cookie, no row). Extra key ignored by older clients.
+$remember = !empty($body['remember']);
+if ($remember) {
+    issueRememberToken((string) $row['id']);
+}
 auditEvent('login_succeeded', $identity, 'user', (string) $row['id']);
 jsonResponse(['user' => $identity, 'csrfToken' => csrfToken()]);

@@ -5,6 +5,8 @@ import { SidebarLogo } from '../../components/SidebarLayout.jsx'
 export default function LoginPage({ onAuthenticated }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  // D-RM1 — opt-in persistent login, default off (unchecked reads as today).
+  const [remember, setRemember] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -20,7 +22,7 @@ export default function LoginPage({ onAuthenticated }) {
     setError('')
 
     try {
-      const user = await login(username.trim(), password)
+      const user = await login(username.trim(), password, remember)
       onAuthenticated?.(user)
     } catch (error) {
       setError(error?.message || 'Username atau password salah.')
@@ -93,6 +95,17 @@ export default function LoginPage({ onAuthenticated }) {
                 placeholder="Masukkan password"
               />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={e => setRemember(e.target.checked)}
+                disabled={loading}
+                className="rounded"
+              />
+              <span className="font-semibold">Tetap masuk di perangkat ini</span>
+            </label>
 
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">

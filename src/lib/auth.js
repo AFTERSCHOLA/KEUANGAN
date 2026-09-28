@@ -112,14 +112,15 @@ export async function bootstrapAuth() {
   return currentUser
 }
 
-export async function login(username, password) {
+export async function login(username, password, remember = false) {
   const result = await apiRequest('/api/auth/login.php', {
     method: 'POST',
     skipCsrf: true,
     // skipUnauthorizedHandler: true — 401 di sini berarti kredensial
     // salah (user memang sedang di form login), bukan sesi habis.
     skipUnauthorizedHandler: true,
-    body: { username, password },
+    // D-RM1 — remember opt-in rides along; absent/false reads as today.
+    body: remember ? { username, password, remember: true } : { username, password },
   })
   if (!result || typeof result !== 'object' || !result.user) {
     currentUser = null
