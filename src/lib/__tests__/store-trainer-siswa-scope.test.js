@@ -121,4 +121,34 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     const store = await freshStore()
     expect(store.readCached('sppPayments').map(p => p.id)).toEqual(['spp-1'])
   })
+
+  it('DC.C.1 union: trainer in asistenIds[1] only sees the assigned school students', async () => {
+    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
+      { id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] },
+      {
+        id: 'trn-ins',
+        nama: 'Instruktur Sim',
+        sekolahIds: ['sch-A'],
+        penugasanPengajar: [
+          {
+            sekolahId: 'sch-A',
+            trainerId: 'trn-ins',
+            asistenId: null,
+            asistenIds: ['trn-self'],
+            aktif: true,
+            periodeMulai: '2026-01-01',
+            periodeSelesai: null,
+          },
+        ],
+      },
+    ]))
+    localStorage.setItem('afterschola_v4_siswa', JSON.stringify([
+      { id: 'sw-1', nama: 'Siswa A', sekolahId: 'sch-A' },
+      { id: 'sw-2', nama: 'Siswa B', sekolahId: 'sch-B' },
+    ]))
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    expect(store.readCached('siswa').map(s => s.id)).toEqual(['sw-1'])
+    expect(store.trainerHasAnyActiveAssignmentToSekolahClient('trn-self', 'sch-A')).toBe(true)
+  })
 })

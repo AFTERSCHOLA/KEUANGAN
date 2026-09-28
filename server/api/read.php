@@ -114,6 +114,19 @@ if (
 
                 $sekolahTrainerIds[$sekolahId][] = trim($assignedId);
             }
+
+            // DC.C.1 union — asistenIds[] positions 1-2 join the same
+            // index so 2nd-assistant scope matches authorize.php.
+            $extraIds = $assignment['asistenIds'] ?? null;
+            if (is_array($extraIds)) {
+                foreach ($extraIds as $extraId) {
+                    if (!is_string($extraId) || trim($extraId) === '') {
+                        continue;
+                    }
+
+                    $sekolahTrainerIds[$sekolahId][] = trim($extraId);
+                }
+            }
         }
     }
 

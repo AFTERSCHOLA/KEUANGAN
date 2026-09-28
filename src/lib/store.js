@@ -1,6 +1,7 @@
 import { normalizeRole } from './role.js'
 import { getSafeIdentityContext } from './auth.js'
 import { apiRequest, ApiError } from './api.js'
+import { penugasanInvolvesTrainer } from './penugasan.js'
 
 const STORE_KEY = 'afterschola_v4'
 const STORE_EVENT = 'afterschola_v4_changed'
@@ -66,7 +67,10 @@ function trainerHasActiveAssignmentClient(trainerId, sekolahId, tanggal) {
     const assignments = Array.isArray(t.penugasanPengajar) ? t.penugasanPengajar : []
     for (const a of assignments) {
       if (!a || a.sekolahId !== sekolahId) continue
-      const matchesTrainer = a.trainerId === trainerId || a.asistenId === trainerId
+      // DC.C.1 union — legacy asistenId counts as position 0, asistenIds
+      // adds positions 1-2. Mirrors penugasanInvolvesTrainer() so client
+      // scope agrees with the server write gate (authorize.php).
+      const matchesTrainer = penugasanInvolvesTrainer(a, trainerId)
       if (!matchesTrainer) continue
       if (a.aktif !== true) continue
       if (!a.periodeMulai || tanggal < a.periodeMulai) continue
@@ -83,7 +87,8 @@ export function trainerHasAnyActiveAssignmentToSekolahClient(trainerId, sekolahI
     const assignments = Array.isArray(t.penugasanPengajar) ? t.penugasanPengajar : []
     for (const a of assignments) {
       if (!a || a.sekolahId !== sekolahId) continue
-      const matchesTrainer = a.trainerId === trainerId || a.asistenId === trainerId
+      // DC.C.1 union — same owner as above (penugasanInvolvesTrainer).
+      const matchesTrainer = penugasanInvolvesTrainer(a, trainerId)
       if (!matchesTrainer) continue
       if (a.aktif !== true) continue
       return true
