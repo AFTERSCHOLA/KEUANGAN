@@ -524,4 +524,31 @@ same-school occupant reading closed; P1 (link-add bypass), P2
 (cross-school same-person), P5 (interval overlap) owned as deferred in
 `DOUBLE_BOOKING_PLAN.md` §10; slot-capacity stays rejected (D-DB1).
 
+## Gate BR — Bulk Reconcile Closure Summary (taste #40 short-task amendment)
+
+**Status: DONE (BR.1–BR.3, 2026-09-29).** Chain lengkap ada di
+`docs/BULK_RECONCILE_PLAN.md` (single-file amendment per taste #69 —
+tidak ada `*_MILESTONES.md` pair, tidak ada renumbering rantai di
+dokumen ini).
+
+Verified: `src/lib/__tests__/spp-bulk.test.js` (9/9 — A parent-paid
+skipped, B/C minted, re-preview 0 rows, partial remainder, Trial/other
+excluded, bare-row non-settling pinned, multi-periode, fails-closed,
+override precedence) + `tests/invoice-bulk-settle.spec.js` (1/1 — A
+ledger stays ortu-only, B/C settle via sekolah rows with invoiceId,
+second run shows the settled text, zero pageerror) + neighboring
+invoice specs 6/6 (incl. pipeline-dashboard Tarif/Frozen) + `npm test`
+(47 files / 287 passed) + `npm run build` green + no `console.log` in
+touched files.
+
+Changed: `src/lib/sppPayments.js` (+ pure `bulkSettlePreview()` /
+`sumberPelunasan()` / `tarifEfektifSiswa()` / `paidForSiswaPeriode()` —
+existing functions untouched), `src/features/reports/InvoiceModal.jsx`
+(superadmin-only "Catat pelunasan sekolah" per settled invoice row,
+ConfirmDialog preview, sequential `addSppPayment` + `read` +
+`recomputeAllSppLunas`), regression `tests/
+invoice-bulk-settle.spec.js` (persisted). Item-14 bulk gap closed via
+D-BR1 (skip-settled per-pupil mint); item-15 credit automation stays a
+logged GAP in `EVAL_FINANCE_PLAN.md`.
+
 **End of Microtask Chains**

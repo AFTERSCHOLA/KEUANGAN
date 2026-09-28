@@ -126,6 +126,8 @@ Saat Gate SB-C ditutup: perbarui `PRODUCTION_MILESTONES.md` (koreksi klaim basi 
 
 **Status Gate SB-C: DITUTUP (2026-09-17).** SB.B.4, SB.B.5, SB.C.1, SB.C.2 verified (lihat `SCOPE_EXPANSION_MILESTONES.md` Gate SB-C). SB.C.3 (dokumen ini) mencatat penyelesaian dan mengoreksi klaim basi M3.4 (`PRODUCTION_MILESTONES.md`). Chain berikutnya (dashboard/target/rekap, D-SB4) dapat dibuka.
 
+**Ekstensi D-SB8: DITUTUP (2026-09-29, Gate BR).** Rekonsiliasi tingkat sekolah kini punya aturan propagasi per-murid yang D-SB8 tidak pernah tentukan: bulk-settle sebuah invoice mem-mint satu baris `sppPayments` per sel (siswa, periode) yang belum lunas (`sumberDana: 'sekolah'`, masing-masing membawa `invoiceId`; sel yang sudah lunas — mis. dibayar ortu — dilewati sehingga sumbernya tidak tertimpa). Rantai lengkap di `docs/BULK_RECONCILE_PLAN.md` (D-BR1, BR.1–BR.3 verified, closure di `SCOPE_EXPANSION_MILESTONES.md` Gate BR). SB history lainnya utuh; R-SB1/R-SB3/R-SB6 tidak berubah.
+
 ## 11. Cross-references
 
 - `docs/PRODUCTION_PLAN.md` — invariant keuangan (cash basis, ledger append-only, tidak ada derived finance writes)

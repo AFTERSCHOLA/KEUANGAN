@@ -1,6 +1,6 @@
 # Bulk Reconcile Plan — school bulk settlement without overwriting parent source
 
-**Status:** DRAFT 2026-09-29 — no microtask executed. Short-task amendment doc per taste #69 (single file, no new `*_MILESTONES.md` pair).
+**Status:** DONE 2026-09-29 — BR.1–BR.3 verified (see §4 per-microtask VERIFIED lines; closure row in `SCOPE_EXPANSION_MILESTONES.md` Gate BR; D-SB8 extension pointer in `SPP_BILLING_PLAN.md` §10). Short-task amendment doc per taste #69 (single file, no new `*_MILESTONES.md` pair).
 **Position:** Amends `SPP_BILLING_PLAN.md` D-SB8 (school-level reconciliation) with the per-pupil propagation rule D-SB8 never specified. It does **not** replace `IMPLEMENTATION_PLAN.md`, `SCOPE_EXPANSION_PLAN.md`, `SCOPE_EXPANSION_PRIVILEGES.md`, `SPP_BILLING_PLAN.md` / `SPP_BILLING_MILESTONES.md`, or `EVAL_FINANCE_PLAN.md` (item 15 credit automation stays a logged GAP there). When BR.2 closes, §7 records completion back on the source docs.
 **Contract order:** `docs/UNIVERSAL.md` (primary contract, read first) → `docs/IMPLEMENTATION_PLAN.md` Part 2 → `docs/SCOPE_EXPANSION_PLAN.md` + `docs/SCOPE_EXPANSION_PRIVILEGES.md` → `docs/SPP_BILLING_PLAN.md` §4 (D-SB8/D-SB12/R-SB1/R-SB6) → this file.
 **Goal:** one sentence — a school bulk payment settles only unsettled pupils and never rewrites who paid for an already-settled pupil.
@@ -97,6 +97,9 @@ MICROTASK BR.3: write-back (§7)
   OUTCOME: Gate BR recorded complete with Verified: lines.
   VERIFY:  grep each referenced ID resolves in both documents (taste #53).
   DONE-IF: VERIFY passes; plan docs and code agree.
+  VERIFIED 2026-09-29: Gate BR closure appended (no renumber); D-SB8
+           extension pointer in SPP_BILLING_PLAN.md §10; header Status ->
+           DONE; ID check below green; status shows only the 3 doc files.
 ```
 
 ---
