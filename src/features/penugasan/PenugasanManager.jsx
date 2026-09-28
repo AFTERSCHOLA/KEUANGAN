@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, writeRemote, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
-import { newPenugasanRow, validateRowDates, PENUGASAN_HARI, findOverlappingPair, PENUGASAN_OVERLAP_ERROR } from '../../lib/penugasan.js'
+import { newPenugasanRow, validateRowDates, PENUGASAN_HARI, findOverlappingPair, findCrossHostPair, PENUGASAN_OVERLAP_ERROR } from '../../lib/penugasan.js'
 import Modal from '../../components/Modal.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -235,6 +235,17 @@ export default function PenugasanManager() {
       // full replace payload (server re-checks authoritatively in
       // trainer.php; this surfaces the pinned copy before the write).
       if (findOverlappingPair(next)) {
+        showError(PENUGASAN_OVERLAP_ERROR)
+        return
+      }
+      // DB.A.2 (F-DB1/F-DB2; D-DB4) — cross-host occupant pre-check over
+      // every other cached host (server re-checks authoritatively in
+      // trainer.php via findCrossHostConflict; this surfaces the same
+      // pinned copy before the write).
+      const otherHostsRows = trainers
+        .filter(t => t && t.id !== host.id)
+        .flatMap(t => (Array.isArray(t.penugasanPengajar) ? t.penugasanPengajar : []))
+      if (findCrossHostPair(next, otherHostsRows)) {
         showError(PENUGASAN_OVERLAP_ERROR)
         return
       }

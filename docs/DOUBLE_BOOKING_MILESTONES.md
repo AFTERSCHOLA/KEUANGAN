@@ -57,6 +57,8 @@ MICROTASK: Mirror client pre-check
   OUTCOME: an admin attempting the cross-host duplicate in the manager sees the pinned copy before any write, with the dialog open and nothing persisted.
   VERIFY:  npx vitest run src/lib/__tests__/penugasan-crosshost.test.js -> client legs passed (same-person-as-assistant blocked; 2nd-assistant id blocked; distinct people pass; cover-linked pass; edit re-save passes); temp one-off debug spec (removed after passing per testing taste #15) proves dialog-open + zero writes, OR the DB.A.3 persisted spec covers it directly
   DONE-IF: verify passes; only intended files changed
+
+  DB.A.2 → Verified: npx vitest run src/lib/__tests__/penugasan-crosshost.test.js -> 25 passed (12 DB.A.1 server-bridge + 5 client-mirror legs + 8 client/server parity fixtures with identical verdicts both layers); npm test -> 46 files / 278 passed. One test-authored fixture failure mid-task (cover row sharing an occupant with an unrelated foreign row) was diagnosed as a test bug per testing taste #14 and fixed by isolating the fixture — implementation untouched. Dialog-open + zero-writes UX leg deferred to the DB.A.3 persisted e2e spec (no temp spec needed)
 ```
 
 ### DB.A.3 Pin e2e regression and write back

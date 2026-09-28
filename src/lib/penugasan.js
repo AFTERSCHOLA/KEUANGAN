@@ -149,6 +149,60 @@ export function findOverlappingPair(rows = []) {
   return null
 }
 
+// DB.A.2 (F-DB1/F-DB2; D-DB1, D-DB2, D-DB4, D-DB5) — cross-host occupant
+// pre-check (client mirror of findCrossHostConflict() in
+// server/lib/assignments.php; the server stays authoritative, taste #61).
+// Compares the about-to-be-saved rows of ONE host (nextRows) against
+// every other cached host's rows (otherHostsRows). Same predicate as the
+// server scan: same sekolahId + both aktif + intersecting ranges (open
+// end = 9999-12-31) + same slot scope (exact triple; unscoped fans out)
+// + occupant sets intersect (trainerId ∪ asistenId ∪ asistenIds[]).
+// Same-id pairs (edit path) and cover-linked pairs (either direction)
+// never block; rows with no attributable occupant never block.
+// Returns the first conflicting [mine, theirs] pair, or null.
+function crossHostOccupants(r) {
+  const out = []
+  for (const single of [r?.trainerId, r?.asistenId]) {
+    if (typeof single === 'string' && single.trim() !== '') out.push(single)
+  }
+  if (Array.isArray(r?.asistenIds)) {
+    for (const id of r.asistenIds) {
+      if (typeof id === 'string' && id.trim() !== '') out.push(id)
+    }
+  }
+  return [...new Set(out)]
+}
+
+export function findCrossHostPair(nextRows = [], otherHostsRows = []) {
+  const mine = Array.isArray(nextRows) ? nextRows : []
+  const theirs = Array.isArray(otherHostsRows) ? otherHostsRows : []
+  for (const a of mine) {
+    if (!a || typeof a !== 'object') continue
+    for (const b of theirs) {
+      if (!b || typeof b !== 'object') continue
+      if (typeof a.id === 'string' && a.id !== '' && a.id === b.id) continue
+      if ((typeof a.coverOf === 'string' && a.coverOf !== '' && a.coverOf === b.id)
+        || (typeof b.coverOf === 'string' && b.coverOf !== '' && b.coverOf === a.id)) continue
+      if (a.aktif !== true || b.aktif !== true) continue
+      if (typeof a.sekolahId !== 'string' || a.sekolahId === '' || a.sekolahId !== b.sekolahId) continue
+      const start = [a.periodeMulai || '', b.periodeMulai || ''].sort()[1]
+      const endA = penugasanRangeEnd(a.periodeSelesai)
+      const endB = penugasanRangeEnd(b.periodeSelesai)
+      if (start > (endA < endB ? endA : endB)) continue
+      const keyA = penugasanSlotKey(a)
+      const keyB = penugasanSlotKey(b)
+      if (keyA !== keyB && keyA !== PENUGASAN_UNSCOPED_KEY && keyB !== PENUGASAN_UNSCOPED_KEY) continue
+      const occA = crossHostOccupants(a)
+      if (occA.length === 0) continue
+      const occB = new Set(crossHostOccupants(b))
+      if (occB.size === 0) continue
+      if (!occA.some(id => occB.has(id))) continue
+      return [a, b]
+    }
+  }
+  return null
+}
+
 // BUG8 (D-BUG8) — cover marks for timetable rows (display-only).
 // A row carrying coverOf is the substitute (Pengganti); an origin row
 // whose id is some same-school+same-waktu row's coverOf is covered
