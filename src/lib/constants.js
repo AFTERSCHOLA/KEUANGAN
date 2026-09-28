@@ -358,8 +358,12 @@ export function newAbsensiPengajar({
   peran = null,
   dicatatOleh = null,
 }) {
+  // BUG1 (dual-role I+A same day): default id keys on peran so one person
+  // can hold an I row and an A row for the same tanggal/sekolah. Legacy
+  // rows without peran keep the old shape byte-identically.
+  const peranSuffix = peran === 'I' || peran === 'A' ? `${peran}_pengajar` : 'pengajar'
   return {
-    id: id || `${tanggal}_${sekolahId}_${trainerId}_pengajar`,
+    id: id || `${tanggal}_${sekolahId}_${trainerId}_${peranSuffix}`,
     tanggal,
     periode: tanggal ? tanggal.slice(0, 7) : '',
     trainerId,

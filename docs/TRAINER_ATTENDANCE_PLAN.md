@@ -173,7 +173,7 @@ absensiPengajar
 }
 ```
 
-Record harus merepresentasikan **satu orang pada satu sekolah pada satu tanggal**. Jika ada tiga orang pada sekolah yang sama di tanggal yang sama, terdapat tiga record orang yang berbeda.
+Record harus merepresentasikan **satu orang + satu peran (`peran` I/A) pada satu sekolah pada satu tanggal**. Jika ada tiga orang pada sekolah yang sama di tanggal yang sama, terdapat tiga record orang yang berbeda; orang yang sama yang bertugas ganda memegang dua record (satu `I`, satu `A`) — id default mengunci peran (`newAbsensiPengajar` di `src/lib/constants.js`) sehingga keduanya tidak bertabrakan. Baris lama tanpa `peran` tetap valid dengan bentuk id lama.
 
 Matriks hanya merupakan view/reka ulang dari record tersebut.
 

@@ -116,6 +116,15 @@ describe('per-session role + external recorder (CS.B.2)', () => {
     expect(school.cells['2026-09-05'][0].label).toBe('A')
   })
 
+  it('default ids key on peran: same day/school/person I vs A do not collide; legacy shape unchanged', () => {
+    const base = { trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-03', status: 'Hadir', cabangId: 'cbg-1' }
+    const rowI = newAbsensiPengajar({ ...base, peran: 'I' })
+    const rowA = newAbsensiPengajar({ ...base, peran: 'A' })
+    const rowLegacy = newAbsensiPengajar({ ...base })
+    expect(rowI.id).not.toBe(rowA.id)
+    expect(rowLegacy.id).toBe('2026-09-03_skl-1_trn-vazira_pengajar')
+  })
+
   it('rows without peran keep the legacy live-type labels byte-identically', () => {
     const absensiPengajar = [
       newAbsensiPengajar({ id: 'l1', trainerId: 'trn-vazira', sekolahId: 'skl-1', tanggal: '2026-09-03', status: 'Hadir', cabangId: 'cbg-1' }),
