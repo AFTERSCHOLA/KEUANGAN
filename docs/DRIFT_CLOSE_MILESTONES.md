@@ -197,6 +197,7 @@ MICROTASK: Run full suite, log drift, write back
   - 2026-09-27: destructive project 8 passed / 5 failed (12.3m). auth #6/#10/#11 (HY.5.1b flake cohort per 2026-09-08 record + #5 lockout cascade documented in config; Keluar/Akun controls untouched by this chain — `AccountMenu.jsx` keeps both); phase567 BLOCKED (Temp seed scripts absent → trainer 401 before rewritten legs execute — Unverified, owner team); stress-sim cascade suspect (480s click after lockout + partial phase567 on dirty DB — Unverified).
   - 2026-09-27: full loop green — `npm test` 45 files / 246 passed; `php entity.validation.php` all incl. CS.B.1/B.2; `php endpoint.protection.php` 274 checks 0 failed; `npm run build` green (pre-existing store.js warning only); acceptance re-run 8/8 (form 4/4, manage 3/3, pipeline 1/1), zero pageerror.
   - Gate marks: DC.A ✓, DC.B ✓ (incl. B.3-fix), DC.C ✓, DC.D ✓, DC.E PARTIAL (default triaged ✓; destructive blocked legs carried Unverified — see §11 closure row).
+  - 2026-09-27 Lane-2 (user-directed): phase567 retired (user chose retire over rewrite; Temp seeds unrecoverable + pre-SB.C.2 flow; config/global-setup/auth/stress Temp refs replaced with in-repo `db-reset.php` + new `clear-throttle.php`); auth 11/11 green; m512 green (13 tabs); Boot green (3-layer fix incl. real `getKeys()` undefined-key app bug); stress-sim Unverified (stacked-modal wedge, non-CI); G4 field procedure drafted in RELEASE_GATES; F12 shipped (see RELEASE_GATES G3). Lane-2 app changes: `store.js` getKeys entry only — no billing/honor logic touched.
 ```
 
 ---

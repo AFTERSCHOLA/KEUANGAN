@@ -109,14 +109,13 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
 
   // M-AUTH.5: the stress test is destructive on purpose. Reset the
   // shared test database to a known baseline so the simulation starts
-  // from the same state each run. The PHP CLI binary is the one
-  // XAMPP ships; the seed and cleanup scripts live next to the test
-  // config under the user's temp directory. (The audit's value is
+  // from the same state each run. Lane-2 (phase567 retirement): the
+  // machine-local Temp scripts are replaced with the in-repo canonical
+  // reset (users + branch + empty tables). (The audit's value is
   // the "## FINDING:" output, not the durable DB state.)
   try {
     const PHP = process.env.PHP_BIN || 'php'
-    execFileSync(PHP, ['C:/Users/barak/AppData/Local/Temp/cleanup_phase.php'], { stdio: 'ignore' })
-    execFileSync(PHP, ['C:/Users/barak/AppData/Local/Temp/seed_phase567.php'], { stdio: 'ignore' })
+    execFileSync(PHP, ['server/tests/db-reset.php'], { stdio: 'ignore' })
   } catch (err) {
     console.warn('## DB-RESET-FAILED:', err.message)
   }
@@ -136,6 +135,11 @@ test('full three-role stress simulation', async ({ page, pageErrors }) => {
   await fieldInput(page, 'Nama Cabang').fill('Cabang Bandung Sim')
   await fieldInput(page, 'Kode Cabang').fill('BDS')
   await page.getByRole('button', { name: 'Simpan' }).click()
+  // Lane-2: dismiss the success overlay before the next create (the
+  // modal has no Escape handling; a leftover overlay wedges the next
+  // Tambah Cabang click — same class as the documented overlay hang).
+  await okAlert(page)
+  await closeModal(page)
 
   // duplicate kode guard
   await page.getByRole('button', { name: 'Tambah Cabang' }).click()

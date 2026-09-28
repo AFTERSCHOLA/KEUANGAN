@@ -224,8 +224,21 @@ async function loadFirstRecordForCorrection(page) {
 test.describe('#1 Boot', () => {
   test('boot: page.goto + zero console errors + favicon-404 tolerance', async ({ page, pageErrors }) => {
     const consoleErrors = []
+    // Lane-2 Boot update: resource-load console lines carry no URL, so HTTP
+    // tolerance lives on the response listener (URL-precise) below; the
+    // console listener keeps only non-resource errors (JS exceptions stay
+    // hard failures). Tolerated like the favicon: anonymous GET
+    // /api/auth/me.php 401s (auth bootstrap probe, documented in the A2.5
+    // login-flake analysis) and GET /api/logo-current.php 404s when no logo
+    // was ever uploaded (specified order in server/api/logo-current.php).
+    const BOOT_PROBE_RE = /\/api\/auth\/me\.php$|\/api\/logo-current\.php$/
     page.on('console', msg => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text())
+      if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource:')) consoleErrors.push(msg.text())
+    })
+    page.on('response', res => {
+      if (res.status() >= 400 && !FAVICON.test(res.url()) && !BOOT_PROBE_RE.test(res.url())) {
+        consoleErrors.push(`http ${res.status()}: ${res.url()}`)
+      }
     })
     page.on('requestfailed', req => {
       if (!isAllowedRequestFailure(req.url())) consoleErrors.push(`requestfailed: ${req.url()}`)
@@ -238,9 +251,11 @@ test.describe('#1 Boot', () => {
     // Title is driven by settings.title || 'Afterschola' (index.html has no static title).
     await expect(page).toHaveTitle('Afterschola')
 
-    // M-R6.3: the persisted-storage indicator chip sits next to the year label.
-    await expect(page.getByText('Tahun Ajaran')).toBeVisible()
-    await expect(page.getByText('Tersimpan lokal')).toBeVisible()
+    // M-R6.3 (updated DC Lane 2): the year control is the "Tahun ajaran"
+    // select in the header PeriodFilter (the old "Tersimpan lokal" chip no
+    // longer exists; bare getByText('Tahun Ajaran') now strict-violates
+    // against the "Tren Bulanan — Tahun Ajaran" chart heading).
+    await expect(page.getByLabel('Tahun ajaran')).toBeVisible()
 
     // Only afterschola_v4_* keys are touched (nothing else, no v3 leftovers).
     const keys = await page.evaluate(() => Object.keys(localStorage))

@@ -40,26 +40,20 @@ export default defineConfig({
       // auth-login-page.spec.js is intentionally placed in the
       // destructive project only (per HY.2.1's testMatch below). Its
       // test #5 deliberately locks the trainer account for 15 minutes;
-      // running it in the default project cascades into flow-simulation,
-      // honor-delete-403, and phase567-exit-gate failing with 401.
+      // running it in the default project cascades into flow-simulation
+      // and honor-delete-403 failing with 401.
       //
-      // phase567-exit-gate.spec.js and stress-simulation.spec.js are
-      // also destructive-project-only: their beforeAll/globalSetup
-      // fixtures WIPE the shared test DB (cleanup_phase.php DELETEs
-      // every cabang row — including the canonical `cbg-test-pusat`
-      // seed that later default-project tests need for sekolah/trainer
-      // seeding and cabang-cache hydration). HY.5 root-cause #5
-      // ("isolate the specific test that wipes the seeded branch")
-      // resolved 2026-09-07: these two specs running in the default
-      // project were the poisoners — every subsequent
-      // "cabangId tidak ditemukan" 422 / cabang-cache timeout in a
-      // full-suite run traces back to them. HY.2.1's OUTCOME ("the
-      // destructive specs no longer poison the default project")
-      // requires all three to be excluded here, not just
-      // auth-login-page.
+      // stress-simulation.spec.js is also destructive-project-only: its
+      // fixtures WIPE the shared test DB, which poisons later
+      // default-project tests needing the canonical `cbg-test-pusat`
+      // seed (HY.5 root-cause #5, resolved 2026-09-07).
+      // Lane-2 (phase567 retirement, user-directed 2026-09-27):
+      // phase567-exit-gate.spec.js is deleted — its Temp seed scripts
+      // were unrecoverable, its Draft/Tandai-Lunas invoice flow predates
+      // SB.C.2 and contradicts the app, and focused green specs cover
+      // every behavior it probed. It is removed from both lists here.
       testIgnore: [
         '**/auth-login-page.spec.js',
-        '**/phase567-exit-gate.spec.js',
         '**/stress-simulation.spec.js',
       ],
     },
@@ -67,7 +61,6 @@ export default defineConfig({
       name: 'destructive',
       testMatch: [
         'tests/auth-login-page.spec.js',
-        'tests/phase567-exit-gate.spec.js',
         'tests/stress-simulation.spec.js',
       ],
       // No `dependencies` here: the spec's VERIFY

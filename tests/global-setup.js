@@ -5,8 +5,9 @@
  * the destructive project always starts from a freshly-reset
  * `afterschola_t3_test` database. Without this, the lockout at
  * `tests/auth-login-page.spec.js:290` and the data mutations in
- * `tests/phase567-exit-gate.spec.js` / `tests/stress-simulation.spec.js`
- * bleed into the next run.
+ * `tests/stress-simulation.spec.js` bleed into the next run.
+ * (Lane-2: phase567-exit-gate retired 2026-09-27; destructive set is
+ * auth-login-page + stress-simulation only.)
  *
  * Note: Playwright's globalSetup runs with `process.cwd()` set to the
  * config file's directory (the repo root in this case), but npm itself

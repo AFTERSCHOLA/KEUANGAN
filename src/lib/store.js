@@ -154,6 +154,12 @@ export function getKeys() {
     cabang: `${STORE_KEY}_cabang`,
     users: `${STORE_KEY}_users`,
     eksternal: `${STORE_KEY}_eksternal`,
+    // Lane-2 e2e#1 fix: absensiPengajar was readable (READABLE_SERVER_KEYS)
+    // but had no key here, so every read/write serialized under a literal
+    // "undefined" localStorage key (Boot's no-foreign-keys assertion).
+    // Stale "undefined" rows in old browsers are inert — login hydrate
+    // repopulates this key from the server.
+    absensiPengajar: `${STORE_KEY}_absensiPengajar`,
   }
 }
 

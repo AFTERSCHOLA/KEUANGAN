@@ -1,23 +1,21 @@
-import { test, expect, loginViaApi, TEST_USERS } from './fixtures.js'
+import { test, expect, loginViaApi, primeCsrf, TEST_USERS } from './fixtures.js'
 import { execFileSync } from 'node:child_process'
 
 const APP = 'http://localhost:5173'
 const PHP = process.env.PHP_BIN || 'php'
-const SEED_USERS = 'C:/Users/barak/AppData/Local/Temp/seed_users.php'
-const CLEANUP = 'C:/Users/barak/AppData/Local/Temp/cleanup_phase.php'
-const SEED_PHASE = 'C:/Users/barak/AppData/Local/Temp/seed_phase567.php'
-const CLEAR_THROTTLE = 'C:/Users/barak/AppData/Local/Temp/clear_throttle.php'
+// Lane-2 (phase567 retirement): machine-local Temp scripts replaced with
+// in-repo equivalents — db-reset reseeds the canonical users + branch and
+// empties the throttle; clear-throttle.php empties only the throttle.
+const DB_RESET = 'server/tests/db-reset.php'
+const CLEAR_THROTTLE = 'server/tests/clear-throttle.php'
 
 test.beforeAll(() => {
-  // M-AUTH.6: re-seed the test users (idempotent ON DUPLICATE KEY UPDATE)
-  // and clear any leftover login-attempt throttle from prior runs.
-  // test 5 deliberately locks a user for 15 minutes — without this
-  // beforeAll, a re-run would hit the throttle and fail.
+  // M-AUTH.6: reseed the canonical test users + branch and clear any
+  // leftover login-attempt throttle from prior runs. test 5 deliberately
+  // locks a user for 15 minutes — without this beforeAll, a re-run would
+  // hit the throttle and fail.
   try {
-    execFileSync(PHP, [SEED_USERS], { stdio: 'ignore' })
-    execFileSync(PHP, [CLEAR_THROTTLE], { stdio: 'ignore' })
-    execFileSync(PHP, [CLEANUP], { stdio: 'ignore' })
-    execFileSync(PHP, [SEED_PHASE], { stdio: 'ignore' })
+    execFileSync(PHP, [DB_RESET], { stdio: 'ignore' })
   } catch (err) {
     // Non-fatal: the tests that need users will surface the real
     // failure with a clearer message.
@@ -122,7 +120,11 @@ test.describe('M-AUTH.6 — credential login page', () => {
     await expect(page.getByRole('navigation').getByRole('button', { name: 'Data Cabang' })).toBeVisible()
     // Sidebar now exposes "Keluar" as a menuitem (AccountMenu dropdown),
     // not a button — see m51-verify.spec.js:36-37 for the canonical locator.
+    // Lane-2 fix (HY.5.1b Akun-dropdown omission): the menu must be opened
+    // first; the item is mounted only while open.
+    await page.getByLabel('Akun').click()
     await expect(page.getByRole('menuitem', { name: 'Keluar' })).toBeVisible()
+    await page.keyboard.press('Escape')
     await expect(page.getByRole('button', { name: 'Ganti Peran' })).toHaveCount(0)
     expect(pageErrors).toHaveLength(0)
   })
@@ -225,7 +227,9 @@ test.describe('M-AUTH.6 — credential login page', () => {
     // Click Keluar and wait for both the credential page AND the
     // server-side logout POST to settle. Without the networkidle
     // wait, the reload can race the logout request and re-bootstrap
-    // a still-valid session. Keluar is a menuitem (AccountMenu dropdown).
+    // a still-valid session. Keluar is a menuitem (AccountMenu dropdown)
+    // — open the Akun menu first (Lane-2, same omission as test 6).
+    await page.getByLabel('Akun').click()
     await page.getByRole('menuitem', { name: 'Keluar' }).click()
     await expect(page.getByLabel('Username')).toBeVisible()
     await page.waitForLoadState('networkidle')
@@ -239,6 +243,16 @@ test.describe('M-AUTH.6 — credential login page', () => {
 
   test('11. session expiration returns to login and clears protected cache', async ({ page, pageErrors }) => {
     await loginViaApi(page, 'superadmin')
+    // Lane-2: the retired Temp seed_phase used to provide schools; the
+    // in-repo db-reset seeds none, so seed one hermetically (deleted at
+    // the end) — otherwise the hydrate wait below can never succeed.
+    const csrfSeed = await primeCsrf(page)
+    const seedRes = await page.request.post('/api/sekolah.php', {
+      headers: { 'X-CSRF-Token': csrfSeed },
+      data: { id: `skl-AUTH11-${Date.now()}`, nama: `SD Auth11 Sim ${Date.now()}`, spp: 100000, cabangId: 'cbg-test-pusat', action: 'create' },
+    })
+    if (!seedRes.ok()) throw new Error(`seed sekolah failed: ${seedRes.status()} ${await seedRes.text()}`)
+    const seedSekolahId = (await seedRes.json()).id
     await page.goto(APP)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('button', { name: 'Data Cabang' })).toBeVisible()
@@ -286,6 +300,15 @@ test.describe('M-AUTH.6 — credential login page', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByLabel('Username')).toBeVisible()
     expect(pageErrors).toHaveLength(0)
+
+    // Hermetic cleanup for the Lane-2 seed above (destructive project —
+    // leaves no rows for stress-simulation to trip over).
+    await loginViaApi(page, 'superadmin')
+    const csrfDel = await primeCsrf(page)
+    await page.request.post('/api/sekolah.php', {
+      headers: { 'X-CSRF-Token': csrfDel },
+      data: { id: seedSekolahId, action: 'delete' },
+    })
   })
 
   test('5. lockout after 5 failed attempts blocks even a correct password', async ({ page, pageErrors }) => {
