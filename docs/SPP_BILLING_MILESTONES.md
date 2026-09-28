@@ -196,3 +196,12 @@ MICROTASK: Write completion back to source docs
 ## Follow-up fix gate SBF (2026-09-18, CLOSED)
 
 Post–SB-C audit (`docs/SB_FOLLOWUP_FIX.md`, retired on close) fixed three gaps: print-template server-shape support, invoice-level payment validation (D-SB8 follow-up now implemented), installment spec on the canonical flow. Verified: `entity.validation.php -> all passed incl. SBF.2`; `invoice-installment.spec.js --workers=1 -> 1 passed, pageErrors 0`; `npm test -> 33/164`; `npm run build -> green`.
+
+## Follow-up verification SB.G (2026-09-28, team bugs 12–15 — verify-only + one fix + one GAP)
+
+Team scenarios 12–15 re-proven against the closed chain (D-SB8/R-SB6/D-SB11/D-SB12 Locked, untouched):
+
+- **12 installments persist:** invoice 5jt → pay 2jt (Belum Lunas, Sisa 3jt) → pay 3jt (Lunas) → reload + logout/login keeps every figure. FIX: per-student pills reverted after refresh because `recomputeSppLunasForSiswa()` only touched localStorage — added `recomputeAllSppLunas()` (ledger-derived cache refresh, R-SB2 analog, no server write) wired into `App.jsx` post-hydrate. Verified: temp E2E green incl. pill-after-relogin leg (removed after passing); `invoice-installment.spec.js -> 1 passed`.
+- **13 parent payment:** `sumberDana='ortu'` (canonical per D-SB12; team wording "Parent" maps here, no code change) + `siswaId` recorded; per-student pill Lunas while school invoice stays outstanding (partial reconciliation holds — `computeSppLunas` is per-siswa, `invoiceSettlement` per-school). Verified: temp E2E green (removed after passing).
+- **14 bulk no-overwrite:** no bulk writer exists (append-only ledger); settling B+C leaves A's `ortu` row untouched, all pills + invoice settle. Verified: temp E2E green (removed after passing).
+- **15 overpay → GAP:** invoice 500k, pay 600k → Lunas + `Lebih bayar 100k`; next invoice carries the `Kelebihan bayar (credit)` memo line with `grandTotal` frozen (D-SB11). Credit auto-apply ("Used 700k") is NOT implemented — logged as GAP per team instruction, not forced PASS. Owner: finance chain / business sign-off on auto-deduct vs memo. Verified: temp E2E green documenting current semantics (removed after passing).

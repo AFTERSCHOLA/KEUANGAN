@@ -26,6 +26,7 @@ import PenugasanManager from './features/penugasan/PenugasanManager.jsx'
 import PenugasanTimetable from './features/penugasan/PenugasanTimetable.jsx'
 import BranchManager from './features/admin/BranchManager.jsx'
 import EksternalManager from './features/admin/EksternalManager.jsx'
+import { recomputeAllSppLunas } from './lib/sppPayments.js'
 import { bootstrapAuth, getCurrentUser, logout, subscribeAuth } from './lib/auth.js'
 import LoginPage from './features/auth/LoginPage.jsx'
 import MustChangePasswordPage from './features/auth/MustChangePasswordPage.jsx'
@@ -164,7 +165,9 @@ useEffect(() => {
   useEffect(() => {
     if (!currentUser) return
     let cancelled = false
-    hydrateServerData()
+    // BUG12/13 — re-derive per-student paid maps from the ledger after
+    // every hydrate (login + full refresh) so pills survive reloads.
+    hydrateServerData().then(() => { if (!cancelled) recomputeAllSppLunas() })
     return () => { cancelled = true }
   }, [currentUser?.id])
 

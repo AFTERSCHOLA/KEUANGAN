@@ -88,3 +88,25 @@ export function recomputeSppLunasForSiswa(siswaId) {
   write('siswa', siswaList.map(s => (s.id === siswaId ? updated : s)))
   return updated
 }
+
+/**
+ * BUG12/13 (R-SB2 analog) — derive every cached siswa's sppLunas map from
+ * the ledger into the LOCAL cache only (never a server write: the ledger
+ * stays the single source of truth). Without this, per-student pills
+ * revert after refresh/logout because recomputeSppLunasForSiswa() only
+ * ever touched localStorage. Runs after login hydrate + full refresh.
+ * write() merges scoped-only for non-superadmin roles, so out-of-scope
+ * rows are preserved untouched.
+ */
+export function recomputeAllSppLunas() {
+  const siswaList = readCached('siswa')
+  if (siswaList.length === 0) return 0
+  const sekolahById = new Map(readCached('sekolah').map(s => [s.id, s]))
+  const allPayments = readCached('sppPayments')
+  const updated = siswaList.map(s => ({
+    ...s,
+    sppLunas: computeSppLunas(s.id, allPayments, sekolahById.get(s.sekolahId)?.spp || 0),
+  }))
+  write('siswa', updated)
+  return updated.length
+}
