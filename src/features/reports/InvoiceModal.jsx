@@ -12,8 +12,17 @@ import {
   generateInvoiceForSekolah,
   deleteInvoiceServer,
 } from '../../lib/invoices.js'
+import {
+  bulkSettlePreview,
+  newSppPayment,
+  addSppPayment,
+  recomputeAllSppLunas,
+} from '../../lib/sppPayments.js'
 
 const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
+// BR.2 (D-BR1) — metode choices mirror SppPaymentModal.jsx (same ledger,
+// same enum); default 'Transfer' is the pinned bulk-settlement default.
+const BULK_METODE_OPTIONS = ['Tunai-Sekolah', 'Tunai-Trainer', 'Tunai-Admin', 'Transfer']
 
 // SB.C.2 — invoice creation sekarang lewat server (invoices-generate.php),
 // bukan localStorage lagi (D-SB10). Konsekuensinya:
@@ -49,6 +58,16 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   // Invoices are superadmin-write server-side; mirror that in UI (the
   // endpoint 403s anyone else, but hiding avoids confusion).
   const canEditFollowUp = getRoleContext().role === 'superadmin'
+  // BR.2 (D-BR1, R-BR3) — bulk settlement mints superadmin-owned ledger
+  // rows; same role gate as the invoice write path, never broadened.
+  const canBulkSettle = getRoleContext().role === 'superadmin'
+  // BR.2 — per-invoice bulk editor state. Shape mirrors the fuEditing
+  // follow-up editor below (open id + form + saving + error), not a new
+  // modal idiom.
+  const [bulkEditing, setBulkEditing] = useState(null)
+  const [bulkForm, setBulkForm] = useState({ metode: 'Transfer', diterimaOleh: '', tanggalBayar: localDateString() })
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkError, setBulkError] = useState('')
 
   if (!open || !sekolah) return null
 
@@ -67,6 +86,8 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   // Diambil sekali di luar map biar nggak baca cache berkali-kali per baris.
   const sppPaymentsAll = readCached('sppPayments')
   const siswaAll = readCached('siswa')
+  const sekolahAll = readCached('sekolah')
+  const cabangAll = readCached('cabang')
 
   async function doGenerate() {
     setSubmitting(true)
@@ -166,8 +187,74 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
     }
   }
 
-  async function removeInvoice(inv) {
-    setConfirmMsg('Hapus invoice ini? Tindakan ini tidak bisa dibatalkan.')
+  // BR.2 (D-BR1) — bulk-settle handlers. Preview is pure
+  // (bulkSettlePreview); the write appends one row per mintable cell
+  // via the existing sppPayments endpoint — never a bare siswaId-null
+  // row for the same settlement (double-count guard, D-BR1).
+  function openBulk(inv) {
+    setBulkError('')
+    setBulkForm({ metode: 'Transfer', diterimaOleh: '', tanggalBayar: localDateString() })
+    setBulkEditing(inv.id)
+  }
+
+  function handleBulkSaveClick(inv, preview) {
+    if (!bulkForm.metode || !bulkForm.diterimaOleh.trim() || !bulkForm.tanggalBayar) {
+      setBulkError('Lengkapi metode, penerima, dan tanggal bayar.')
+      return
+    }
+    const total = preview.rows.reduce((sum, r) => sum + Number(r.nominal || 0), 0)
+    setConfirmMsg(`Buat ${preview.rows.length} baris pelunasan sekolah ${formatRupiah(total)} untuk invoice ${inv.nomor || inv.nomorInvoice || ''}? Murid yang sudah lunas dilewati.`)
+    setConfirmAction(() => () => doBulkSave(inv, preview))
+    setConfirmOpen(true)
+  }
+
+  async function doBulkSave(inv, preview) {
+    if (bulkSaving) return
+    setBulkSaving(true)
+    setBulkError('')
+    const sch = sekolahAll.find(s => s.id === inv.sekolahId)
+    const cabangKode = cabangAll.find(c => c.id === sch?.cabangId)?.kode
+    let failed = 0
+    try {
+      for (const row of preview.rows) {
+        try {
+          const result = await addSppPayment(newSppPayment({
+            siswaId: row.siswaId,
+            periode: row.periode,
+            nominal: Number(row.nominal),
+            tanggalBayar: bulkForm.tanggalBayar,
+            metode: bulkForm.metode,
+            diterimaOleh: bulkForm.diterimaOleh.trim(),
+            sumberDana: 'sekolah',
+            invoiceId: row.invoiceId,
+            sekolahId: row.sekolahId,
+            cabangKode,
+            cabangId: sch?.cabangId,
+          }))
+          if (result.status === 'forbidden' || result.status === 'conflict') failed += 1
+        } catch {
+          failed += 1
+        }
+      }
+      // Refresh dulu ke state server yang sebenarnya (tidak ada rollback
+      // lintas-baris — lihat catatan di generateInvoiceForSekolah), lalu
+      // turunkan ulang pill per-siswa dari ledger yang baru.
+      await read('sppPayments')
+      recomputeAllSppLunas()
+      setTick(t => t + 1)
+      if (failed === 0) {
+        setBulkEditing(null)
+      } else {
+        setBulkError(`Sebagian baris gagal (${failed}). Data dimuat ulang — periksa Riwayat sebelum mengulang.`)
+      }
+    } catch (error) {
+      setBulkError(error instanceof ApiError ? error.message : 'Gagal menyimpan pelunasan.')
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
+  async function removeInvoice(inv) {    setConfirmMsg('Hapus invoice ini? Tindakan ini tidak bisa dibatalkan.')
     setConfirmAction(() => async () => {
       setSubmitting(true)
       setErrorMsg('')
@@ -268,6 +355,13 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
 
                 const carryLines = Array.isArray(inv.carryOverLines) ? inv.carryOverLines : []
                 const displayStatus = isLegacyDraft ? 'Draft (legacy)' : settlement.status
+                // BR.2 — pure preview per invoice (cells settled -> skipped
+                // by construction, so a re-open after settling shows 0 rows).
+                const bulkPreview = !isLegacyDraft
+                  ? bulkSettlePreview(inv, { siswa: siswaAll, sekolah: sekolahAll, sppPayments: sppPaymentsAll })
+                  : { cells: [], rows: [] }
+                const bulkTotal = bulkPreview.rows.reduce((sum, r) => sum + Number(r.nominal || 0), 0)
+                const bulkSkipped = bulkPreview.cells.length - bulkPreview.rows.length
 
                 // F12 — follow-up display line (billing math never reads it).
                 const fu = inv.followUp || null
@@ -314,6 +408,47 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       <button onClick={() => removeInvoice(inv)} disabled={submitting} className="text-rose-500 hover:underline font-bold disabled:opacity-40">Hapus</button>
                     </div>
                     </div>
+                    {/* BR.2 — bulk-settle trigger + editor. Trigger mirrors
+                        the fuEditing toggle idiom (per-row expand, same
+                        button classes); empty state pins the second-run
+                        expectation: a settled invoice offers no rows. */}
+                    {canBulkSettle && !isLegacyDraft && bulkEditing !== inv.id && bulkPreview.rows.length > 0 && (
+                      <button onClick={() => openBulk(inv)} className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg transition">
+                        Catat pelunasan sekolah
+                      </button>
+                    )}
+                    {canBulkSettle && !isLegacyDraft && bulkEditing !== inv.id && bulkPreview.cells.length > 0 && bulkPreview.rows.length === 0 && (
+                      <p className="mt-2 text-[11px] text-slate-400">Semua murid sudah lunas untuk invoice ini.</p>
+                    )}
+                    {canBulkSettle && bulkEditing === inv.id && (
+                      <div className="mt-2 border-t pt-2 space-y-2">
+                        <div className="bg-slate-50 rounded-lg p-2.5 text-xs space-y-0.5 border">
+                          <p className="flex justify-between"><span className="text-slate-400">Baris baru:</span><span className="font-bold">{bulkPreview.rows.length} murid × {formatRupiah(bulkTotal)}</span></p>
+                          {bulkSkipped > 0 && <p className="text-slate-400 italic">Melewati {bulkSkipped} murid yang sudah lunas (sumber dana mereka tidak diubah).</p>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Metode</label>
+                            <select value={bulkForm.metode} onChange={e => setBulkForm({ ...bulkForm, metode: e.target.value })} disabled={bulkSaving} className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white disabled:opacity-60">
+                              {BULK_METODE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Tanggal Bayar</label>
+                            <input type="date" value={bulkForm.tanggalBayar} onChange={e => setBulkForm({ ...bulkForm, tanggalBayar: e.target.value })} disabled={bulkSaving} className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white disabled:opacity-60" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Diterima Oleh</label>
+                          <input value={bulkForm.diterimaOleh} onChange={e => setBulkForm({ ...bulkForm, diterimaOleh: e.target.value })} disabled={bulkSaving} placeholder="Nama penerima" className="w-full mt-0.5 rounded-lg border p-2 text-xs disabled:opacity-60" />
+                        </div>
+                        {bulkError && <p className="text-xs text-rose-600 font-semibold">{bulkError}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={() => handleBulkSaveClick(inv, bulkPreview)} disabled={bulkSaving} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-lg transition">Simpan Pelunasan</button>
+                          <button onClick={() => !bulkSaving && setBulkEditing(null)} disabled={bulkSaving} className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-xs px-3.5 py-1.5 rounded-lg transition">Batal</button>
+                        </div>
+                      </div>
+                    )}
                     {canEditFollowUp && fuEditing === inv.id && (
                       <div className="mt-2 border-t pt-2 space-y-2">
                         <div className="grid grid-cols-2 gap-2">

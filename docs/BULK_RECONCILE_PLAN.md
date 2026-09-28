@@ -75,6 +75,20 @@ MICROTASK BR.2: per-invoice bulk-settle button
            then full npm test + production build green, unrelated failures
            labeled pre-existing before moving on (taste #9).
   DONE-IF: VERIFY passes; nothing else changed.
+  VERIFIED 2026-09-29: tests/invoice-bulk-settle.spec.js 1/1 green (A ledger
+           stays ortu-only, B/C settle via sekolah rows with invoiceId,
+           second run shows "Semua murid sudah lunas untuk invoice ini.");
+           neighboring invoice specs 6/6 green (incl. pipeline-dashboard
+           Tarif/Frozen); npm test 47/287 green; production build green;
+           no console.log in touched files.
+  NOTE 2026-09-29: first spec attempt failed at seeding with
+           "cabangId tidak ditemukan" — the shared test DB's cabang table
+           was empty because the earlier endpoint.protection.php run
+           (restore section, hard replace) left master data wiped. Recovered
+           via sanctioned `npm run db:reset` (canonical seed) after backing
+           up the 5-row users table to Temp; non-canonical user
+           test_trainer_a was dropped by the reset and is restorable from
+           that backup on request.
 
 MICROTASK BR.3: write-back (§7)
   EDIT:    docs/ (SCOPE_EXPANSION_MILESTONES.md closure row, SPP_BILLING_PLAN.md
