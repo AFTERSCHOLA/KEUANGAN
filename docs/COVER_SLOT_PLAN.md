@@ -43,6 +43,7 @@
 | F-CS4 | **Per-person honor/role cannot express per-session I/A.** Label follows live type; honor follows the person; the Vazira dual-role case is unrepresentable. | `trainerAttendance.js:66`; `finance.js:111-114`; `EXEMPLAR_MIGRATION.md` D2-revised, D3, F3 |
 | F-CS5 | **External assistants have no write path and no recorder audit.** No login, no entity, no attendance attribution; a trainer-claimed `Present` would mint 50k without a trail. | `constants.js:345-366`; `EVALUATION_LOG.md` assistant-external analysis + recorder risk note |
 | F-CS6 | **Dashboard-first is a trap while the generator is still flat.** Potensi 53,535,011 vs tariff-only ≈73.45M; the canonical generator still bills flat. | `finance.js:89-94` vs `billingForSekolah`; `invoiceGenerator.php:106-135`; `EXEMPLAR_MIGRATION.md` P1–P2, F7; `SPP_BILLING_PLAN.md` D-SB10 |
+| F-CS7 | **Naive link yields zero rows vs team expectation (Fail A1).** Ticking a school with no slot boxes sends `[]`, and D-CS1 "No pick, no row" creates nothing — the trainer's `Absensi Saya` stays blocked with the pinned "no active assignment" guidance. The team expects all-slots inheritance. | `TrainerList.jsx:120` (`slotPicks[sId] \|\| []`); `assignments.php:235-250`; `TrainerAttendanceForm.jsx:165-167`; team Bug 4 report |
 
 ## 4. Decision set (D-CS)
 
@@ -55,6 +56,7 @@
 | D-CS5 | **External assistants (concrete pick, minimal + audited).** New minimal person record `{ nama, kontak, sekolahId, cabangId }`, no login account, created by admin_cabang (own branch) or superadmin only. Attendance for an external is recorded by an authorized admin/trainer in-scope for that school+date and **must** carry `dicatatOleh` = recorder user id (who claimed the 50k). Missing recorder fails hard; trainer creation of externals is deferred (reference-only for trainers). | Locked |
 | D-CS6 | **Role-first honor (concrete pick).** `peran 'A'` → flat 50k per D2 (whoever fills the slot, incl. externals); `peran 'I'` → the row owner's `trainer.honor` per R-TA3 (Senior/Newbie tiers, no hardcode). No `peran` on legacy rows → legacy path unchanged (R-SB3 analog: history byte-identical). | Locked |
 | D-CS7 | **Dashboard-last sequencing (guard, not build).** The dashboard keeps the flat Potensi source until the SPP_BILLING chain ships the per-meeting generator upgrade (SB.B/SB.C, D-SB10). This chain adds a regression guard pinning both figures (Potensi 53,535,011 + tariff-only ≈73.45M on the exemplar fixture) so a premature source switch fails loudly. Generator work itself is deferred with owner (§10), never duplicated here. | Locked |
+| D-CS8 | **Naive-link defaults to Semua slot (concrete pick, recorded 2026-09-28).** Checking a school seeds `[null]` (the Semua slot box renders pre-checked, honest default); an explicitly emptied entry (`[]`) still means no rows. The save maps a missing entry to `[null]`. Server D-CS1 semantics stay byte-identical (Locked, untouched) — the change is client-default only; `[]` remains reachable via direct API writes. | Locked |
 
 ## 5. Data model (extensions, additive only)
 
@@ -85,6 +87,7 @@ Invariants: `coverOf` must reference an existing assignment for the same `sekola
 - **R-CS4** Schema additive only: no renames, no deletions, no new tables beyond the minimal external record; missing keys read as legacy behavior; silently writing unvalidated scope/role/recorder is a defect.
 - **R-CS5** Server is authoritative (taste #33/#61): every cover/role/external/recorder write is gated in `authorize.php` + `entities.php`; UI mirrors, never guards alone; trainer assignment-write stays 403.
 - **R-CS6** Verification language `Verified: <command> -> <result>` / `Unverified:` (UNIVERSAL); every microtask has one OUTCOME + one falsifiable VERIFY (taste #2); narrowest check runs immediately after the first edit (taste #4); source hygiene gate: no `console.log` in `src/`, no build artifacts in `git status` (taste #20); `deploy/` only via `npm run build:deploy` (taste #71, HARD parity gate #72).
+- **R-CS7** Naive links inherit all slots (D-CS8): a newly ticked school without slot picks saves `[null]` (one unscoped row); only an explicitly emptied pick list sends `[]` (no rows). Server pick semantics (D-CS1) are never reinterpreted client-side.
 
 ## 7. UI concept (pinned copy)
 
@@ -100,6 +103,7 @@ Slot-pick step inside the existing assignment flow (after `Asisten`): `Slot` sel
 | F-CS4 per-person role/honor | `trainerAttendance.js:66`; `finance.js:111-114`; `EXEMPLAR_MIGRATION.md` D2-revised/D3/F3; `TRAINER_ATTENDANCE_PLAN.md` R-TA14/D-TA16 | Per-session role storage never specified | New decisions D-CS3 + D-CS6 (row-level `peran`, role-first honor) |
 | F-CS5 externals + recorder | `EVALUATION_LOG.md` external-assistant analysis (no account, admin/trainer records attendance) | Entity shape + recorder audit never specified | New decision D-CS5 (minimal record, `dicatatOleh` required, trainer reference-only) |
 | F-CS6 dashboard-before-generator | `finance.js:89-94` vs `billingForSekolah`; `invoiceGenerator.php:106-135` (still flat); `EXEMPLAR_MIGRATION.md` P1–P2/F7; `SPP_BILLING_PLAN.md` D-SB10 | Generator upgrade timing vs dashboard switch never sequenced | Guard D-CS7 here; build deferred to SPP_BILLING (§10) |
+| F-CS7 naive link, no rows | `TrainerList.jsx` school-check + picksMap default; `assignments.php` (no pick, no row); `TrainerAttendanceForm.jsx:165-167` (blocked guidance) | Naive-link default (inherit vs stage-empty) never decided — D-CS1 only defines the server poles | New default D-CS8/R-CS7 here (client only; D-CS1 Locked intact) |
 
 ## 9. Access model (explicit, no broadening)
 

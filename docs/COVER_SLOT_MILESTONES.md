@@ -2,7 +2,7 @@
 
 **Companion to `docs/COVER_SLOT_PLAN.md`.** Decomposes the slot-pick revision + cover path + per-session role into strictly ordered microtasks. Each microtask must VERIFY before the next begins; a failing check becomes a bounded follow-up, not a widened edit (taste #3/#4). Later work does not start until gates pass. No app code changes in this pair yet — this chain is the build order for implementers.
 
-**Source of truth for findings/decisions:** `COVER_SLOT_PLAN.md` §3 (F-CS1–F-CS6) and §4 (D-CS1–D-CS7). The chain below does not restate plan prose; each `FINDS`/`RULES` line cites the registry. Violated invariant for the whole chain (taste bug rule, one hypothesis): *a cover session bills the school but pays nobody because the assignment gate has no cover path, and the slot model has no explicit pick — F-CS1/F-CS2*; CS.A–CS.C is the single slice that tests it.
+**Source of truth for findings/decisions:** `COVER_SLOT_PLAN.md` §3 (F-CS1–F-CS7) and §4 (D-CS1–D-CS8) + §6 (R-CS1–R-CS7). The chain below does not restate plan prose; each `FINDS`/`RULES` line cites the registry. Violated invariant for the whole chain (taste bug rule, one hypothesis): *a cover session bills the school but pays nobody because the assignment gate has no cover path, and the slot model has no explicit pick — F-CS1/F-CS2*; CS.A–CS.C is the single slice that tests it.
 
 ```text
 MICROTASK: <one verb + one noun>
@@ -127,6 +127,25 @@ MICROTASK: Guard dashboard order and write back
   DONE-IF: verify passes; only intended files changed
 
   CS.C.2 → Verified: npm test -> 43 files / 220 passed (215 baseline + 4 CS.C.1 + 1 CS.C.2 guard); npx vitest targeted 4 files -> 35 passed (penugasan-slot 7, trainerAttendance 14, finance-pengajar-honor 9, finance-regression 5); php server/tests/entity.validation.php -> all passed incl. CS.B.1 cover-link + CS.B.2 role+external; php server/tests/endpoint.protection.php -> 261 checks, 0 failed incl. CS.A.2 slotPicks + CS.B.1 cover (403 control / 201 with link / dangling 403) + CS.B.2 externals (trainer-create 403, missing/forged recorder 422, dicatatOleh=self 201); E2E with PHP 8000 + reseeded cbg-test-pusat: penugasan 6/6 passed (PG.A.1, AP.B.1, PG.B.1, PG.C.1, PG.C.2, PG.A.2) + recap 2/2 passed, zero pageerror on green legs; 8 legs (admin 2, form 3, summary 3) fail pre-existing on the stale sync assumption (Sinkronisasi [disabled] — form uses writeRemote since CS.B.2, tests still wait for /api/sync.php; proven identical on pristine HEAD via git-stash, out of CS.C scope per taste #13, documented follow-up); npm run build -> green (5.05s, PWA 6 entries); node -e ID check -> cited 19 / missing 0; rg console.log src/ -> clean; git status -> 4 intended files only; original acceptance re-run green (CS.A.1 picked-save, CS.B.1 cover-403-gone via endpoint suite, CS.C.1 I/A-price 9/9)
+```
+
+---
+
+## Gate CS.D — Naive-link default (F-CS7; D-CS8, scope decision 2026-09-28)
+
+### CS.D.1 Default new links to Semua slot
+
+```text
+MICROTASK: Default new links to Semua slot
+  EDIT:    src/features/trainers/TrainerList.jsx (seed [null] on school-check; map missing entries to [null]; honest pre-checked Semua slot box; comments),
+           docs/COVER_SLOT_PLAN.md (F-CS7, D-CS8 Locked, R-CS7, alignment row) + this file (this gate)
+  FINDS:   F-CS7; D-CS8
+  RULES:   R-CS1, R-CS3, R-CS7; server D-CS1 byte-identical (no PHP touched); explicit [] still means no rows via API; Indonesian copy unchanged (§7 already defaults to Semua slot)
+  DEPENDS: CS.C.2 (chain was closed; this gate appends, no renumbering)
+  OUTCOME: ticking a school with no slot boxes creates exactly one unscoped assignment row and unblocks the trainer's Absensi Saya dropdown.
+  DONE-IF: verify passes; only intended files changed
+
+  CS.D.1 → Verified: temp E2E (removed after passing) -> naive create shows Semua slot pre-checked, server holds exactly 1 unscoped aktif row; npx playwright test tests/auto-penugasan-create.spec.js tests/auto-penugasan-delete.spec.js tests/auto-penugasan-livejadwal.spec.js --workers=1 -> 3 passed; r3-verify 4/4, ki1-trainer-cabangid 2/2, trainer-honor-input 1/1 (second-batch flakes pass in isolation — wedged-renderer pattern, pre-existing); e2e.spec.js #3 fails pre-existing at HEAD (M-AF5.1 Hapus Sekolah confirm unhandled by the test, proven on stashed tree) and the full-file run is pollution-sensitive (fixed names, no hermetic cleanup) — reported Unverified/inconclusive per taste #28, follow-up owned by the e2e-hygiene thread, not this gate
 ```
 
 ---

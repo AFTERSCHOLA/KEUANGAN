@@ -45,7 +45,9 @@ export default function TrainerList() {
   // CS.A.2 (F-CS1; D-CS1) — per-new-link slot picks, kept OUTSIDE `form`
   // so they never land in trainer.payload (Part 2 R8). Shape mirrors the
   // server `slotPicks` map: { [sekolahId]: Array<null | {hari,jamMulai,jamSelesai}> }.
-  // Absent/empty entry = no rows ("No pick, no row"); [null] = Semua slot.
+  // BUG4 (D-BUG4): checking a school seeds [null] = Semua slot, so a naive
+  // link inherits all slots; an explicit empty entry (every box unticked)
+  // still means no rows ("No pick, no row" — API-reachable, D-CS1 intact).
   const [slotPicks, setSlotPicks] = useState({})
 
   // PM.5.13: per-button copy feedback state. 'idle' | 'copied' | 'error'.
@@ -112,12 +114,13 @@ export default function TrainerList() {
     const isEdit = prev !== undefined
     const isCreatingAccount = !isEdit && createAccount
 
-    // CS.A.2 — explicit picks for added links only; untouched/missing
-    // entries read as [] (no rows, D-CS1). Sent as request extras via
-    // writeRemote, never stored in any payload (Part 2 R8).
+    // CS.A.2 — explicit picks for added links only (BUG4/D-BUG4: a
+    // missing entry defaults to [null] = Semua slot so naive links inherit
+    // all slots; an explicit [] still sends no rows, D-CS1 intact). Sent as
+    // request extras via writeRemote, never stored in any payload (Part 2 R8).
     const picksMap = {}
     form.sekolahIds.forEach(sId => {
-      if (!oldSekolahIds.includes(sId)) picksMap[sId] = slotPicks[sId] || []
+      if (!oldSekolahIds.includes(sId)) picksMap[sId] = (sId in slotPicks) ? slotPicks[sId] : [null]
     })
     const picksExtra = Object.keys(picksMap).length > 0 ? { slotPicks: picksMap } : null
 
@@ -512,14 +515,20 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
                       delete next[s.id]
                       return next
                     })
+                  } else {
+                    // BUG4 (D-BUG4) — checking a school seeds Semua slot so
+                    // the naive link inherits all slots; the admin narrows
+                    // by unticking Semua slot and picking specific slots.
+                    setSlotPicks(prev => (s.id in prev ? prev : { ...prev, [s.id]: [null] }))
                   }
                 }} className="rounded" />
                 {s.nama}
               </label>
-              {/* CS.A.2 (D-CS1) — explicit slot pick per newly added link.
-                  Nothing checked = no rows ("No pick, no row"); "Semua slot"
-                  = one unscoped row. Previously linked schools keep their
-                  rows untouched (re-scope in Penugasan Pengajar). */}
+              {/* CS.A.2 (D-CS1; BUG4/D-BUG4) — explicit slot pick per newly
+                  added link. New links default to "Semua slot" checked (one
+                  unscoped row); unticking every box = no rows ("No pick, no
+                  row"). Previously linked schools keep their rows untouched
+                  (re-scope in Penugasan Pengajar). */}
               {form.sekolahIds.includes(s.id) && !(prevSekolahIds || []).includes(s.id) && (
                 <div className="ml-6 mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50 p-2" aria-label={`Slot untuk ${s.nama}`}>
                   <p className="text-[11px] font-bold text-slate-400 uppercase">Slot penugasan</p>
