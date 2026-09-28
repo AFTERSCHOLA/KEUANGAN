@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, writeRemote, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
-import { newPenugasanRow, validateRowDates, PENUGASAN_HARI } from '../../lib/penugasan.js'
+import { newPenugasanRow, validateRowDates, PENUGASAN_HARI, findOverlappingPair, PENUGASAN_OVERLAP_ERROR } from '../../lib/penugasan.js'
 import Modal from '../../components/Modal.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -230,6 +230,13 @@ export default function PenugasanManager() {
           aktif: form.aktif,
         })
         next = [...existing, row]
+      }
+      // BUG7 (F-PG5; D-PG9) — same-host double-booking pre-check on the
+      // full replace payload (server re-checks authoritatively in
+      // trainer.php; this surfaces the pinned copy before the write).
+      if (findOverlappingPair(next)) {
+        showError(PENUGASAN_OVERLAP_ERROR)
+        return
       }
       const result = await writeRemote('trainer', { ...host, penugasanPengajar: next })
       if (result.status === 'forbidden') {

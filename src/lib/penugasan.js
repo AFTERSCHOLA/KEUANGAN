@@ -101,6 +101,54 @@ export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSe
   return null
 }
 
+// BUG7 (F-PG5; D-PG9) — intra-payload double-booking guard (same-host
+// reject; server re-checks authoritatively in trainer.php via
+// validateNoOverlappingAssignments). Mirrors that predicate exactly:
+// exact triple equality, unscoped fans out over the same school,
+// cover-linked + same-id pairs skipped, inactive and non-intersecting
+// ranges never block. Pinned copy shared with the server gate.
+export const PENUGASAN_OVERLAP_ERROR = 'Penugasan ganda: sekolah dan waktu yang sama sudah terisi pada rentang tanggal ini.'
+
+function penugasanSlotKey(a) {
+  const norm = v => (v === '' ? null : (v ?? null))
+  return JSON.stringify([norm(a?.hari), norm(a?.jamMulai), norm(a?.jamSelesai)])
+}
+
+const PENUGASAN_UNSCOPED_KEY = JSON.stringify([null, null, null])
+
+function penugasanRangeEnd(v) {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s === '' ? '9999-12-31' : s
+}
+
+// Returns the first overlapping [a, b] pair, or null when the payload
+// holds no double booking.
+export function findOverlappingPair(rows = []) {
+  const list = Array.isArray(rows) ? rows : []
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i]
+    if (!a || typeof a !== 'object') continue
+    for (let j = i + 1; j < list.length; j++) {
+      const b = list[j]
+      if (!b || typeof b !== 'object') continue
+      if (typeof a.id === 'string' && a.id !== '' && a.id === b.id) continue
+      if ((typeof a.coverOf === 'string' && a.coverOf !== '' && a.coverOf === b.id)
+        || (typeof b.coverOf === 'string' && b.coverOf !== '' && b.coverOf === a.id)) continue
+      if (a.aktif !== true || b.aktif !== true) continue
+      if (typeof a.sekolahId !== 'string' || a.sekolahId === '' || a.sekolahId !== b.sekolahId) continue
+      const start = [a.periodeMulai || '', b.periodeMulai || ''].sort()[1]
+      const endA = penugasanRangeEnd(a.periodeSelesai)
+      const endB = penugasanRangeEnd(b.periodeSelesai)
+      if (start > (endA < endB ? endA : endB)) continue
+      const keyA = penugasanSlotKey(a)
+      const keyB = penugasanSlotKey(b)
+      if (keyA !== keyB && keyA !== PENUGASAN_UNSCOPED_KEY && keyB !== PENUGASAN_UNSCOPED_KEY) continue
+      return [a, b]
+    }
+  }
+  return null
+}
+
 // DC.C.1 (F-DC3; D-CS4/D-DC3) — union membership: legacy asistenId
 // counts as position 0, asistenIds adds positions 1-2. Mirrors the server
 // union in authorize.php trainerHasActiveAssignment() so client scope

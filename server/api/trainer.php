@@ -146,6 +146,16 @@ if ($method === 'POST' || $method === 'PUT') {
         }
     }
 
+    // BUG7 (F-PG5; D-PG9) — server-authoritative double-booking guard.
+    // PenugasanManager pre-checks client-side; this gate holds for direct
+    // API writes. Same-host payload only (recorded scope decision).
+    if (isset($data['penugasanPengajar']) && is_array($data['penugasanPengajar'])) {
+        $overlapError = validateNoOverlappingAssignments($data['penugasanPengajar']);
+        if ($overlapError !== null) {
+            jsonResponse(['error' => $overlapError], 422);
+        }
+    }
+
     masterWrite('trainer', $user, record: $data, overrides: ['cabangId' => $cabangId], action: $action);
 } elseif ($method === 'DELETE') {
     if ($role !== 'admin_cabang') {

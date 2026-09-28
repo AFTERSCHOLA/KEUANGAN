@@ -135,6 +135,28 @@ MICROTASK: Harden penugasan chain and write back
 
 ---
 
+## Gate PG.D — Double-booking guard (F-PG5; D-PG9, D-BUG7 scope decision 2026-09-28)
+
+### PG.D.1 Reject duplicate manual assignments
+
+```text
+MICROTASK: Reject duplicate manual assignments
+  EDIT:    server/lib/assignments.php (add validateNoOverlappingAssignments pairwise guard),
+           server/api/trainer.php (422 hook after the cover gate, before masterWrite),
+           src/lib/penugasan.js (add findOverlappingPair + PENUGASAN_OVERLAP_ERROR pinned copy),
+           src/features/penugasan/PenugasanManager.jsx (pre-check the full replace payload in save()),
+           src/lib/__tests__/penugasan-slot.test.js (client cases + PHP bridge legs)
+  FINDS:   F-PG5; D-PG9
+  RULES:   R-PG8, R-PG1, R-PG3; mirror hasOverlappingActiveAssignment/coverScopeOverlaps (exact triple, unscoped fans out, YAGNI no intervals); same-id + cover-linked pairs excluded; inactive + disjoint ranges never block; deploy/ untouched
+  DEPENDS: PG.C.3 (chain was closed; this gate appends, no renumbering)
+  OUTCOME: saving an identical second assignment is rejected with the pinned copy in the UI and 422s via direct API write, while distinct slots, inactive rows, disjoint ranges, and cover-linked rows still save.
+  DONE-IF: verify passes; only intended files changed
+
+  PG.D.1 → Verified: npx vitest run src/lib/__tests__/penugasan-slot.test.js src/lib/__tests__/trainerAttendance.test.js -> 2 files, 28 passed (BUG7 client + PHP-bridge legs); temp E2E (removed after passing) -> UI 2nd save shows pinned copy + dialog stays open + server keeps 1 row, direct duplicate POST -> 422 with pinned copy; npx playwright test tests/penugasan-manage.spec.js tests/penugasan-attendance-unblock.spec.js tests/auto-penugasan-create.spec.js tests/auto-penugasan-delete.spec.js --workers=1 -> 6 passed, zero pageerror (AP.A.1 re-save still adds zero rows)
+```
+
+---
+
 ## Ordering rationale
 
 - **PG.A before PG.B:** the timetable is a derived view over assignments; building the view first would be unverifiable against an always-empty source (taste: smallest slice that runs end-to-end, falsifiable).

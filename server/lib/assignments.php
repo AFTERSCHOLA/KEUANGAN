@@ -197,6 +197,58 @@ function isUnscopedAssignmentSlot(array $r): bool
     return slotKeyOfAssignment($r) === json_encode([null, null, null]);
 }
 
+// BUG7 (F-PG5; D-PG9) — reject duplicate manual assignments within one
+// host payload (same-instructor reject; cross-host asisten checks stay
+// deferred). Same-school + both aktif + intersecting date ranges + same
+// slot scope (exact triple; unscoped fans out and blocks anything in the
+// same school — same rule as hasOverlappingActiveAssignment, YAGNI: no
+// interval matching). Same-id pairs (edit path) and cover-linked pairs
+// (cover rows share their origin scope by design, D-CS2) never block.
+// Returns the pinned Indonesian copy or null.
+function penugasanRangeStart($v): string
+{
+    return is_string($v) ? $v : '';
+}
+
+function penugasanRangeEnd($v): string
+{
+    $s = is_string($v) ? trim($v) : '';
+    return $s === '' ? '9999-12-31' : $s;
+}
+
+function validateNoOverlappingAssignments(array $rows): ?string
+{
+    $err = 'Penugasan ganda: sekolah dan waktu yang sama sudah terisi pada rentang tanggal ini.';
+    $n = count($rows);
+    for ($i = 0; $i < $n; $i++) {
+        $a = $rows[$i];
+        if (!is_array($a)) continue;
+        for ($j = $i + 1; $j < $n; $j++) {
+            $b = $rows[$j];
+            if (!is_array($b)) continue;
+            $idA = $a['id'] ?? null;
+            $idB = $b['id'] ?? null;
+            if (is_string($idA) && $idA !== '' && $idA === $idB) continue;
+            $coverA = $a['coverOf'] ?? null;
+            $coverB = $b['coverOf'] ?? null;
+            if ((is_string($coverA) && $coverA !== '' && $coverA === $idB)
+                || (is_string($coverB) && $coverB !== '' && $coverB === $idA)) continue;
+            if (($a['aktif'] ?? null) !== true || ($b['aktif'] ?? null) !== true) continue;
+            $sekA = $a['sekolahId'] ?? null;
+            $sekB = $b['sekolahId'] ?? null;
+            if (!is_string($sekA) || $sekA === '' || $sekA !== $sekB) continue;
+            $start = max(penugasanRangeStart($a['periodeMulai'] ?? null), penugasanRangeStart($b['periodeMulai'] ?? null));
+            $end = min(penugasanRangeEnd($a['periodeSelesai'] ?? null), penugasanRangeEnd($b['periodeSelesai'] ?? null));
+            if (strcmp($start, $end) > 0) continue;
+            $keyA = slotKeyOfAssignment($a);
+            $keyB = slotKeyOfAssignment($b);
+            if ($keyA !== $keyB && !isUnscopedAssignmentSlot($a) && !isUnscopedAssignmentSlot($b)) continue;
+            return $err;
+        }
+    }
+    return null;
+}
+
 function hasOverlappingActiveAssignment(array $rows, string $sekolahId, string $today, ?array $slot = null, ?string $excludeId = null): bool
 {
     $slotKey = null;

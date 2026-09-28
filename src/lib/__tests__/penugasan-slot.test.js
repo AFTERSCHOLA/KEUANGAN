@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { newPenugasanRow, validateRowDates, penugasanInvolvesTrainer } from '../penugasan.js'
+import { newPenugasanRow, validateRowDates, penugasanInvolvesTrainer, findOverlappingPair, PENUGASAN_OVERLAP_ERROR } from '../penugasan.js'
 
 // CS.A.1 (F-CS1; D-CS1) — slot-pick auto-create revision.
 // Client legs pin the picked-triple vocabulary contract (parity with
@@ -21,6 +21,29 @@ const PHP_CASE_RUNNER = [
   "$rows = missingAssignmentLinks($c['existing'], 'trn-x', array('skl-1'), '2026-09-26', $sp, $co);",
   "echo json_encode(array_values(array_map(function ($r) { unset($r['id']); return $r; }, $rows)));",
 ].join(' ')
+
+const PHP_OVERLAP_RUNNER = [
+  "require 'server/lib/assignments.php';",
+  "$c = json_decode(getenv('BG7_CASE'), true);",
+  "echo json_encode(validateNoOverlappingAssignments($c['rows']));",
+].join(' ')
+
+function phpValidateNoOverlap(rows) {
+  let out
+  try {
+    out = execFileSync('php', ['-r', PHP_OVERLAP_RUNNER], {
+      cwd: repoRoot,
+      env: { ...process.env, BG7_CASE: JSON.stringify({ rows }) },
+      encoding: 'utf8',
+    })
+  } catch (error) {
+    throw new Error(
+      'BUG7 overlap leg blocked: php CLI unavailable — install PHP to run the assignments.php bridge (taste #56 blocker). Cause: ' +
+        (error?.message || String(error)),
+    )
+  }
+  return JSON.parse(out)
+}
 
 function phpMissingLinks(caseObj) {
   let out
@@ -137,6 +160,36 @@ describe('CS.A.1 slot-pick auto-create (COVER_SLOT)', () => {
     expect(penugasanInvolvesTrainer(legacy, 'trn-i')).toBe(true)
     expect(penugasanInvolvesTrainer(legacy, 'trn-a0')).toBe(false)
     expect(penugasanInvolvesTrainer(null, 'trn-i')).toBe(false)
+  })
+
+  it('BUG7: duplicate unscoped rows in one payload are rejected client + server', () => {
+    const rows = [
+      { id: 'pgs-1', sekolahId: 'skl-1', trainerId: 'trn-x', aktif: true, periodeMulai: '2026-01-01', periodeSelesai: null },
+      { id: 'pgs-2', sekolahId: 'skl-1', trainerId: 'trn-x', aktif: true, periodeMulai: '2026-02-01', periodeSelesai: null },
+    ]
+    expect(findOverlappingPair(rows)).not.toBeNull()
+    expect(PENUGASAN_OVERLAP_ERROR).toBe('Penugasan ganda: sekolah dan waktu yang sama sudah terisi pada rentang tanggal ini.')
+    expect(phpValidateNoOverlap(rows)).toBe(PENUGASAN_OVERLAP_ERROR)
+  })
+
+  it('BUG7: distinct slots, inactive rows, disjoint ranges, cover links, and self-pairs stay accepted', () => {
+    const mk = (o) => ({ sekolahId: 'skl-1', trainerId: 'trn-x', aktif: true, periodeMulai: '2026-01-01', periodeSelesai: null, ...o })
+    const accepted = [
+      [mk({ id: 'a', hari: 'Rabu', jamMulai: '14:15', jamSelesai: '15:15' }), mk({ id: 'b', hari: 'Rabu', jamMulai: '16:00', jamSelesai: '17:00' })],
+      [mk({ id: 'a' }), mk({ id: 'b', aktif: false })],
+      [mk({ id: 'a', periodeSelesai: '2026-03-31' }), mk({ id: 'b', periodeMulai: '2026-04-01' })],
+      [mk({ id: 'o' }), mk({ id: 'c', trainerId: 'trn-y', coverOf: 'o' })],
+      [mk({ id: 'a' }), mk({ id: 'a' })],
+      [mk({ id: 'a' })],
+    ]
+    for (const rows of accepted) {
+      expect(findOverlappingPair(rows)).toBeNull()
+      expect(phpValidateNoOverlap(rows)).toBeNull()
+    }
+    // Unscoped fans out: blocks a scoped row in the same school.
+    const fanOut = [mk({ id: 'a' }), mk({ id: 'b', hari: 'Rabu', jamMulai: '14:15', jamSelesai: '15:15' })]
+    expect(findOverlappingPair(fanOut)).not.toBeNull()
+    expect(phpValidateNoOverlap(fanOut)).toBe(PENUGASAN_OVERLAP_ERROR)
   })
 
   it('same scoped triple skips; different scoped triple creates', () => {

@@ -1,6 +1,6 @@
 # Penugasan Pengajar Plan — Assignment Write + Daily Timetable + Export
 
-**Status:** DONE 2026-09-24 — Gates PG.A–PG.C closed (Verified per microtask in `docs/PENUGASAN_MILESTONES.md`; joint regression 16/16 + `npm test` 42/198 + `npm run build` green; closure row appended to `SCOPE_EXPANSION_MILESTONES.md` Gate PG).
+**Status:** DONE 2026-09-24 — Gates PG.A–PG.C closed (Verified per microtask in `docs/PENUGASAN_MILESTONES.md`; joint regression 16/16 + `npm test` 42/198 + `npm run build` green; closure row appended to `SCOPE_EXPANSION_MILESTONES.md` Gate PG). **Gate PG.D (double-booking guard, F-PG5/D-PG9) appended 2026-09-28 — see `docs/PENUGASAN_MILESTONES.md` Gate PG.D for its VERIFY.**
 **Position:** Temporary scope-expansion chain per taste #40. It does **not** replace `IMPLEMENTATION_PLAN.md`, `SCOPE_EXPANSION_PLAN.md`, `SCOPE_EXPANSION_PRIVILEGES.md`, or `TRAINER_ATTENDANCE_PLAN.md` / `TRAINER_ATTENDANCE_MILESTONES.md`. When Gate PG.C closes, §11 records completion back on the source docs.
 **Contract order:** `docs/UNIVERSAL.md` (primary contract, read first) → `docs/IMPLEMENTATION_PLAN.md` Part 2 → `docs/SCOPE_EXPANSION_PLAN.md` + `docs/SCOPE_EXPANSION_PRIVILEGES.md` (scope-expansion first-reads) → `docs/TRAINER_ATTENDANCE_PLAN.md` §5.2/§8 + `docs/TRAINER_ATTENDANCE_MILESTONES.md` (assignment contract) → this file.
 
@@ -37,6 +37,7 @@
 | F-PG2 | **Daily timetable requested, unplanned.** Monthly school×date recap is planned (`TRAINER_ATTENDANCE_PLAN.md §8.3`); a daily person×time table (`Sekolah \| Trainer \| Asisten \| Waktu` per `Tanggal`) appears in no plan or milestone. | `TRAINER_ATTENDANCE_PLAN.md` §8 has no daily-timetable row; `SCOPE_EXPANSION_PLAN.md` Phase A has no such table |
 | F-PG3 | **Per-table export requested; hubs exist.** CSV pack (6 exports) and print-to-PDF (`window.print` + print CSS) are the sanctioned paths; no timetable export exists yet. | `src/lib/csv.js:10-28,30-119`; `PrintButton.jsx:10`; `FinanceReport.jsx:138-145`; `src/print.css` |
 | F-PG4 | **Out-of-scope observations, not built here.** Bug D is downstream of F-PG1 (empty assignments → `pengajarHonorStats` → beban 0, `finance.js:83`); Bug B needs a live multi-role repro; Bug C needs the exact `AlertDialog` text retry. | Prior verification 2026-09-24; `sekolah.php:165-183`, `SchoolList.jsx:129-183`; `rg "Invalid Branch"` → 0 hits in HEAD |
+| F-PG5 | **No duplicate guard on manual saves.** `PenugasanManager.save()` validates vocab/dates only (`src/lib/penugasan.js:55-102`); `trainer.php` gates cover/vocab but `validateTrainer` never did overlap checks (`server/validation/entities.php:362`). Two identical aktif rows for the same instructor persist (team Bug 7). | `PenugasanManager.jsx:153-251` (no overlap call); `entities.php:360-362`; `penugasan-manage.spec.js` (no duplicate-rejection case) |
 
 ## 4. Decision set (D-PG)
 
@@ -50,6 +51,7 @@
 | D-PG6 | **Export paths (concrete pick).** CSV = new `exportJadwalPenugasanCSV()` in `src/lib/csv.js` reusing `downloadCSV()` (BOM, quoting, date filename). PDF = existing print path (`PrintButton` + `printable-report`/`no-print` + `src/print.css`), user picks "Save as PDF" — no jsPDF/new dependency (needs a concrete failure to justify one; none here). Export writes only the filtered visible rows. | Locked |
 | D-PG7 | **Privilege boundary explicit (taste #33).** `superadmin` = all branches + branch filter; `admin_cabang` = own branch only (session `cabangId` is authority, never the client's — mirrors `sekolah.php:155-164`, `trainer.php:41-48`); trainer = own rows only, **no** assignment write (R-TA6/R-TA7, `authorize.php:191-212`). No `roleCanReadEntity()` change. | Locked |
 | D-PG8 | **Style source (taste #11, do not invent).** Table + modal + dialogs mirror `TrainerAttendanceAdmin.jsx:153-210`; primary `bg-blue-600 hover:bg-blue-700 text-white ... rounded-xl`, export `bg-emerald-600` (Part-5 design table). Indonesian copy pinned in §7. | Locked |
+| D-PG9 | **Same-host double-booking reject (concrete pick, recorded 2026-09-28).** Pairwise guard over the saved full-array payload: same `sekolahId` + both `aktif` + intersecting `periodeMulai..periodeSelesai` + same slot scope (exact triple equality; unscoped fans out and blocks anything in the same school — YAGNI idiom shared with `hasOverlappingActiveAssignment`/D-CS2, no interval matching). Same-id pairs (edit path) and cover-linked pairs (cover rows share origin scope by design) never block. Client pre-check in `save()` surfaces the pinned copy before the write; `trainer.php` 422s authoritatively so direct API writes hold too. Cross-host asisten double-booking stays deferred (§10). | Locked |
 
 ## 5. Data model (restatement, no change)
 
@@ -72,6 +74,7 @@ penugasanPengajar[] on trainer.payload (host = instruktur record):
 - **R-PG5** Concurrency respected: `trainer` update carries `version`; 409 (`_master.php:115-123`) surfaces as "data berubah, muat ulang" — never silent overwrite.
 - **R-PG6** Verification language `Verified: <command> -> <result>` / `Unverified:` (UNIVERSAL); every microtask has one OUTCOME + one falsifiable VERIFY (taste #2); narrowest check runs immediately after the first edit (taste #4/#6).
 - **R-PG7** `deploy/` is generated by `npm run build:deploy` only (taste #71); never hand-edit `deploy/`; parity gate is HARD (taste #72). Source hygiene gate: no `console.log` in `src/`, no build artifacts in `git status` (taste #20).
+- **R-PG8** No double booking (D-PG9): manual saves that would persist two overlapping aktif rows for one instructor are rejected with the pinned copy `Penugasan ganda: sekolah dan waktu yang sama sudah terisi pada rentang tanggal ini.` — client pre-check + server 422, same predicate both layers.
 
 ## 7. UI concept (pinned copy)
 
@@ -85,6 +88,7 @@ Nav item `Penugasan Pengajar` (admin/superadmin only; trainer never sees the wri
 | F-PG2 daily table | Monthly matrix planned (`TRAINER_ATTENDANCE_PLAN.md §8.3`, R-TA5 derived view) | Daily person×time table never specified | New build: PG.B (derived-view analog, no re-plan of §8.3) |
 | F-PG3 export | CSV pack `IMPLEMENTATION_PLAN.md M2`/M3.4 print; `csv.js` + `PrintButton` contracts | Per-table timetable export never listed | New build: PG.C (additive, hub logic reused) |
 | F-PG4 out-of-scope | Bug D follows D-TA14 Gate C (`finance.js:83`); Bug C/B owned by prior threads | Exact C message + B repro are inherently runtime evidence | Deferred with owners (§10), not built here |
+| F-PG5 duplicate manual rows | `PenugasanManager.jsx:153-251` (vocab/dates only); `entities.php:360-362` (never did overlap checks); no duplicate-rejection case in `penugasan-manage.spec.js` | Rejection rule + pinned copy never specified | New build: PG.D (D-PG9/R-PG8, this chain) |
 
 ## 9. Access model (explicit, no broadening)
 
@@ -101,6 +105,7 @@ Nav item `Penugasan Pengajar` (admin/superadmin only; trainer never sees the wri
 |---|---|---|
 | Bug C exact-message retry (`Cabang wajib dipilih` vs server 422 vs stale `Invalid Branch`) | Operator + `SchoolList.jsx`/`sekolah.php` thread | Needs runtime evidence (dialog text + `POST /api/sekolah.php` body); this chain must not patch it blind (taste #13) |
 | Bug B multi-account direction repro | `MULTI_ACCOUNT_SYNC.md` MAS follow-up | Lowest priority per instruction; needs per-role `read.php?entity=sekolah` capture |
+| Cross-host asisten double-booking (same asisten, same slot, two instructors) | Future plan amendment | Needs a cross-host server scan; PG.D scope is same-host only per recorded decision 2026-09-28 |
 | Per-assignment time overrides | Future plan amendment | Schema change; explicitly out of R-PG4 |
 | Weekday enforcement on attendance | Future decision | Would change R-TA8; needs explicit business sign-off like TA.C.2b |
 
