@@ -12,8 +12,8 @@ import PrintButton from '../../components/PrintButton.jsx'
 // R-TA5: the matrix is a derived view built from `absensiPengajar`
 // records, never stored. Scope comes free from readCached(): admin
 // cabang only receives own-cabang rows (server-enforced), superadmin
-// receives all. Cell text: `Nama (I/A)` + optional ` — keterangan` +
-// optional ` (status)` when status is not Hadir.
+// receives all. Cell text: `Nama (I/A)` + optional ` — status,
+// keterangan, catatan` (BUG6: admin correction notes visible).
 export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
   const { periodeKey } = usePeriod()
   const [tick, setTick] = useState(0)
@@ -56,6 +56,9 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
             peran: entry.label,
             status: entry.status || '',
             keterangan: entry.keterangan || '',
+            // BUG6: admin correction notes get their own export column
+            // (teks already mirrors them via formatMatrixCell).
+            catatan: entry.catatan || '',
             teks: formatMatrixCell(entry),
           })
         })

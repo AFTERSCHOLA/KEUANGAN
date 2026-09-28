@@ -41,13 +41,17 @@ export function resolveCurrentAbsensiPengajar(records = []) {
 // visibleRows) — a corrected row never appears twice in one cell.
 // AP.C.2 (D-AP5) — matrix cell text. Pure so the format is unit-pinned:
 // Hadir renders bare `Nama (I/A)` (exemplar default); any non-Hadir
-// status joins the details after the dash, keterangan last:
-// `Nama (I) — EXPO`, `Nama (I) — Izin`, `Nama (I) — Izin, Acara keluarga`.
+// status joins the details after the dash, keterangan next, admin
+// correction note (catatan) last — BUG6: corrections were invisible in
+// Rekap until catatan joined this list:
+// `Nama (I) — EXPO`, `Nama (I) — Izin`, `Nama (I) — Izin, Acara keluarga`,
+// `Nama (A) — EXPO, Catatan ralat`. Empty catatan renders byte-identically.
 export function formatMatrixCell(entry) {
   let text = `${entry.nama} (${entry.label})`
   const details = []
   if (entry.status && entry.status !== 'Hadir') details.push(entry.status)
   if (entry.keterangan) details.push(entry.keterangan)
+  if (entry.catatan) details.push(entry.catatan)
   if (details.length > 0) text += ` — ${details.join(', ')}`
   return text
 }
@@ -71,8 +75,9 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
       nama: t?.nama || 'Trainer tidak ditemukan',
       label,
       keterangan: r.keterangan || null,
-      // Display-only thread for the matrix title-tooltip; never part of
-      // cell text (formatMatrixCell) or the CSV export mirror.
+      // BUG6: admin correction notes ride into the cell text
+      // (formatMatrixCell) and the CSV export mirror, not just the
+      // matrix title-tooltip.
       catatan: r.catatan || null,
       status: r.status,
     }

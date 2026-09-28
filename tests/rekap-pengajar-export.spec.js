@@ -46,7 +46,7 @@ test('AP.C.3 rekap export carries full details + print fires', async ({ page, pa
   await switchRole(page, 'superadmin')
   csrf = await primeCsrf(page)
   const { id: schId } = await createSekolahSuperadmin(page, csrf, `SD RPX ${suffix}`, 500000, CABANG_A, `RPX-${suffix}`)
-  for (const [tid, status, ket] of [[widiaId, 'Hadir', null], [asyifaId, 'Hadir', 'EXPO'], [asyifaId, 'Izin', 'Pengganti']]) {
+  for (const [tid, status, ket, cat] of [[widiaId, 'Hadir', null, ''], [asyifaId, 'Hadir', 'EXPO', 'Catatan ralat RPX'], [asyifaId, 'Izin', 'Pengganti', '']]) {
     const rid = `absp-RPX-${suffix}-${Math.random().toString(36).slice(2, 6)}`
     rowIds.push(rid)
     csrf = await primeCsrf(page)
@@ -55,7 +55,7 @@ test('AP.C.3 rekap export carries full details + print fires', async ({ page, pa
       data: {
         entries: [{
           key: 'absensiPengajar', id: rid,
-          record: { id: rid, trainerId: tid, sekolahId: schId, tanggal: today, periode: today.slice(0, 7), status, keterangan: ket, catatan: '', cabangId: CABANG_A },
+          record: { id: rid, trainerId: tid, sekolahId: schId, tanggal: today, periode: today.slice(0, 7), status, keterangan: ket, catatan: cat, cabangId: CABANG_A },
         }],
       },
     })
@@ -68,7 +68,7 @@ test('AP.C.3 rekap export carries full details + print fires', async ({ page, pa
   await openMatriks(page)
   const schRow = page.locator('tr', { hasText: `SD RPX ${suffix}` })
   await expect(schRow.getByRole('cell', { name: `Widia RPX ${suffix} (I)` })).toBeVisible()
-  await expect(schRow.getByRole('cell', { name: `Asyifa RPX ${suffix} (A) — EXPO` })).toBeVisible()
+  await expect(schRow.getByRole('cell', { name: `Asyifa RPX ${suffix} (A) — EXPO, Catatan ralat RPX` })).toBeVisible()
 
   const [download] = await Promise.all([
     page.waitForEvent('download'),
@@ -77,9 +77,9 @@ test('AP.C.3 rekap export carries full details + print fires', async ({ page, pa
   console.log('## AP.C.3 download:', download.suggestedFilename())
   expect(download.suggestedFilename()).toContain('Rekap_Pengajar_')
   const content = fs.readFileSync(await download.path(), 'utf8')
-  expect(content).toContain('Sekolah,Tanggal,Nama,Peran,Status,Keterangan,Teks')
+  expect(content).toContain('Sekolah,Tanggal,Nama,Peran,Status,Keterangan,Catatan,Teks')
   expect(content).toContain(`Asyifa RPX ${suffix}`)
-  expect(content).toContain('— EXPO')
+  expect(content).toContain('— EXPO, Catatan ralat RPX')
   expect(content).toContain('— Izin, Pengganti')
   console.log('## AP.C.3 csv full-detail OK')
 

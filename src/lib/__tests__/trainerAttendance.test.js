@@ -194,4 +194,10 @@ describe('formatMatrixCell (AP.C.2)', () => {
   it('renders status before keterangan when both present', () => {
     expect(formatMatrixCell({ nama: 'Asyifa', label: 'A', status: 'Izin', keterangan: 'Acara keluarga' })).toBe('Asyifa (A) — Izin, Acara keluarga')
   })
+
+  it('BUG6: admin correction note (catatan) joins last; empty catatan renders byte-identically', () => {
+    expect(formatMatrixCell({ nama: 'Asyifa', label: 'A', status: 'Hadir', keterangan: 'EXPO', catatan: 'Catatan ralat' })).toBe('Asyifa (A) — EXPO, Catatan ralat')
+    expect(formatMatrixCell({ nama: 'Widia', label: 'I', status: 'Hadir', keterangan: null, catatan: '' })).toBe('Widia (I)')
+    expect(formatMatrixCell({ nama: 'Widia', label: 'I', status: 'Hadir', keterangan: null })).toBe('Widia (I)')
+  })
 })
