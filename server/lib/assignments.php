@@ -249,6 +249,72 @@ function validateNoOverlappingAssignments(array $rows): ?string
     return null;
 }
 
+// DB.A.1 (F-DB1/F-DB2; D-DB1, D-DB2, D-DB5) — cross-host occupant guard.
+// Pure: compares the about-to-be-saved rows of ONE host ($newRows)
+// against every other same-branch host's rows ($foreignRows — the caller
+// excludes the host record itself; its own rows were already checked by
+// validateNoOverlappingAssignments). Two rows conflict iff: same
+// sekolahId + both aktif + intersecting periodeMulai..periodeSelesai
+// (open end = 9999-12-31, same range helpers as the PG.D gate) + same
+// slot scope (exact triple; unscoped fans out — same rule, YAGNI no
+// intervals) + occupant sets intersect. Occupants = {trainerId} ∪
+// {asistenId} ∪ asistenIds[] with nulls/empties dropped — the same union
+// as penugasanInvolvesTrainer() client-side and
+// trainerHasActiveAssignment() server-side. Same-id pairs (edit path)
+// and cover-linked pairs (either direction; cover shares its origin
+// scope by design, D-CS2) never block; rows with no attributable
+// occupant never block. Returns the pinned Indonesian copy shared with
+// the PG.D gate (D-DB6) or null.
+function penugasanOccupants(array $row): array
+{
+    $out = [];
+    foreach ([$row['trainerId'] ?? null, $row['asistenId'] ?? null] as $single) {
+        if (is_string($single) && trim($single) !== '') $out[] = $single;
+    }
+    $extra = $row['asistenIds'] ?? null;
+    if (is_array($extra)) {
+        foreach ($extra as $id) {
+            if (is_string($id) && trim($id) !== '') $out[] = $id;
+        }
+    }
+    return array_values(array_unique($out));
+}
+
+function findCrossHostConflict(array $newRows, array $foreignRows): ?string
+{
+    $err = 'Penugasan ganda: sekolah dan waktu yang sama sudah terisi pada rentang tanggal ini.';
+    foreach ($newRows as $a) {
+        if (!is_array($a)) continue;
+        foreach ($foreignRows as $b) {
+            if (!is_array($b)) continue;
+            $idA = $a['id'] ?? null;
+            $idB = $b['id'] ?? null;
+            if (is_string($idA) && $idA !== '' && $idA === $idB) continue;
+            $coverA = $a['coverOf'] ?? null;
+            $coverB = $b['coverOf'] ?? null;
+            if ((is_string($coverA) && $coverA !== '' && $coverA === $idB)
+                || (is_string($coverB) && $coverB !== '' && $coverB === $idA)) continue;
+            if (($a['aktif'] ?? null) !== true || ($b['aktif'] ?? null) !== true) continue;
+            $sekA = $a['sekolahId'] ?? null;
+            $sekB = $b['sekolahId'] ?? null;
+            if (!is_string($sekA) || $sekA === '' || $sekA !== $sekB) continue;
+            $start = max(penugasanRangeStart($a['periodeMulai'] ?? null), penugasanRangeStart($b['periodeMulai'] ?? null));
+            $end = min(penugasanRangeEnd($a['periodeSelesai'] ?? null), penugasanRangeEnd($b['periodeSelesai'] ?? null));
+            if (strcmp($start, $end) > 0) continue;
+            $keyA = slotKeyOfAssignment($a);
+            $keyB = slotKeyOfAssignment($b);
+            if ($keyA !== $keyB && !isUnscopedAssignmentSlot($a) && !isUnscopedAssignmentSlot($b)) continue;
+            $occA = penugasanOccupants($a);
+            if ($occA === []) continue;
+            $occB = penugasanOccupants($b);
+            if ($occB === []) continue;
+            if (count(array_intersect($occA, $occB)) === 0) continue;
+            return $err;
+        }
+    }
+    return null;
+}
+
 function hasOverlappingActiveAssignment(array $rows, string $sekolahId, string $today, ?array $slot = null, ?string $excludeId = null): bool
 {
     $slotKey = null;

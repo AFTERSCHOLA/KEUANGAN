@@ -156,6 +156,41 @@ if ($method === 'POST' || $method === 'PUT') {
         }
     }
 
+    // DB.A.1 (F-DB1/F-DB2; D-DB3) — server-authoritative cross-host scan.
+    // Same predicate as the PG.D gate above plus occupant intersection
+    // (findCrossHostConflict, pure and bridge-tested). Branch bound: only
+    // same-cabang hosts are scanned (F-DB6; $cabangId is session authority
+    // for admin_cabang and the stored record branch for superadmin
+    // update). The host record itself is excluded — its own rows were
+    // already checked by the PG.D gate. Foreign rows are compared
+    // server-side and never echoed beyond the 422 copy (taste #33).
+    if (isset($data['penugasanPengajar']) && is_array($data['penugasanPengajar'])) {
+        $scanDb = database();
+        $scanHostId = (isset($data['id']) && is_string($data['id'])) ? $data['id'] : '';
+        $scanSql = 'SELECT id, payload FROM trainer WHERE cabang_id = :cabang';
+        $scanParams = [':cabang' => $cabangId];
+        if ($scanHostId !== '') {
+            $scanSql .= ' AND id != :host';
+            $scanParams[':host'] = $scanHostId;
+        }
+        $scanStmt = $scanDb->prepare($scanSql);
+        $scanStmt->execute($scanParams);
+        $scanForeign = [];
+        while ($scanRow = $scanStmt->fetch()) {
+            $scanPayload = json_decode((string) ($scanRow['payload'] ?? ''), true);
+            if (!is_array($scanPayload)) continue;
+            $scanList = $scanPayload['penugasanPengajar'] ?? [];
+            if (!is_array($scanList)) continue;
+            foreach ($scanList as $scanAssignment) {
+                if (is_array($scanAssignment)) $scanForeign[] = $scanAssignment;
+            }
+        }
+        $crossError = findCrossHostConflict($data['penugasanPengajar'], $scanForeign);
+        if ($crossError !== null) {
+            jsonResponse(['error' => $crossError], 422);
+        }
+    }
+
     masterWrite('trainer', $user, record: $data, overrides: ['cabangId' => $cabangId], action: $action);
 } elseif ($method === 'DELETE') {
     if ($role !== 'admin_cabang') {
