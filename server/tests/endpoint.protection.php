@@ -1241,6 +1241,44 @@ $b4CorrectPayloadTrainer = [
 [$status] = req('POST', "$base/server/api/absensiPengajar.php", $b4CorrectPayloadTrainer, $cookieTrainerA, $csrfTrainerA);
 check('trainer using action=correct is rejected -> 403', $status === 403, "got $status");
 
+// T2.E.2 (F1) — correct-path forged-third-id must 422
+// (server/validation/entities.php:551-553): external row recorded by the
+// trainer, admin corrects carrying a dicatatOleh that is neither self nor
+// the preserved original recorder.
+$b4ExtForged = 'ext-tb4f-' . uniqid();
+$pdo->prepare('INSERT INTO eksternal (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $b4ExtForged,
+    ':c' => $branchA,
+    ':p' => json_encode([
+        'id' => $b4ExtForged, 'nama' => 'Asisten Eksternal TB4F',
+        'sekolahId' => $b2SekolahValid, 'cabangId' => $branchA,
+    ], JSON_UNESCAPED_UNICODE),
+]);
+$b4ExtOrigId = 'absp-tb4f-orig-' . uniqid();
+$pdo->prepare('INSERT INTO absensi_pengajar (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $b4ExtOrigId,
+    ':c' => $branchA,
+    ':p' => json_encode([
+        'id' => $b4ExtOrigId, 'trainerId' => $b4ExtForged, 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Izin', 'cabangId' => $branchA,
+        'dicatatOleh' => $trainerUserId,
+    ], JSON_UNESCAPED_UNICODE),
+]);
+$b4ForgedCorrect = [
+    'action' => 'correct',
+    'correctionOf' => $b4ExtOrigId,
+    'record' => [
+        'id' => 'absp-tb4f-corr-' . uniqid(),
+        'trainerId' => $b4ExtForged, 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Hadir', 'cabangId' => $branchA,
+        'dicatatOleh' => 'usr-someone-else',
+    ],
+];
+[$status, $b4ForgedBody] = req('POST', "$base/server/api/absensiPengajar.php", $b4ForgedCorrect, $cookieAdminA, $csrfAdminA);
+check('correct-path external correction with forged third-id recorder -> 422 (preserved recorder gate)', $status === 422 && str_contains(json_encode($b4ForgedBody), 'dicatatOleh'), "got $status " . json_encode($b4ForgedBody));
+$pdo->exec("DELETE FROM absensi_pengajar WHERE id LIKE 'absp-tb4f-%'");
+$pdo->exec("DELETE FROM eksternal WHERE id = '$b4ExtForged'");
+
 $row = auditRow($pdo, 'absensiPengajar_recorded', $b4CorrectPayloadA['record']['id']);
 check('absensiPengajar correction audit row exists', $row !== false);
 check('correction audit metadata carries correctionOf', $row && (json_decode((string) $row['metadata'], true)['correctionOf'] ?? null) === $b4OriginalId, json_encode($row));
