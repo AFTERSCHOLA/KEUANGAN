@@ -468,7 +468,8 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Metode</label>
+                            {/* T2.C.1 (D-T2-4) — kanal label disambiguates Metode from sumber dana; copy-only. */}
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Metode (kanal)</label>
                             <select value={bulkForm.metode} onChange={e => setBulkForm({ ...bulkForm, metode: e.target.value })} disabled={bulkSaving} className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white disabled:opacity-60">
                               {BULK_METODE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
@@ -478,6 +479,8 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                             <input type="date" value={bulkForm.tanggalBayar} onChange={e => setBulkForm({ ...bulkForm, tanggalBayar: e.target.value })} disabled={bulkSaving} className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white disabled:opacity-60" />
                           </div>
                         </div>
+                        {/* T2.C.1 (D-T2-4) — school-source hint; bulk mints school-source rows only (copy-only). */}
+                        <p className="text-[11px] text-slate-400">Sumber dana baris ini: Sekolah (murid yang sudah lunas dilewati).</p>
                         <div>
                           <label className="text-[10px] font-bold text-slate-400 uppercase">Diterima Oleh</label>
                           <input value={bulkForm.diterimaOleh} onChange={e => setBulkForm({ ...bulkForm, diterimaOleh: e.target.value })} disabled={bulkSaving} placeholder="Nama penerima" className="w-full mt-0.5 rounded-lg border p-2 text-xs disabled:opacity-60" />

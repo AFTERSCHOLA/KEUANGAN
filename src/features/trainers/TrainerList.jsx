@@ -39,6 +39,24 @@ export function resolveNewLinkSlotPicks(formSekolahIds, oldSekolahIds, slotPicks
   return picksMap
 }
 
+// T2.C.1 (D-T2-4) — card scope note, copy-only disambiguation (no
+// ledger/scope/total math touched; T2.D.1 logic above untouched). Reads the
+// effective link rows: any unscoped row (null triple = fans out) pins
+// `· Cakupan: Semua slot`, otherwise each scoped row pins
+// `· Cakupan: <Hari HH:MM–HH:MM>`. Trainers with no link rows render no note.
+export function cakupanNoteForTrainer(trainer) {
+  const rows = Array.isArray(trainer?.penugasanPengajar)
+    ? trainer.penugasanPengajar.filter(r => r && r.aktif !== false)
+    : []
+  if (rows.length === 0) return ''
+  if (rows.some(r => !r.hari && !r.jamMulai && !r.jamSelesai)) return '· Cakupan: Semua slot'
+  const parts = rows
+    .filter(r => r.hari)
+    .map(r => (r.jamMulai ? `${r.hari} ${r.jamMulai}–${r.jamSelesai || ''}` : `${r.hari}`))
+  if (parts.length === 0) return '· Cakupan: Semua slot'
+  return `· Cakupan: ${parts.join(', ')}`
+}
+
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => readCached('trainer'))
   const [modalOpen, setModalOpen] = useState(false)
@@ -398,7 +416,8 @@ if (serverTrainer && initialPassword) {
                 </div>
                 <div className="flex justify-between pt-1.5 border-t border-dashed">
                   <span className="text-slate-400">Jadwal Mengajar</span>
-                  <span className="font-semibold text-slate-700">{derivedJadwalText(t.sekolahIds, readCached('sekolah'))}</span>
+                  {/* T2.C.1 (D-T2-4) — scope note appended copy-only; D.1 logic untouched. */}
+                  <span className="font-semibold text-slate-700 text-right">{derivedJadwalText(t.sekolahIds, readCached('sekolah'))}{cakupanNoteForTrainer(t) ? ` ${cakupanNoteForTrainer(t)}` : ''}</span>
                 </div>
                 <div className="flex justify-between font-bold text-slate-700 pt-1 border-t">
                   <span>Honor per Kedatangan</span>

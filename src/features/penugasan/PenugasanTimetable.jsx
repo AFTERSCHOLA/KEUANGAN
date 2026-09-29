@@ -171,7 +171,8 @@ export default function PenugasanTimetable() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="py-12 text-center text-slate-400">
-                    Belum ada jadwal penugasan untuk tanggal ini.
+                    {/* T2.C.1 (D-T2-4) — empty-state names what was viewed (tanggal + hari), copy-only. */}
+                    Tidak ada sesi pada {tanggal}{hari ? ` (${hari})` : ''}.
                   </td>
                 </tr>
               )}
