@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { readCached, usePeriod, trainerHasAnyActiveAssignmentToSekolahClient } from '../../lib/store.js'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { readCached, usePeriod, subscribeStore, read, trainerHasAnyActiveAssignmentToSekolahClient } from '../../lib/store.js'
 import { financialData } from '../../lib/finance.js'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 
@@ -14,6 +14,12 @@ function scheduleIncludesToday(sekolah, dayName) {
 
 export default function TrainerDashboard({ trainerId }) {
   const { periodeKey } = usePeriod()
+  // D-T2-2 (F-T2-2 fix) — mirror TrainerAttendanceSummary.jsx:16-29: tick
+  // state + subscribeStore(bump) so a pre-hydrate mount re-renders when the
+  // sync lands. financialData call below unchanged; no copy change.
+  const [tick, setTick] = useState(0)
+  const bump = useCallback(() => setTick(t => t + 1), [])
+  useEffect(() => subscribeStore(bump), [bump])
   const periode = periodeKey()
   const trainers = readCached('trainer')
   const trainer = trainers.find(t => t.id === trainerId)
@@ -22,8 +28,18 @@ export default function TrainerDashboard({ trainerId }) {
   const absensi = readCached('absensi')
   // TA.C.3 (D-TA14 Locked berpindah) — Honor Saya beban comes from the
   // Gate C source; legacy absensi still feeds the schedule/done badges.
-  const absensiPengajar = readCached('absensiPengajar')
-  const honorPayments = readCached('honorPayments')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const absensiPengajar = useMemo(() => readCached('absensiPengajar'), [tick])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const honorPayments = useMemo(() => readCached('honorPayments'), [tick])
+
+  // D-T2-2 — mount-time pull, mirroring TrainerAttendanceSummary.jsx:27-29:
+  // the dashboard remounts on tab switch without re-hydrate (App.jsx
+  // hydrates on currentUser.id only), so re-read both ledgers here.
+  useEffect(() => {
+    read('absensiPengajar').then(() => setTick(t => t + 1))
+    read('honorPayments').then(() => setTick(t => t + 1))
+  }, [])
   const sppPayments = readCached('sppPayments')
   const finance = useMemo(
     () => financialData({ sekolah, siswa, trainer: trainers, absensi, absensiPengajar, honorPayments, sppPayments, periode }),
