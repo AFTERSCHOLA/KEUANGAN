@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, writeRemote, subscribeStore } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
-import { newPenugasanRow, validateRowDates, PENUGASAN_HARI, findOverlappingPair, findCrossHostPair, PENUGASAN_OVERLAP_ERROR } from '../../lib/penugasan.js'
+import { newPenugasanRow, validateRowDates, dayNameForTanggal, PENUGASAN_HARI, findOverlappingPair, findCrossHostPair, PENUGASAN_OVERLAP_ERROR } from '../../lib/penugasan.js'
 import Modal from '../../components/Modal.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
@@ -363,7 +363,7 @@ export default function PenugasanManager() {
     if (!coverForm.substituteId) return 'Pengganti wajib dipilih.'
     if (!coverForm.tanggal) return 'Tanggal wajib diisi.'
     const sch = sekolahById.get(coverOrigin.sekolahId)
-    return validateRowDates({
+    const vocabErr = validateRowDates({
       sekolahId: coverOrigin.sekolahId,
       trainerId: coverForm.substituteId,
       periodeMulai: coverForm.tanggal,
@@ -373,6 +373,18 @@ export default function PenugasanManager() {
       jamSelesai: coverForm.jamSelesai || null,
       sekolahJadwalList: sch?.jadwalList,
     })
+    if (vocabErr) return vocabErr
+    // T2.D.3 (F-T2-12; D-T2-8) — save-side weekday guard. The retrieve
+    // gate (buildDailyTimetable) renders a scoped row only on dates
+    // whose weekday matches its hari, so a scoped cover whose tanggal
+    // falls on another weekday would be born invisible on its own
+    // tanggal (creatable but invisible). Block it here with the pinned
+    // copy; unscoped covers fan out over the tanggal weekday, no guard.
+    const coverHari = coverForm.hari || null
+    if (coverHari && dayNameForTanggal(coverForm.tanggal) !== coverHari) {
+      return `Tanggal pengganti harus jatuh pada hari ${coverHari}.`
+    }
+    return null
   }
 
   function requestCoverConfirm() {
