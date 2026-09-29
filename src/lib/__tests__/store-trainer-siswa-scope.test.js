@@ -122,6 +122,80 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     expect(store.readCached('sppPayments').map(p => p.id)).toEqual(['spp-1'])
   })
 
+  it('T2.A.1 cross-record wipe: read(siswa) trusts server scope after read(trainer) own-only overwrite', async () => {
+    // Instructor-hosted asistenIds link (cross-record shape): the
+    // assignment lives on trn-ins, not on the viewer's own record.
+    // Server authorize.php:153-155 returns own-record-only for
+    // entity=trainer, but server-filters entity=siswa via DB
+    // assignments — the client must not re-filter that remote list
+    // against its freshly-wiped local trainer cache (F-T2-1/D-T2-1).
+    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
+      { id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] },
+      {
+        id: 'trn-ins',
+        nama: 'Instruktur Sim',
+        sekolahIds: ['sch-A'],
+        penugasanPengajar: [
+          {
+            sekolahId: 'sch-A',
+            trainerId: 'trn-ins',
+            asistenId: null,
+            asistenIds: ['trn-self'],
+            aktif: true,
+            periodeMulai: '2026-01-01',
+            periodeSelesai: null,
+          },
+        ],
+      },
+    ]))
+    localStorage.setItem('afterschola_v4_siswa', JSON.stringify([
+      { id: 'sw-1', nama: 'Siswa A', sekolahId: 'sch-A' },
+      { id: 'sw-2', nama: 'Siswa B', sekolahId: 'sch-B' },
+    ]))
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    // Sanity: pre-sync client scope resolves the cross-record link.
+    expect(store.readCached('siswa').map(s => s.id)).toEqual(['sw-1'])
+    globalThis.fetch = async (url) => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => {
+        const u = String(url)
+        // Server own-only scope for trainer (authorize.php:153-155).
+        if (u.includes('entity=trainer')) {
+          return [{ id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] }]
+        }
+        // Server-filtered siswa: DB assignment scope keeps sch-A row.
+        if (u.includes('entity=siswa')) {
+          return [{ id: 'sw-1', nama: 'Siswa A', sekolahId: 'sch-A' }]
+        }
+        return []
+      },
+    })
+    await store.read('trainer')
+    const siswa = await store.read('siswa')
+    expect(siswa.map(s => s.id)).toEqual(['sw-1'])
+  })
+
+  it('T2.A.1 hydrateServerData fetches trainer before the remaining entities', async () => {
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    const order = []
+    globalThis.fetch = async (url) => {
+      order.push(String(url))
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => [],
+      }
+    }
+    await store.hydrateServerData()
+    expect(order.length).toBeGreaterThan(0)
+    expect(order[0]).toContain('entity=trainer')
+  })
+
   it('DC.C.1 union: trainer in asistenIds[1] only sees the assigned school students', async () => {
     localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
       { id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] },

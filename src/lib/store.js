@@ -244,6 +244,14 @@ export async function read(key) {
     writeRaw(key, merged)
     notifyStoreChanged()
 
+    // D-T2-1 (F-T2-1 fix) — trainer role trusts the server-filtered
+    // remote array directly: the server scope (authorize.php + read.php
+    // DB assignments) is authoritative, and re-filtering here against
+    // the possibly-stale local trainer cache drops cross-record rows
+    // (read('trainer') is own-record-only). readCached keeps the
+    // client filter for offline/sync paths. No privilege change.
+    if (ctx.role === 'trainer') return merged
+
     return merged.filter(record => isWithinScope(key, record, ctx))
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
@@ -263,7 +271,10 @@ export function subscribeStore(listener) {
 }
 
 export async function hydrateServerData() {
-  await Promise.all([...READABLE_SERVER_KEYS].map(key => read(key)))
+  // D-T2-1 (F-T2-1 fix) — trainer row first so the remaining reads land
+  // on a fresh trainer cache; trainer-role read() trusts server scope.
+  await read('trainer')
+  await Promise.all([...READABLE_SERVER_KEYS].filter(key => key !== 'trainer').map(key => read(key)))
   migrateSiswaFoto()
 }
 
