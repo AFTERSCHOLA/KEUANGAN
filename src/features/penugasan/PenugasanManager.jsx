@@ -44,9 +44,13 @@ export default function PenugasanManager() {
   // sees own branch, superadmin sees all, trainer sees own rows only.
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
   const trainers = useMemo(() => readCached('trainer'), [tick])
+  // T2.D.2 (F-T2-11; D-T2-7) — externals read reference-only (same idiom
+  // as EksternalManager; no login for externals, no new keys).
+  const eksternal = useMemo(() => readCached('eksternal'), [tick])
 
   const trainerById = useMemo(() => new Map(trainers.map(t => [t.id, t])), [trainers])
   const sekolahById = useMemo(() => new Map(sekolah.map(s => [s.id, s])), [sekolah])
+  const eksternalById = useMemo(() => new Map((eksternal || []).map(e => [e && e.id, e])), [eksternal])
 
   const rows = useMemo(() => {
     const out = []
@@ -68,6 +72,9 @@ export default function PenugasanManager() {
       .filter(id =>
         id &&
         !trainerById.has(id) &&
+        // T2.D.2 — externals resolve from the local cache (never a
+        // trainer-name lookup).
+        !eksternalById.has(id) &&
         !crossScopeNames[id] &&
         !lookupAttempted[id]
       )
@@ -97,7 +104,7 @@ export default function PenugasanManager() {
       setCrossScopeNames(next)
     })
     .catch(() => {})
-}, [rows, trainerById, crossScopeNames, lookupAttempted])
+}, [rows, trainerById, eksternalById, crossScopeNames, lookupAttempted])
 
   // CS.A.1 (F-CS1; D-CS1/D-PS6) — human-readable scope for the Slot
   // column: `Semua slot` when unscoped, else `Hari · HH:MM–HH:MM`
@@ -117,10 +124,11 @@ export default function PenugasanManager() {
   }
 
   // DC.C.2 — union display: legacy asistenId (position 0) + asistenIds.
+  // T2.D.2 (F-T2-11; D-T2-7) — externals resolve from the local cache.
   function asistenNames(r) {
     const ids = [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean)
     if (ids.length === 0) return '—'
-    return ids.map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Memuat...').join(', ')
+    return ids.map(id => trainerById.get(id)?.nama || eksternalById.get(id)?.nama || crossScopeNames[id] || 'Memuat...').join(', ')
   }
 
   function openAdd() {
@@ -133,11 +141,17 @@ export default function PenugasanManager() {
   // stay locked: moving a row across host records is a delete+create, not
   // an edit (entities.php:172-175 trainerId-host invariant).
   function openEdit(row) {
+    // T2.D.2 (F-T2-11; D-T2-7) — externals ride asistenIds (legacy
+    // asistenId is trainer-only), so a row whose asistenIds holds
+    // externals pre-fills from that key (single entry reads as Asisten
+    // 1, a pair reads as Asisten 1 + 2); internal rows map exactly as
+    // before, no data loss on edit-save round-trip.
+    const extraIds = Array.isArray(row.asistenIds) ? row.asistenIds : []
     setForm({
       sekolahId: row.sekolahId || '',
       trainerId: row.trainerId || '',
-      asistenId: row.asistenId || '',
-      asisten2Id: (Array.isArray(row.asistenIds) ? row.asistenIds[0] : null) || '',
+      asistenId: row.asistenId || extraIds[0] || '',
+      asisten2Id: (row.asistenId ? extraIds[0] : extraIds[1]) || '',
       hari: row.hari || '',
       jamMulai: row.jamMulai || '',
       jamSelesai: row.jamSelesai || '',
@@ -189,6 +203,26 @@ export default function PenugasanManager() {
       showError('Instruktur tidak ditemukan. Muat ulang halaman dan coba lagi.')
       return
     }
+    // T2.D.2 (F-T2-11; D-T2-7) — external picks ride asistenIds: the
+    // server union gate accepts trainer OR external there
+    // (entities.php:253), while legacy asistenId is trainer-only by
+    // design (entities.php:226-231 + eksternal.php:110). All-internal
+    // picks keep the legacy placement byte-identically; any external
+    // pick consolidates to first-internal-in-position-0 + rest in
+    // asistenIds (max 2 total, existing keys only).
+    const pickedAsisten = [form.asistenId, form.asisten2Id].filter(Boolean)
+    const hasExternalPick = pickedAsisten.some(id => eksternalById.has(id))
+    let saveAsistenId
+    let saveAsistenIds
+    if (!hasExternalPick) {
+      saveAsistenId = form.asistenId || null
+      saveAsistenIds = form.asisten2Id ? [form.asisten2Id] : null
+    } else {
+      const firstInternal = pickedAsisten.find(id => !eksternalById.has(id)) || null
+      const extras = pickedAsisten.filter(id => id !== firstInternal)
+      saveAsistenId = firstInternal
+      saveAsistenIds = extras.length > 0 ? extras : null
+    }
     setSaving(true)
     try {
       const existing = Array.isArray(host.penugasanPengajar) ? host.penugasanPengajar : []
@@ -199,10 +233,11 @@ export default function PenugasanManager() {
         next = existing.map(a => (a && a.id === editing.assignmentId
           ? {
               ...a,
-              asistenId: form.asistenId || null,
+              asistenId: saveAsistenId,
               // DC.C.2 — writes prefer the new key (D-CS4 additive rule);
               // clearing Asisten 2 writes null (legacy position 0 kept).
-              asistenIds: form.asisten2Id ? [form.asisten2Id] : null,
+              // T2.D.2 — external picks arrive here via asistenIds.
+              asistenIds: saveAsistenIds,
               cabangId: sch?.cabangId || host?.cabangId || a.cabangId || null,
               hari: form.hari || null,
               jamMulai: form.jamMulai || null,
@@ -216,8 +251,8 @@ export default function PenugasanManager() {
         const row = newPenugasanRow({
           sekolahId: form.sekolahId,
           trainerId: form.trainerId,
-          asistenId: form.asistenId || null,
-          asistenIds: form.asisten2Id ? [form.asisten2Id] : null,
+          asistenId: saveAsistenId,
+          asistenIds: saveAsistenIds,
           // Nested cabangId: send the school branch so same-branch rows validate
           // (entities.php:176-194); cross-branch rows correctly 422 instead of
           // silently landing (D-PG plan §4).
@@ -565,6 +600,9 @@ export default function PenugasanManager() {
           >
             <option value="">— Tanpa asisten —</option>
             {trainers.filter(t => t.id !== form.trainerId).map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
+            {/* T2.D.2 (F-T2-11; D-T2-7) — union: same-school externals
+                with the pinned ` (Eksternal)` suffix (PLAN §4). */}
+            {(eksternal || []).filter(e => e && e.sekolahId === form.sekolahId && e.id !== form.trainerId).map(e => <option key={e.id} value={e.id}>{e.nama} (Eksternal)</option>)}
           </select>
         </div>
         <div>
@@ -577,6 +615,7 @@ export default function PenugasanManager() {
           >
             <option value="">— Tanpa asisten 2 —</option>
             {trainers.filter(t => t.id !== form.trainerId && t.id !== form.asistenId).map(t => <option key={t.id} value={t.id}>{t.nama}</option>)}
+            {(eksternal || []).filter(e => e && e.sekolahId === form.sekolahId && e.id !== form.trainerId && e.id !== form.asistenId).map(e => <option key={e.id} value={e.id}>{e.nama} (Eksternal)</option>)}
           </select>
         </div>
         <div>
