@@ -19,12 +19,18 @@ export default function StudentList({ readOnly = false }) {
   const [confirmMsg, setConfirmMsg] = useState('')
   const [pendingRemoveId, setPendingRemoveId] = useState(null)
   const [sppPaymentSiswaId, setSppPaymentSiswaId] = useState(null)
+  // T2.B.2 (F-T2-4; D-T2-3) — per-row expandable history, mirroring the
+  // PaymentTable.jsx:304-335 honor `Riwayat` idiom (single expanded id +
+  // chevron toggle). Display-only: rows come from sppPayments for the
+  // viewed periode, pill math untouched.
+  const [expandedSiswaId, setExpandedSiswaId] = useState(null)
 
   const sekolah = readCached('sekolah')
   const absensi = readCached('absensi')
   const sppPayments = readCached('sppPayments')
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
+  const viewedPeriode = period.periodeKey()
   const stats = attendanceStats(absensi, period.periodeKey())
 
   function sppTarifOf(s) {
@@ -274,7 +280,15 @@ export default function StudentList({ readOnly = false }) {
                 </tr>
               )}
 
-              {visibleSiswa.map((s, idx) => (
+              {visibleSiswa.map((s, idx) => {
+                // T2.B.2 — per-payment source rows for the viewed periode
+                // (display-only; pill math below untouched).
+                const history = sppPayments.filter(
+                  p => p.siswaId === s.id && p.periode === viewedPeriode
+                )
+                const isExpanded = expandedSiswaId === s.id
+
+                return (
                 <tr key={s.id} className="hover:bg-slate-50/50">
                   <td className="py-4 px-3 text-right font-semibold text-slate-400">
                     {idx + 1}
@@ -348,6 +362,33 @@ export default function StudentList({ readOnly = false }) {
                       <span className="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">
                         Belum Bayar
                       </span>
+                    )}
+                    {/* T2.B.2 — expandable per-payment source history. Toggle
+                        mirrors the PaymentTable `Riwayat (N)` idiom; row line
+                        copy pinned by TEAM_ROUND2_PLAN §4. */}
+                    {history.length > 0 && (
+                      <button onClick={() => setExpandedSiswaId(isExpanded ? null : s.id)} className="mt-1.5 mx-auto text-slate-500 hover:text-blue-600 text-[11px] font-bold px-1 py-1 flex items-center gap-1">
+                        Riwayat ({history.length})
+                        <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                    )}
+                    {isExpanded && history.length > 0 && (
+                      <div className="mt-1 space-y-1.5 bg-slate-50/70 rounded-lg p-2 text-left">
+                        {history.map(p => {
+                          const [py, pm] = String(p.periode || '').split('-')
+                          const periodeLabel = `${MONTHS[MONTH_KEYS.indexOf(pm)] || pm} ${py}`
+                          return (
+                            <div key={p.id} className="bg-white rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                              <p className="text-slate-600">
+                                {periodeLabel}
+                                {' · '}{formatRupiah(Number(p.nominal || 0))}
+                                {' · Sumber: '}{p.sumberDana === 'ortu' ? 'Ortu langsung' : p.sumberDana === 'sekolah' ? 'Sekolah' : (p.sumberDana || '—')}
+                                {' · Metode: '}{p.metode || '—'}
+                              </p>
+                            </div>
+                          )
+                        })}
+                      </div>
                     )}
                   </td>
 
@@ -470,7 +511,8 @@ export default function StudentList({ readOnly = false }) {
                     </td>
                   )}
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
