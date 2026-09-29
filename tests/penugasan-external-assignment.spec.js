@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { test, expect, loginViaApi, loginAndPrime, primeCsrf, readEntity, createSekolahSuperadmin } from './fixtures.js'
 
 // T2.D.2 (F-T2-11; D-T2-7; R-T2-1, R-T2-2, R-T2-3, R-T2-5, R-T2-7) —
@@ -149,6 +150,44 @@ test('T2.D.2: created external is assignable via picker and flows to attendance 
     console.log(`## T2.D.2 saved row keys: ${JSON.stringify({ asistenId: saved.asistenId ?? null, asistenIds: saved.asistenIds ?? null })}`)
     expect(saved.asistenId ?? null).toBe(null)
     expect(saved.asistenIds).toEqual([ids.extA])
+
+    // ---- FINAL wave (D.2 cross-task gap): assigned external resolves by
+    // name in Jadwal Penugasan (table + CSV), never `Trainer tidak
+    // ditemukan`. RED pre-fix: the timetable resolves asisten ids
+    // trainer-only, so the external cell reads `Memuat...` (table) /
+    // `Trainer tidak ditemukan` (CSV).
+    csrf = await primeCsrf(page)
+    const schACurrent = (await readEntity(page, 'sekolah', csrf)).find(s => s.id === ids.schA)
+    const legToday = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()]
+    const schAUpd = await page.request.post('/api/sekolah.php', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { ...schACurrent, action: 'update', jadwalList: [{ dayOfWeek: legToday, time: '14:00', endTime: '15:00' }] },
+    })
+    if (!schAUpd.ok()) throw new Error(`seed jadwalList failed: ${schAUpd.status()} ${await schAUpd.text()}`)
+    await page.goto(APP)
+    await page.waitForLoadState('domcontentloaded')
+    await openTab(page, 'Jadwal Penugasan')
+    await expect(page.getByRole('heading', { name: 'Jadwal Penugasan' })).toBeVisible({ timeout: 15000 })
+    const schedRow = page.getByRole('row').filter({ hasText: SCH_A }).filter({ hasText: '14:00' })
+    await expect(schedRow).toBeVisible({ timeout: 15000 })
+    const schedText = await schedRow.innerText()
+    console.log('## T2.D.2-final timetable row:', JSON.stringify(schedText))
+    expect(schedText).toContain(`${EXT_A} (Eksternal)`)
+    expect(schedText).not.toContain('Trainer tidak ditemukan')
+    expect(schedText).not.toContain('Memuat...')
+    // D-PG6 export-mirrors-text: the CSV carries the same resolved name
+    // (asserted on this school's line only — shared-DB residue rows are
+    // out of scope for this leg).
+    const [schedDl] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15000 }),
+      page.getByRole('button', { name: 'Unduh CSV', exact: true }).click(),
+    ])
+    const schedCsv = fs.readFileSync(await schedDl.path(), 'utf8')
+    const schedLine = schedCsv.split('\n').find(l => l.includes(SCH_A))
+    console.log('## T2.D.2-final timetable csv line:', JSON.stringify(schedLine))
+    expect(schedLine).toBeTruthy()
+    expect(schedLine).toContain(`${EXT_A} (Eksternal)`)
+    expect(schedLine).not.toContain('Trainer tidak ditemukan')
 
     // ---- attendance writable: trainer records Hadir/peran-Asisten for the external ----
     const trainerUser = await loginViaApi(page, 'trainer')

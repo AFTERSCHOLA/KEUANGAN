@@ -25,7 +25,13 @@ export default function PenugasanTimetable() {
   // below (R-TA6: personal scope), admins keep the scoped set as-is.
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
   const trainers = useMemo(() => readCached('trainer'), [tick])
+  // T2.D.2-final (F-T2-11; D-T2-7) — externals read reference-only (same
+  // idiom as PenugasanManager/EksternalManager; no login for externals,
+  // no new keys). Without this the D.2 external ids below resolve
+  // trainer-only and render `Trainer tidak ditemukan` / `Memuat...`.
+  const eksternal = useMemo(() => readCached('eksternal'), [tick])
   const trainerById = useMemo(() => new Map(trainers.map(t => [t.id, t])), [trainers])
+  const eksternalById = useMemo(() => new Map((eksternal || []).map(e => [e && e.id, e])), [eksternal])
 
   // State tambahan buat nama trainer lintas-cabang yang di-resolve dari server
   const [crossScopeNames, setCrossScopeNames] = useState({}) // { [id]: nama }
@@ -48,6 +54,9 @@ export default function PenugasanTimetable() {
       .filter(id =>
         id &&
         !trainerById.has(id) &&
+        // T2.D.2-final — externals resolve from the local cache (never a
+        // trainer-name lookup; mirrors PenugasanManager).
+        !eksternalById.has(id) &&
         !crossScopeNames[id] &&
         !lookupAttempted[id]
       )
@@ -77,14 +86,26 @@ export default function PenugasanTimetable() {
       setCrossScopeNames(next)
     })
     .catch(() => {})
-}, [rows, trainerById, crossScopeNames, lookupAttempted])
+}, [rows, trainerById, eksternalById, crossScopeNames, lookupAttempted])
 
   const hari = dayNameForTanggal(tanggal)
 
   // BUG8 (D-BUG8) — cover marks shared by the table and the CSV export.
   const coverMarks = useMemo(() => coverMarksForRows(rows), [rows])
+  // T2.D.2-final (F-T2-11; D-T2-7) — external label mirrors the manager
+  // picker union: same cached record, pinned ` (Eksternal)` suffix
+  // (PLAN §4). Reference-only; host/trainer resolution is untouched.
+  function eksternalLabel(id) {
+    const nama = eksternalById.get(id)?.nama
+    return nama ? `${nama} (Eksternal)` : undefined
+  }
   function trainerName(id) {
-    return trainerById.get(id)?.nama || crossScopeNames[id] || 'Trainer tidak ditemukan'
+    return trainerById.get(id)?.nama || eksternalLabel(id) || crossScopeNames[id] || 'Trainer tidak ditemukan'
+  }
+  // DC.C.2 union display mirrors the manager table; the fallback stays
+  // per-surface (`Memuat...` in cells, `Trainer tidak ditemukan` in CSV).
+  function asistenName(id, fallback) {
+    return trainerById.get(id)?.nama || eksternalLabel(id) || crossScopeNames[id] || fallback
   }
   function trainerCellText(r) {
     const base = trainerName(r.trainerId)
@@ -102,10 +123,10 @@ export default function PenugasanTimetable() {
   trainer: trainerCellText(r),
   // DC.C.2 — union display mirrors the manager table.
   asisten: [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length
-    ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Trainer tidak ditemukan').join(', ')
+    ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => asistenName(id, 'Trainer tidak ditemukan')).join(', ')
     : '—',
   waktu: r.waktu,
-})), [rows, trainerById, crossScopeNames, coverMarks])
+})), [rows, trainerById, eksternalById, crossScopeNames, coverMarks])
 
   function handleExportCSV() {
     exportJadwalPenugasanCSV(displayRows, tanggal)
@@ -164,7 +185,7 @@ export default function PenugasanTimetable() {
                       <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Digantikan</span>
                     )}
                   </td>
-                  <td className="py-4 px-6 font-semibold text-slate-600">{[r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => trainerById.get(id)?.nama || crossScopeNames[id] || 'Memuat...').join(', ') : '—'}</td>
+                  <td className="py-4 px-6 font-semibold text-slate-600">{[r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => asistenName(id, 'Memuat...')).join(', ') : '—'}</td>
                   <td className="py-4 px-6 font-semibold text-slate-600">{r.waktu}</td>
                 </tr>
               ))}

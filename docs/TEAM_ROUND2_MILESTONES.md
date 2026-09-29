@@ -181,7 +181,8 @@ MICROTASK: Prove double-booking hard-block
   OUTCOME: the second same-slot assignment is rejected and never saved.
   VERIFY:  npx playwright test tests/penugasan-double-booking.spec.js --workers=1 -> rejection visible + ledger shows 1 row with zero pageerror
   DONE-IF: verify passes; only intended files changed (spec-only if proof passes)
-  Verified (T2.E.3 full loop, 2026-09-29): npx playwright test tests/penugasan-double-booking.spec.js --workers=1 -> 2/2 passed (UI hard-block + direct-API 422), zero pageerror. Landed in cd3d688.
+   Verified (T2.E.3 full loop, 2026-09-29): npx playwright test tests/penugasan-double-booking.spec.js --workers=1 -> 2/2 passed (UI hard-block + direct-API 422), zero pageerror. Landed in cd3d688.
+   E.1 rationale nod (final wave, 2026-09-29): unscoped fan-out intentionally blocks cross-school same-time rows — clock-sound (unscoped = all clock times at its school; one person cannot hold one clock slot at two schools); remediation saves clean (validation runs on the new array).
 ```
 
 ### T2.E.2 Prove audit, frozen, payable-independence
