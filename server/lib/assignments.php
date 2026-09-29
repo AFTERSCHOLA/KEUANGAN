@@ -199,10 +199,11 @@ function isUnscopedAssignmentSlot(array $r): bool
 
 // BUG7 (F-PG5; D-PG9) — reject duplicate manual assignments within one
 // host payload (same-instructor reject; cross-host asisten checks stay
-// deferred). Same-school + both aktif + intersecting date ranges + same
-// slot scope (exact triple; unscoped fans out and blocks anything in the
-// same school — same rule as hasOverlappingActiveAssignment, YAGNI: no
-// interval matching). Same-id pairs (edit path) and cover-linked pairs
+// deferred). Both aktif + intersecting date ranges + same
+// slot scope (exact triple; unscoped fans out — same rule as hasOverlappingActiveAssignment, YAGNI: no
+// interval matching). T2.E.1 (F-T2-13; D-T2-9) — school equality
+// dropped: the same host cannot hold the same clock slot at two schools
+// at once. Same-id pairs (edit path) and cover-linked pairs
 // (cover rows share their origin scope by design, D-CS2) never block.
 // Returns the pinned Indonesian copy or null.
 function penugasanRangeStart($v): string
@@ -236,7 +237,7 @@ function validateNoOverlappingAssignments(array $rows): ?string
             if (($a['aktif'] ?? null) !== true || ($b['aktif'] ?? null) !== true) continue;
             $sekA = $a['sekolahId'] ?? null;
             $sekB = $b['sekolahId'] ?? null;
-            if (!is_string($sekA) || $sekA === '' || $sekA !== $sekB) continue;
+            if (!is_string($sekA) || $sekA === '' || !is_string($sekB) || $sekB === '') continue;
             $start = max(penugasanRangeStart($a['periodeMulai'] ?? null), penugasanRangeStart($b['periodeMulai'] ?? null));
             $end = min(penugasanRangeEnd($a['periodeSelesai'] ?? null), penugasanRangeEnd($b['periodeSelesai'] ?? null));
             if (strcmp($start, $end) > 0) continue;
@@ -253,11 +254,12 @@ function validateNoOverlappingAssignments(array $rows): ?string
 // Pure: compares the about-to-be-saved rows of ONE host ($newRows)
 // against every other same-branch host's rows ($foreignRows — the caller
 // excludes the host record itself; its own rows were already checked by
-// validateNoOverlappingAssignments). Two rows conflict iff: same
-// sekolahId + both aktif + intersecting periodeMulai..periodeSelesai
+// validateNoOverlappingAssignments). Two rows conflict iff: both aktif + intersecting periodeMulai..periodeSelesai
 // (open end = 9999-12-31, same range helpers as the PG.D gate) + same
 // slot scope (exact triple; unscoped fans out — same rule, YAGNI no
-// intervals) + occupant sets intersect. Occupants = {trainerId} ∪
+// intervals) + occupant sets intersect. T2.E.1 (F-T2-13; D-T2-9) —
+// school equality dropped: same person, same clock slot, overlapping
+// dates blocks across schools too. Occupants = {trainerId} ∪
 // {asistenId} ∪ asistenIds[] with nulls/empties dropped — the same union
 // as penugasanInvolvesTrainer() client-side and
 // trainerHasActiveAssignment() server-side. Same-id pairs (edit path)
@@ -297,7 +299,7 @@ function findCrossHostConflict(array $newRows, array $foreignRows): ?string
             if (($a['aktif'] ?? null) !== true || ($b['aktif'] ?? null) !== true) continue;
             $sekA = $a['sekolahId'] ?? null;
             $sekB = $b['sekolahId'] ?? null;
-            if (!is_string($sekA) || $sekA === '' || $sekA !== $sekB) continue;
+            if (!is_string($sekA) || $sekA === '' || !is_string($sekB) || $sekB === '') continue;
             $start = max(penugasanRangeStart($a['periodeMulai'] ?? null), penugasanRangeStart($b['periodeMulai'] ?? null));
             $end = min(penugasanRangeEnd($a['periodeSelesai'] ?? null), penugasanRangeEnd($b['periodeSelesai'] ?? null));
             if (strcmp($start, $end) > 0) continue;

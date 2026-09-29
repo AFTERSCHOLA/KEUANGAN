@@ -104,7 +104,10 @@ export function validateRowDates({ sekolahId, trainerId, periodeMulai, periodeSe
 // BUG7 (F-PG5; D-PG9) — intra-payload double-booking guard (same-host
 // reject; server re-checks authoritatively in trainer.php via
 // validateNoOverlappingAssignments). Mirrors that predicate exactly:
-// exact triple equality, unscoped fans out over the same school,
+// exact triple equality, unscoped fans out,
+// T2.E.1 (F-T2-13; D-T2-9) — cross-school same-time blocks: the school
+// leg requires both rows to name a school but never requires equality
+// (same person cannot hold the same clock slot at two schools at once).
 // cover-linked + same-id pairs skipped, inactive and non-intersecting
 // ranges never block. Pinned copy shared with the server gate.
 export const PENUGASAN_OVERLAP_ERROR = 'Penugasan ganda: sekolah dan waktu yang sama sudah terisi pada rentang tanggal ini.'
@@ -135,7 +138,7 @@ export function findOverlappingPair(rows = []) {
       if ((typeof a.coverOf === 'string' && a.coverOf !== '' && a.coverOf === b.id)
         || (typeof b.coverOf === 'string' && b.coverOf !== '' && b.coverOf === a.id)) continue
       if (a.aktif !== true || b.aktif !== true) continue
-      if (typeof a.sekolahId !== 'string' || a.sekolahId === '' || a.sekolahId !== b.sekolahId) continue
+      if (typeof a.sekolahId !== 'string' || a.sekolahId === '' || typeof b.sekolahId !== 'string' || b.sekolahId === '') continue
       const start = [a.periodeMulai || '', b.periodeMulai || ''].sort()[1]
       const endA = penugasanRangeEnd(a.periodeSelesai)
       const endB = penugasanRangeEnd(b.periodeSelesai)
@@ -154,9 +157,11 @@ export function findOverlappingPair(rows = []) {
 // server/lib/assignments.php; the server stays authoritative, taste #61).
 // Compares the about-to-be-saved rows of ONE host (nextRows) against
 // every other cached host's rows (otherHostsRows). Same predicate as the
-// server scan: same sekolahId + both aktif + intersecting ranges (open
+// server scan: both aktif + intersecting ranges (open
 // end = 9999-12-31) + same slot scope (exact triple; unscoped fans out)
 // + occupant sets intersect (trainerId ∪ asistenId ∪ asistenIds[]).
+// T2.E.1 (F-T2-13; D-T2-9) — school equality dropped: the same person at
+// the same clock slot on overlapping dates blocks across schools too.
 // Same-id pairs (edit path) and cover-linked pairs (either direction)
 // never block; rows with no attributable occupant never block.
 // Returns the first conflicting [mine, theirs] pair, or null.
@@ -184,7 +189,7 @@ export function findCrossHostPair(nextRows = [], otherHostsRows = []) {
       if ((typeof a.coverOf === 'string' && a.coverOf !== '' && a.coverOf === b.id)
         || (typeof b.coverOf === 'string' && b.coverOf !== '' && b.coverOf === a.id)) continue
       if (a.aktif !== true || b.aktif !== true) continue
-      if (typeof a.sekolahId !== 'string' || a.sekolahId === '' || a.sekolahId !== b.sekolahId) continue
+      if (typeof a.sekolahId !== 'string' || a.sekolahId === '' || typeof b.sekolahId !== 'string' || b.sekolahId === '') continue
       const start = [a.periodeMulai || '', b.periodeMulai || ''].sort()[1]
       const endA = penugasanRangeEnd(a.periodeSelesai)
       const endB = penugasanRangeEnd(b.periodeSelesai)

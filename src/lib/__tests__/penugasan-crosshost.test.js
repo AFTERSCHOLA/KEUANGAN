@@ -89,9 +89,9 @@ describe('DB.A.1 cross-host occupant guard (server predicate)', () => {
     expect(phpCrossHost([row()], foreign)).toBeNull()
   })
 
-  it('same person, different school -> null (P2 cross-school stays deferred per DOUBLE_BOOKING_PLAN.md §10)', () => {
+  it('same person, different school, same slot+dates -> pinned copy (T2.E.1 supersedes P2 deferred)', () => {
     const foreign = [row({ id: 'pgs-foreign-6', sekolahId: 'skl-2', trainerId: 'trn-b', asistenId: 'trn-a' })]
-    expect(phpCrossHost([row()], foreign)).toBeNull()
+    expect(phpCrossHost([row()], foreign)).toBe(PENUGASAN_OVERLAP_ERROR)
   })
 
   it('unscoped foreign row fans out over a scoped new row -> pinned copy', () => {
@@ -133,18 +133,22 @@ describe('DB.A.2 cross-host pre-check (client mirror)', () => {
     expect(findCrossHostPair([row()], foreign)).not.toBeNull()
   })
 
-  it('distinct people, cover links, disjoint, inactive, different school/scope, same-id, empty occupants -> null', () => {
+  it('distinct people, cover links, disjoint, inactive, different scope, same-id, empty occupants -> null (T2.E.1: different-school same-person now blocks, excluded from this null batch)', () => {
     const foreign = [
       row({ id: 'pgs-f-3', trainerId: 'trn-b', asistenId: 'trn-c' }),
       row({ id: 'pgs-f-4', trainerId: 'trn-b', asistenId: 'trn-a', periodeMulai: '2026-01-01', periodeSelesai: '2026-06-30' }),
       row({ id: 'pgs-f-5', trainerId: 'trn-b', asistenId: 'trn-a', aktif: false }),
-      row({ id: 'pgs-f-6', sekolahId: 'skl-2', trainerId: 'trn-b', asistenId: 'trn-a' }),
       row({ id: 'pgs-f-8', trainerId: 'trn-b', asistenId: 'trn-a', jamMulai: '16:00', jamSelesai: '17:00' }),
       row({ id: 'pgs-new-1', trainerId: 'trn-b', asistenId: 'trn-q' }),
       row({ id: 'pgs-f-9', trainerId: null, asistenId: null }),
     ]
     expect(findCrossHostPair([row()], foreign)).toBeNull()
     expect(findCrossHostPair([row()], [])).toBeNull()
+  })
+
+  it('same person, different school, same slot -> pair (T2.E.1)', () => {
+    const foreign = [row({ id: 'pgs-f-6', sekolahId: 'skl-2', trainerId: 'trn-b', asistenId: 'trn-a' })]
+    expect(findCrossHostPair([row()], foreign)).not.toBeNull()
   })
 
   it('cover-linked pair never blocks (isolated fixture)', () => {
@@ -168,7 +172,7 @@ describe('DB.A.2 client/server parity (same fixtures, same verdicts)', () => {
     [{ n: { id: 'pgs-x-4', coverOf: 'pgs-orig-4' }, f: { id: 'pgs-orig-4', trainerId: 'trn-b', asistenId: 'trn-a' } }, false],
     [{ n: { periodeMulai: '2026-10-01' }, f: { id: 'pgs-x-5', trainerId: 'trn-b', asistenId: 'trn-a', periodeMulai: '2026-01-01', periodeSelesai: '2026-06-30' } }, false],
     [{ n: {}, f: { id: 'pgs-x-6', trainerId: 'trn-b', asistenId: 'trn-a', aktif: false } }, false],
-    [{ n: {}, f: { id: 'pgs-x-7', sekolahId: 'skl-9', trainerId: 'trn-b', asistenId: 'trn-a' } }, false],
+    [{ n: {}, f: { id: 'pgs-x-7', sekolahId: 'skl-9', trainerId: 'trn-b', asistenId: 'trn-a' } }, true],
     [{ n: {}, f: { id: 'pgs-x-8', trainerId: 'trn-b', asistenId: 'trn-a', hari: null, jamMulai: null, jamSelesai: null } }, true],
   ]
   for (const [{ n, f }, hits] of cases) {
