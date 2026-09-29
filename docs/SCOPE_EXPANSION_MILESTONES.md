@@ -551,4 +551,42 @@ invoice-bulk-settle.spec.js` (persisted). Item-14 bulk gap closed via
 D-BR1 (skip-settled per-pupil mint); item-15 credit automation stays a
 logged GAP in `EVAL_FINANCE_PLAN.md`.
 
+## Gate T2 — Team Round-2 Closure Summary (taste #40 temporary gate)
+
+**Status: DONE (T2.A.1–T2.E.3, 2026-09-29).** Chain lengkap ada di
+`docs/TEAM_ROUND2_PLAN.md` + `docs/TEAM_ROUND2_MILESTONES.md`
+(tidak ada renumbering rantai di dokumen ini — pair tersebut adalah gate
+doc sementara per taste #40).
+
+Verified: `npm run test` (47 files / 293 passed) + targeted 9-leg
+Playwright `--workers=1` (14/14 green across A.2-first sequencing, zero
+pageerror — T2.A.2 honor-no-refresh, T2.B.1/B.2 history lists, T2.D.2
+external picker, T2.D.3 cover SAVE/RETRIEVE/guard, T2.E.1 double-block
+UI+API, T2.E.2 audit/frozen/TEST-17-payable, invoice-installment +
+invoice-bulk-settle) + `npm run build` green (PWA 6 entries) + node -e
+ID check (cited 37 / missing 0) + no `console.log` in `src/`.
+
+Changed: `src/lib/store.js` (trainer-first hydrate, server-scope
+trust), `src/features/auth/TrainerDashboard.jsx` (Summary-mirror
+subscription), `src/features/reports/InvoiceModal.jsx` + `src/features/
+students/StudentList.jsx` (display-only `Riwayat pembayaran` /
+`Riwayat` lists), `src/features/trainers/TrainerList.jsx` (explicit
+slot pick + scope note), `src/features/penugasan/PenugasanManager.jsx`
+(external union picker), timetable/cover retrieve path, double-booking
+pre-check + server 422, regression specs `tests/trainer-honor-refresh`,
+`invoice-payment-history`, `student-payment-history`,
+`penugasan-external-assignment`, `penugasan-cover-schedule`,
+`penugasan-double-booking`, `finance-expectation-cycle` (persisted).
+
+Sign-off decisions: (1) D-T2-3 history UI is display-only addition —
+ledger/total math untouched (noted in `SPP_BILLING_PLAN.md` §10, no SB
+rewrite); (2) D-T2-6 re-plans the D-CS8 client default back to explicit
+pick (`[]` seed, missing → `[]`; server D-CS1 byte-identical — noted in
+`COVER_SLOT_PLAN.md`, no CS rewrite); (3) credit auto-deduct stays
+deferred (D-T2-5, finance chain item 15); (4) T2.A.2 carries one known
+ordering constraint — fails when run after T2.B.1 in a single command
+(transient `0 sesi` never paints; B.1 leaves un-cleaned rows), green in
+isolation and A.2-first order; owner + evidence in
+`.superpowers/sdd/team-round2/task-E3-report.md`.
+
 **End of Microtask Chains**

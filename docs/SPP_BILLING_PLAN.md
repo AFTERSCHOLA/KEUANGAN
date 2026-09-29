@@ -128,6 +128,8 @@ Saat Gate SB-C ditutup: perbarui `PRODUCTION_MILESTONES.md` (koreksi klaim basi 
 
 **Ekstensi D-SB8: DITUTUP (2026-09-29, Gate BR).** Rekonsiliasi tingkat sekolah kini punya aturan propagasi per-murid yang D-SB8 tidak pernah tentukan: bulk-settle sebuah invoice mem-mint satu baris `sppPayments` per sel (siswa, periode) yang belum lunas (`sumberDana: 'sekolah'`, masing-masing membawa `invoiceId`; sel yang sudah lunas — mis. dibayar ortu — dilewati sehingga sumbernya tidak tertimpa). Rantai lengkap di `docs/BULK_RECONCILE_PLAN.md` (D-BR1, BR.1–BR.3 verified, closure di `SCOPE_EXPANSION_MILESTONES.md` Gate BR). SB history lainnya utuh; R-SB1/R-SB3/R-SB6 tidak berubah.
 
+**Team Round-2 note (2026-09-29, Gate T2, D-T2-3):** rantai T2 menambah UI histori display-only di atas ledger SB tanpa mengubah SB history: baris invoice mendapat expandable `Riwayat pembayaran (N)` (`matchedPaymentsForInvoice`: tanggal · nominal · metode · diterimaOleh · sumberDana + footer Total dibayar/Sisa dari `invoiceSettlement` yang ada), baris siswa mendapat expandable `Riwayat (N)` (`sppPaymentsForSiswa` per periode). `computeSppLunas`/`invoiceSettlement`/generator kanonik tidak tersentuh (R-SB1/R-SB2); chain lengkap di `docs/TEAM_ROUND2_PLAN.md` + `docs/TEAM_ROUND2_MILESTONES.md`, closure di `SCOPE_EXPANSION_MILESTONES.md` Gate T2.
+
 ## 11. Cross-references
 
 - `docs/PRODUCTION_PLAN.md` — invariant keuangan (cash basis, ledger append-only, tidak ada derived finance writes)

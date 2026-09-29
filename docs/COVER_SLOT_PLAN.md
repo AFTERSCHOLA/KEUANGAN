@@ -130,6 +130,8 @@ Slot-pick step inside the existing assignment flow (after `Asisten`): `Slot` sel
 | Audit-log viewer UI | AUDIT chain | Trail verified server-side; no UI requested |
 | Slot-scoped honor weighting beyond role-first | Finance chain + explicit tariff source | Would change D-TA14 beyond D-CS6; not inferred |
 
+**Team Round-2 note (2026-09-29, Gate T2, D-T2-6):** rantai T2 (F-T2-10, user verdict TRUE BUG) membalik default client D-CS8 kembali ke explicit pick — mencentang sekolah men-seed `[]` (tidak ada box tercentang, Semua unchecked); save memetakan entry yang hilang ke `[]` = no rows; SATU baris unscoped (`[null]`) hanya dibuat ketika admin eksplisit mencentang `Semua slot`. Semantik server D-CS1 byte-identical (Locked, untouched) — `[]` tetap berarti no rows via API. CS history lainnya utuh; D-CS2/D-CS9 tidak berubah. Chain lengkap di `docs/TEAM_ROUND2_PLAN.md` + `docs/TEAM_ROUND2_MILESTONES.md`, closure di `SCOPE_EXPANSION_MILESTONES.md` Gate T2.
+
 ## 11. Write-back contract (taste #32/#43, on CS.C close)
 
 Record `Verified:` lines per microtask in `COVER_SLOT_MILESTONES.md`; mark Gates CS.A–CS.C; append one closure row to `SCOPE_EXPANSION_MILESTONES.md` (no renumbering of the existing chain — this pair is the temporary gate doc per taste #40/#74); note the D-AP1/D-AP2 revision scope (AP stays otherwise intact) in `AUTO_PENUGASAN_PLAN.md` §10 without rewriting AP history; link Q1(a) closed and Q2 guarded in `EVALUATION_LOG.md`/`EXEMPLAR_MIGRATION.md` addendum without expanding the long-term plan.
