@@ -178,6 +178,57 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     expect(siswa.map(s => s.id)).toEqual(['sw-1'])
   })
 
+  it('T2.A.1 fix: readCached(siswa) keeps server-authorized row after wipe→sync (Data Siswa render path)', async () => {
+    // Full wipe→sync→render sequence: read('trainer') own-only
+    // overwrite wipes the cross-record assignment from the local cache,
+    // read('siswa') syncs the server-filtered list, and Data Siswa
+    // renders via readCached — which must keep the row via the
+    // server-scope snapshot (pre-fix it returns []).
+    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
+      { id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] },
+      {
+        id: 'trn-ins',
+        nama: 'Instruktur Sim',
+        sekolahIds: ['sch-A'],
+        penugasanPengajar: [
+          {
+            sekolahId: 'sch-A',
+            trainerId: 'trn-ins',
+            asistenId: null,
+            asistenIds: ['trn-self'],
+            aktif: true,
+            periodeMulai: '2026-01-01',
+            periodeSelesai: null,
+          },
+        ],
+      },
+    ]))
+    localStorage.setItem('afterschola_v4_siswa', JSON.stringify([
+      { id: 'sw-1', nama: 'Siswa A', sekolahId: 'sch-A' },
+      { id: 'sw-2', nama: 'Siswa B', sekolahId: 'sch-B' },
+    ]))
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    globalThis.fetch = async (url) => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => {
+        const u = String(url)
+        if (u.includes('entity=trainer')) {
+          return [{ id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] }]
+        }
+        if (u.includes('entity=siswa')) {
+          return [{ id: 'sw-1', nama: 'Siswa A', sekolahId: 'sch-A' }]
+        }
+        return []
+      },
+    })
+    await store.read('trainer')
+    await store.read('siswa')
+    expect(store.readCached('siswa').map(s => s.id)).toEqual(['sw-1'])
+  })
+
   it('T2.A.1 hydrateServerData fetches trainer before the remaining entities', async () => {
     setIdentity(trainerIdentity)
     const store = await freshStore()

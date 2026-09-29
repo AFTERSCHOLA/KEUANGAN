@@ -5,6 +5,9 @@ import { penugasanInvolvesTrainer } from './penugasan.js'
 
 const STORE_KEY = 'afterschola_v4'
 const STORE_EVENT = 'afterschola_v4_changed'
+// T2.A.1 fix — privacy-safe server-scope snapshot for the trainer role:
+// only schoolIds (no trainer records, no student data), keyed by trainerId.
+const TRAINER_SCOPE_KEY = `${STORE_KEY}_trainerScope`
 
 // DC.B.3 (D-DC1) — ledgers write direct (writeRemote / apiRequest custom
 // actions). No queue, no batch flush; the queue-and-flush pattern is gone.
@@ -97,6 +100,82 @@ export function trainerHasAnyActiveAssignmentToSekolahClient(trainerId, sekolahI
   return false
 }
 
+// T2.A.1 fix — server-scope snapshot (trainer role only). The server
+// read lane (read.php DB assignments + authorize.php) is authoritative,
+// but read('trainer') is own-record-only, so a trainer-first hydrate
+// wipes the cross-record assignment rows the local scan needs. Persist
+// the schools the server just authorized for this trainer and OR them
+// into isWithinScope alongside the local-assignment scan. Additive only:
+// missing/corrupt/foreign-trainer snapshot reads as empty (legacy).
+// Staleness is bounded by hydrate-on-login + read-on-mount refreshes.
+function trainerSnapshotSchoolIdsFor(ctx) {
+  try {
+    if (!ctx || ctx.role !== 'trainer' || !ctx.trainerId) return new Set()
+    const json = localStorage.getItem(TRAINER_SCOPE_KEY)
+    if (!json) return new Set()
+    const parsed = JSON.parse(json)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Set()
+    if (parsed.trainerId !== ctx.trainerId) return new Set()
+    if (!Array.isArray(parsed.schoolIds)) return new Set()
+    return new Set(parsed.schoolIds.filter(id => typeof id === 'string' && id !== ''))
+  } catch {
+    return new Set()
+  }
+}
+
+function persistTrainerScopeSnapshot(ctx, key, remote) {
+  try {
+    if (!ctx || ctx.role !== 'trainer' || !ctx.trainerId) return
+    if (!Array.isArray(remote) || remote.length === 0) return
+    const observed = new Set()
+    for (const r of remote) {
+      if (!r || typeof r !== 'object') continue
+      // Where the _sekolahTrainerIds enrichment is present, only trust
+      // rows that actually list this trainer (future-proof; the server
+      // currently strips the enrichment, so absent means trusted —
+      // the list was already server-filtered for this trainer).
+      if (Array.isArray(r._sekolahTrainerIds) && !r._sekolahTrainerIds.includes(ctx.trainerId)) continue
+      if (key === 'sekolah') {
+        if (typeof r.id === 'string' && r.id !== '') observed.add(r.id)
+      } else if (key === 'siswa' || key === 'sppPayments' || key === 'eksternal' || key === 'absensi') {
+        if (typeof r.sekolahId === 'string' && r.sekolahId !== '') {
+          observed.add(r.sekolahId)
+        } else if (key === 'sppPayments' && typeof r.siswaId === 'string' && r.siswaId !== '') {
+          // sppPayments rows scoped via the siswa hop may carry only
+          // siswaId: resolve through the local siswa cache (already
+          // server-synced for this trainer by hydrate order).
+          const sw = readCollection('siswa').find(s => s && s.id === r.siswaId)
+          if (sw && typeof sw.sekolahId === 'string' && sw.sekolahId !== '') observed.add(sw.sekolahId)
+        }
+      } else {
+        continue
+      }
+    }
+    if (observed.size === 0) return
+    let existing = new Set()
+    try {
+      const raw = localStorage.getItem(TRAINER_SCOPE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          && parsed.trainerId === ctx.trainerId && Array.isArray(parsed.schoolIds)) {
+          for (const id of parsed.schoolIds) {
+            if (typeof id === 'string' && id !== '') existing.add(id)
+          }
+        }
+        // Trainer switch: start fresh (never union across trainers).
+      }
+    } catch {
+      existing = new Set()
+    }
+    for (const id of observed) existing.add(id)
+    const merged = [...existing].slice(0, 500)
+    localStorage.setItem(TRAINER_SCOPE_KEY, JSON.stringify({ trainerId: ctx.trainerId, schoolIds: merged, updatedAt: Date.now() }))
+  } catch {
+    // Best-effort: snapshot must never break the sync path.
+  }
+}
+
 function isWithinScope(key, record, ctx) {
 
   if (!record || ctx.role === 'superadmin') return true
@@ -126,13 +205,17 @@ function isWithinScope(key, record, ctx) {
     if (!ctx.trainerId) return false
     const trainer = readCollection('trainer').find(t => t.id === ctx.trainerId)
     const schoolIds = new Set(trainer?.sekolahIds || [])
-    const studentIds = new Set(readCollection('siswa').filter(s => schoolIds.has(s.sekolahId)).map(s => s.id))
+    // T2.A.1 fix — OR the server-scope snapshot alongside the local
+    // scan so post-wipe readCached keeps server-authorized rows (Data
+    // Siswa renders via readCached). Missing snapshot reads as legacy.
+    const snapshotIds = trainerSnapshotSchoolIdsFor(ctx)
+    const studentIds = new Set(readCollection('siswa').filter(s => schoolIds.has(s.sekolahId) || snapshotIds.has(s.sekolahId)).map(s => s.id))
     switch (key) {
-      case 'sekolah': return schoolIds.has(record.id) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.id)
+      case 'sekolah': return schoolIds.has(record.id) || snapshotIds.has(record.id) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.id)
       case 'trainer': return record.id === ctx.trainerId
-      case 'absensi': return record.trainerId === ctx.trainerId && (schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId))
-      case 'siswa': return schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
-      case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
+      case 'absensi': return record.trainerId === ctx.trainerId && (schoolIds.has(record.sekolahId) || snapshotIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId))
+      case 'siswa': return schoolIds.has(record.sekolahId) || snapshotIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
+      case 'sppPayments': return studentIds.has(record.siswaId) || schoolIds.has(record.sekolahId) || snapshotIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
       case 'honorPayments': return record.trainerId === ctx.trainerId
       case 'invoices': return false
       // BUG2 (D-BUG2) — read scope is ownership-only, matching the server
@@ -142,7 +225,7 @@ function isWithinScope(key, record, ctx) {
       case 'absensiPengajar': return record.trainerId === ctx.trainerId
       // CS.B.2 (D-CS5) — trainers read externals in assigned schools
       // (reference-only for the attendance picker).
-      case 'eksternal': return schoolIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
+      case 'eksternal': return schoolIds.has(record.sekolahId) || snapshotIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
       default: return false
     }
   }
@@ -195,6 +278,7 @@ export function clearSessionCache() {
   for (const key of READABLE_SERVER_KEYS) {
     localStorage.removeItem(getKeys()[key])
   }
+  try { localStorage.removeItem(TRAINER_SCOPE_KEY) } catch { /* inert */ }
 
   notifyStoreChanged()
 }
@@ -248,9 +332,15 @@ export async function read(key) {
     // remote array directly: the server scope (authorize.php + read.php
     // DB assignments) is authoritative, and re-filtering here against
     // the possibly-stale local trainer cache drops cross-record rows
-    // (read('trainer') is own-record-only). readCached keeps the
-    // client filter for offline/sync paths. No privilege change.
-    if (ctx.role === 'trainer') return merged
+    // (read('trainer') is own-record-only).
+    // T2.A.1 fix — persist the privacy-safe schoolIds snapshot from
+    // this server-authorized batch so post-wipe readCached (the Data
+    // Siswa render path) keeps the rows. No trainer-record merge
+    // (own-only privacy preserved). No privilege change.
+    if (ctx.role === 'trainer') {
+      persistTrainerScopeSnapshot(ctx, key, merged)
+      return merged
+    }
 
     return merged.filter(record => isWithinScope(key, record, ctx))
   } catch (error) {
