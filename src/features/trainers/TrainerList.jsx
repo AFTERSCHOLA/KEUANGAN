@@ -20,6 +20,25 @@ function derivedJadwalText(sekolahIds, sekolahList) {
   return parts.join(', ') || 'Belum diatur'
 }
 
+// T2.D.1 (F-T2-10; D-T2-6) — explicit slot pick helpers (pure, unit-tested
+// in penugasan-slot.test.js). Checking a school seeds [] (nothing picked,
+// Semua unchecked); a missing entry on save also resolves to [] = no rows
+// (server D-CS1 "No pick, no row" already handles [] with zero rows,
+// untouched). One unscoped row is minted ONLY when the admin explicitly
+// ticks Semua slot ([null]).
+export function seedSlotPickOnSchoolCheck(prev, sekolahId) {
+  if (sekolahId in prev) return prev
+  return { ...prev, [sekolahId]: [] }
+}
+
+export function resolveNewLinkSlotPicks(formSekolahIds, oldSekolahIds, slotPicks) {
+  const picksMap = {}
+  formSekolahIds.forEach(sId => {
+    if (!oldSekolahIds.includes(sId)) picksMap[sId] = (sId in slotPicks) ? slotPicks[sId] : []
+  })
+  return picksMap
+}
+
 export default function TrainerList() {
   const [trainers, setTrainers] = useState(() => readCached('trainer'))
   const [modalOpen, setModalOpen] = useState(false)
@@ -42,12 +61,12 @@ export default function TrainerList() {
   const [initialPasswordDialog, setInitialPasswordDialog] = useState(null) // { username, password } | null
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
 
-  // CS.A.2 (F-CS1; D-CS1) — per-new-link slot picks, kept OUTSIDE `form`
-  // so they never land in trainer.payload (Part 2 R8). Shape mirrors the
-  // server `slotPicks` map: { [sekolahId]: Array<null | {hari,jamMulai,jamSelesai}> }.
-  // BUG4 (D-BUG4): checking a school seeds [null] = Semua slot, so a naive
-  // link inherits all slots; an explicit empty entry (every box unticked)
-  // still means no rows ("No pick, no row" — API-reachable, D-CS1 intact).
+  // T2.D.1 (F-T2-10; D-T2-6) — per-new-link slot picks, kept OUTSIDE
+  // `form` so they never land in trainer.payload (Part 2 R8). Shape mirrors
+  // the server `slotPicks` map: { [sekolahId]: Array<null | {hari,jamMulai,jamSelesai}> }.
+  // Checking a school seeds [] (Semua unchecked); save maps a missing entry
+  // to [] = no rows; ONLY an explicit Semua tick mints [null] = one unscoped
+  // row. Server D-CS1 ("No pick, no row") untouched — no PHP changed.
   const [slotPicks, setSlotPicks] = useState({})
 
   // PM.5.13: per-button copy feedback state. 'idle' | 'copied' | 'error'.
@@ -114,14 +133,12 @@ export default function TrainerList() {
     const isEdit = prev !== undefined
     const isCreatingAccount = !isEdit && createAccount
 
-    // CS.A.2 — explicit picks for added links only (BUG4/D-BUG4: a
-    // missing entry defaults to [null] = Semua slot so naive links inherit
-    // all slots; an explicit [] still sends no rows, D-CS1 intact). Sent as
-    // request extras via writeRemote, never stored in any payload (Part 2 R8).
-    const picksMap = {}
-    form.sekolahIds.forEach(sId => {
-      if (!oldSekolahIds.includes(sId)) picksMap[sId] = (sId in slotPicks) ? slotPicks[sId] : [null]
-    })
+    // T2.D.1 (F-T2-10; D-T2-6) — explicit picks for added links only: a
+    // missing entry resolves to [] = no rows so a naive check inherits
+    // nothing; ONLY an explicit Semua tick ([null]) mints one unscoped row.
+    // Sent as request extras via writeRemote, never stored in any payload
+    // (Part 2 R8). Server D-CS1 untouched.
+    const picksMap = resolveNewLinkSlotPicks(form.sekolahIds, oldSekolahIds, slotPicks)
     const picksExtra = Object.keys(picksMap).length > 0 ? { slotPicks: picksMap } : null
 
     // USER_PROVISIONING.md D3: when creating a trainer with login account,
@@ -516,18 +533,20 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
                       return next
                     })
                   } else {
-                    // BUG4 (D-BUG4) — checking a school seeds Semua slot so
-                    // the naive link inherits all slots; the admin narrows
-                    // by unticking Semua slot and picking specific slots.
-                    setSlotPicks(prev => (s.id in prev ? prev : { ...prev, [s.id]: [null] }))
+                    // T2.D.1 (F-T2-10; D-T2-6) — checking a school seeds []
+                    // (Semua unchecked, nothing inherited); the admin picks
+                    // specific slots or ticks Semua explicitly for one
+                    // unscoped row.
+                    setSlotPicks(prev => seedSlotPickOnSchoolCheck(prev, s.id))
                   }
                 }} className="rounded" />
                 {s.nama}
               </label>
-              {/* CS.A.2 (D-CS1; BUG4/D-BUG4) — explicit slot pick per newly
-                  added link. New links default to "Semua slot" checked (one
-                  unscoped row); unticking every box = no rows ("No pick, no
-                  row"). Previously linked schools keep their rows untouched
+              {/* T2.D.1 (F-T2-10; D-T2-6) — explicit slot pick per newly
+                  added link. New links seed [] (Semua unchecked, nothing
+                  inherited); ticking specifics or Semua explicitly mints
+                  rows, otherwise no rows ("No pick, no row", D-CS1 intact).
+                  Previously linked schools keep their rows untouched
                   (re-scope in Penugasan Pengajar). */}
               {form.sekolahIds.includes(s.id) && !(prevSekolahIds || []).includes(s.id) && (
                 <div className="ml-6 mt-1 mb-2 rounded-lg border border-slate-100 bg-slate-50 p-2" aria-label={`Slot untuk ${s.nama}`}>
@@ -544,6 +563,9 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
                     />
                     Semua slot
                   </label>
+                  {(slotPicks[s.id] || []).length === 0 && (
+                    <p className="text-[11px] text-slate-400 mt-1">Pilih minimal satu slot atau centang Semua slot.</p>
+                  )}
                   {(s.jadwalList || []).map((slot, idx) => {
                     const triple = { hari: slot.dayOfWeek, jamMulai: slot.time, jamSelesai: slot.endTime }
                     const tripleKey = JSON.stringify(triple)

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { newPenugasanRow, validateRowDates, penugasanInvolvesTrainer, findOverlappingPair, PENUGASAN_OVERLAP_ERROR } from '../penugasan.js'
+import { resolveNewLinkSlotPicks, seedSlotPickOnSchoolCheck } from '../../features/trainers/TrainerList.jsx'
 
 // CS.A.1 (F-CS1; D-CS1) — slot-pick auto-create revision.
 // Client legs pin the picked-triple vocabulary contract (parity with
@@ -190,6 +191,27 @@ describe('CS.A.1 slot-pick auto-create (COVER_SLOT)', () => {
     const fanOut = [mk({ id: 'a' }), mk({ id: 'b', hari: 'Rabu', jamMulai: '14:15', jamSelesai: '15:15' })]
     expect(findOverlappingPair(fanOut)).not.toBeNull()
     expect(phpValidateNoOverlap(fanOut)).toBe(PENUGASAN_OVERLAP_ERROR)
+  })
+
+  it('T2.D.1 (F-T2-10; D-T2-6): naive school check seeds [] and saves no rows; explicit Semua only mints [null]', () => {
+    // School-check seeds nothing (Semua unchecked).
+    expect(seedSlotPickOnSchoolCheck({}, 'skl-1')).toEqual({ 'skl-1': [] })
+    // Save maps a missing entry to [] = no rows (server D-CS1 untouched).
+    expect(resolveNewLinkSlotPicks(['skl-1'], [], {})).toEqual({ 'skl-1': [] })
+    expect(phpMissingLinks({ existing: [], slotPicks: { 'skl-1': [] } })).toEqual([])
+    expect(phpMissingLinks({ existing: [], slotPicks: resolveNewLinkSlotPicks(['skl-1'], [], {}) })).toEqual([])
+    // ONLY an explicit Semua tick mints one unscoped row.
+    expect(resolveNewLinkSlotPicks(['skl-1'], [], { 'skl-1': [null] })).toEqual({ 'skl-1': [null] })
+    expect(phpMissingLinks({ existing: [], slotPicks: { 'skl-1': [null] } })).toHaveLength(1)
+    // Explicit specifics ride through verbatim (Mon 09:00 + 13:00 yes, 11:00 no).
+    const picks = [
+      { hari: 'Senin', jamMulai: '09:00', jamSelesai: '10:00' },
+      { hari: 'Senin', jamMulai: '13:00', jamSelesai: '14:00' },
+    ]
+    expect(resolveNewLinkSlotPicks(['skl-1'], [], { 'skl-1': picks })).toEqual({ 'skl-1': picks })
+    const rows = phpMissingLinks({ existing: [], slotPicks: { 'skl-1': picks } })
+    expect(rows).toHaveLength(2)
+    expect(rows.map(r => r.jamMulai).sort()).toEqual(['09:00', '13:00'])
   })
 
   it('same scoped triple skips; different scoped triple creates', () => {
