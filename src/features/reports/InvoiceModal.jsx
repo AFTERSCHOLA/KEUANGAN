@@ -8,6 +8,7 @@ import { ApiError } from '../../lib/api.js'
 import {
   invoicesForSekolah,
   invoiceSettlement,
+  matchedPaymentsForInvoice,
   carryOverLines,
   generateInvoiceForSekolah,
   deleteInvoiceServer,
@@ -68,6 +69,11 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   const [bulkForm, setBulkForm] = useState({ metode: 'Transfer', diterimaOleh: '', tanggalBayar: localDateString() })
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkError, setBulkError] = useState('')
+  // T2.B.1 (F-T2-3; D-T2-3) — per-invoice expandable history, mirroring the
+  // PaymentTable.jsx:304-335 honor `Riwayat` idiom (single expanded id +
+  // chevron toggle). Display-only: rows come from
+  // matchedPaymentsForInvoice, totals reuse the existing settlement.
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState(null)
 
   if (!open || !sekolah) return null
 
@@ -368,6 +374,12 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                 const fuLine = fu && (fu.penerima || fu.wa || fu.tanggalKirim || fu.tanggalFollowUp || fu.catatan)
                   ? [`Penerima: ${fu.penerima || '—'}`, fu.wa ? `WA ${fu.wa}` : null, fu.tanggalKirim ? `Kirim ${fu.tanggalKirim}` : null, fu.tanggalFollowUp ? `Follow-up ${fu.tanggalFollowUp}` : null, fu.catatan || null].filter(Boolean).join(' · ')
                   : null
+                // T2.B.1 — per-payment rows for the expandable history
+                // (display-only; settlement math untouched).
+                const history = !isLegacyDraft
+                  ? matchedPaymentsForInvoice(inv, { sppPayments: sppPaymentsAll, siswa: siswaAll })
+                  : []
+                const isExpanded = expandedInvoiceId === inv.id
 
                 return (
                   <div key={inv.id} className="bg-white border rounded-lg px-3 py-2 text-xs">
@@ -408,6 +420,34 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       <button onClick={() => removeInvoice(inv)} disabled={submitting} className="text-rose-500 hover:underline font-bold disabled:opacity-40">Hapus</button>
                     </div>
                     </div>
+                    {/* T2.B.1 — expandable per-payment history. Toggle mirrors
+                        the PaymentTable `Riwayat (N)` idiom; row line copy
+                        pinned by TEAM_ROUND2_PLAN §4; footer reuses the
+                        existing settlement values (no new math). */}
+                    {history.length > 0 && (
+                      <button onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.id)} className="mt-1.5 text-slate-500 hover:text-blue-600 text-[11px] font-bold px-1 py-1 flex items-center gap-1">
+                        Riwayat pembayaran ({history.length})
+                        <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                    )}
+                    {isExpanded && history.length > 0 && (
+                      <div className="mt-1 space-y-1.5 bg-slate-50/70 rounded-lg p-2">
+                        {history.map(p => (
+                          <div key={p.id} className="bg-white rounded-lg border border-slate-100 px-3 py-2 text-xs">
+                            <p className="text-slate-600">
+                              {p.tanggalBayar ? new Date(p.tanggalBayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                              {' · '}{p.metode || '—'}
+                              {' · '}{formatRupiah(Number(p.nominal || 0))}
+                              {' · Diterima: '}{p.diterimaOleh || '—'}
+                              {' · Sumber: '}{p.sumberDana === 'ortu' ? 'Ortu' : p.sumberDana === 'sekolah' ? 'Sekolah' : (p.sumberDana || '—')}
+                            </p>
+                          </div>
+                        ))}
+                        <p className="text-slate-500 font-semibold px-1">
+                          Total dibayar {formatRupiah(settlement.dibayar)} · Sisa {formatRupiah(settlement.sisa)}
+                        </p>
+                      </div>
+                    )}
                     {/* BR.2 — bulk-settle trigger + editor. Trigger mirrors
                         the fuEditing toggle idiom (per-row expand, same
                         button classes); empty state pins the second-run
