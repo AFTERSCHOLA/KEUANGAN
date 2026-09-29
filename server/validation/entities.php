@@ -534,14 +534,23 @@ function validateAbsensiPengajar(array $data, PDO $pdo): array {
 // then pins caller-identity: an external row's dicatatOleh must be the
 // authenticated caller's own user id (no forging someone else as the
 // recorder who claimed the 50k). Returns the Indonesian error or null.
-function absensiPengajarWriteError(array $record, PDO $pdo, array $user): ?string {
+// T2.E.2 (F-T2-14; D-T2-9) — corrections preserve the ORIGINAL recorder
+// (buildPengajarCorrection keeps dicatatOleh; the corrector is an admin,
+// never the session owner of the row). $preservedRecorder carries the
+// original row's dicatatOleh for the correct path only: an external
+// correction passes when its recorder equals self (corrector takes over)
+// OR equals the preserved original (audit intact). Anything else —
+// including a forged third id — still fails. Default null keeps the
+// write path byte-identical (additive only).
+function absensiPengajarWriteError(array $record, PDO $pdo, array $user, ?string $preservedRecorder = null): ?string {
     $errors = validateAbsensiPengajar($record, $pdo);
     if ($errors !== []) return implode('; ', $errors);
     if (isExternalPerson($pdo, $record['trainerId'] ?? null)) {
         $me = $user['id'] ?? null;
-        if (!is_string($me) || $me === '' || ($record['dicatatOleh'] ?? null) !== $me) {
-            return 'absensiPengajar: dicatatOleh harus berisi id pengguna yang mencatat';
-        }
+        $recorder = $record['dicatatOleh'] ?? null;
+        if (is_string($me) && $me !== '' && $recorder === $me) return null;
+        if (is_string($preservedRecorder) && $preservedRecorder !== '' && $recorder === $preservedRecorder) return null;
+        return 'absensiPengajar: dicatatOleh harus berisi id pengguna yang mencatat';
     }
     return null;
 }

@@ -47,7 +47,11 @@ if (($data['action'] ?? 'write') === 'correct') {
     // CS.B.2 — corrections mint new rows, so the same role/recorder
     // shape gate applies (a correction cannot smuggle an unvalidated
     // peran or a missing/forged dicatatOleh past the write path).
-    $csbCorrectError = absensiPengajarWriteError($record, database(), $user);
+    // T2.E.2 (F-T2-14; D-T2-9) — the corrector is an admin, never the
+    // original recorder: pass the original's dicatatOleh as the
+    // preserved identity so a faithful preservation passes while a
+    // forged third id still 422s.
+    $csbCorrectError = absensiPengajarWriteError($record, database(), $user, $originalPayload['dicatatOleh'] ?? null);
     if ($csbCorrectError !== null) {
         jsonResponse(['error' => $csbCorrectError], 422);
     }
