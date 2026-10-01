@@ -175,4 +175,25 @@ Unverified: run npx playwright test tests/e2e/auth-bearer.spec.ts (browser E2E; 
 Remaining: Gate AA.D (Bearer for sekolah/siswa/sppPayments/trainer); pre-existing authorize.policy :194; pepper-rotation live run
 ```
 
+## 8. Staging runbook (manual rows — run where `php -S` is safe)
+
+> These rows need a real HTTP server + browser and were never run in dev (function-level locks stand in). Run on staging/XAMPP, in this order, destructive steps last, test DB isolated/disposable.
+
+```text
+1. php server/tests/login.lifecycle.php
+   -> wrong password 401 generic; inactive 401; 5 wrong -> 6th (even correct) 401;
+      session id rotates; no password/password_hash in any body;
+      logout without/wrong CSRF 403; post-logout me 401.
+2. php server/tests/endpoint.protection.php
+   -> anonymous 401; cross-scope 403 incl. trainer-A/trainer-B, out-of-assignment,
+      admin_cabang cross-branch correct 403; duplicate 409; malformed 422.
+3. npx playwright test tests/e2e/auth-bearer.spec.ts
+   -> cookie vs Bearer: mint -> me via Bearer without CSRF 200;
+      revoke -> next Bearer use 401; browser POST without CSRF still 403.
+4. Browser smoke: login -> mint (copy secret once) -> attendance write via Bearer
+   (no cookies) -> cookie attendance path unregressed -> revoke -> Bearer 401.
+```
+
+Record results as `Verified: <command> -> <result>`; anything unrun stays `Unverified` with owner + blocker (taste #56 — never infer).
+
 *End of API Integration Guide — Bearer live for login/me/attendance (§3); cookie-only for the 4 AA.D sectors (§2); Gate AA.D owns the rest.*
