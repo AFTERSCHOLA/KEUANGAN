@@ -248,6 +248,46 @@ export function penugasanInvolvesTrainer(assignment, trainerId) {
   return Array.isArray(extra) && extra.includes(trainerId)
 }
 
+// PG.C.1 — assignment date-validity predicate, extracted so every caller
+// shares one definition of "aktif di tanggal ini" instead of forking the
+// same aktif+periodeMulai+periodeSelesai check inline (previously
+// duplicated in buildDailyTimetable here and in
+// TrainerAttendanceForm.jsx's validSekolahForDate). Mirrors
+// trainerHasActiveAssignmentClient() (store.js) and
+// trainerHasActiveAssignment() (authorize.php) — do not fork this
+// predicate again; extend here if the date rule ever changes.
+export function isAssignmentActiveOnDate(a, tanggal) {
+  if (!a || typeof a !== 'object') return false
+  if (a.aktif !== true) return false
+  if (!a.periodeMulai || typeof a.periodeMulai !== 'string' || tanggal < a.periodeMulai) return false
+  if (a.periodeSelesai != null && String(a.periodeSelesai).trim() !== '' && tanggal > String(a.periodeSelesai)) return false
+  return true
+}
+
+// PG.C.1 — sekolah→trainer direction (companion to
+// TrainerAttendanceForm.jsx's validSekolahForDate, which goes
+// trainer→sekolah). Returns every trainerId actually assigned to this
+// sekolahId on this tanggal, via the same union read as
+// penugasanInvolvesTrainer (trainerId ∪ asistenId ∪ asistenIds[]).
+// AttendanceForm.jsx (Data Absensi, admin-facing) uses this instead of
+// the legacy sekolah.trainerIds field, which no assignment flow writes
+// to (D-SB13 — confirmed empty/unmaintained on every school tested).
+export function trainerIdsForSekolahOnDate(trainers, sekolahId, tanggal) {
+  const ids = new Set()
+  if (!sekolahId) return ids
+  ;(trainers || []).forEach(t => {
+    const assignments = Array.isArray(t && t.penugasanPengajar) ? t.penugasanPengajar : []
+    assignments.forEach(a => {
+      if (!a || a.sekolahId !== sekolahId) return
+      if (!isAssignmentActiveOnDate(a, tanggal)) return
+      if (a.trainerId) ids.add(a.trainerId)
+      if (a.asistenId) ids.add(a.asistenId)
+      ;(a.asistenIds || []).forEach(id => ids.add(id))
+    })
+  })
+  return ids
+}
+
 // Day names match TrainerDashboard.jsx DAY_NAMES (user-local calendar).
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
@@ -277,9 +317,9 @@ export function buildDailyTimetable({ trainers = [], sekolah = [], tanggal = '' 
     const assignments = Array.isArray(t && t.penugasanPengajar) ? t.penugasanPengajar : []
     assignments.forEach(a => {
       if (!a || typeof a !== 'object' || !a.sekolahId) return
-      if (a.aktif !== true) return
-      if (!a.periodeMulai || typeof a.periodeMulai !== 'string' || tanggal < a.periodeMulai) return
-      if (a.periodeSelesai != null && String(a.periodeSelesai).trim() !== '' && tanggal > String(a.periodeSelesai)) return
+      // PG.C.1 — now via the shared predicate (was inline aktif +
+      // periodeMulai/periodeSelesai checks; behavior unchanged).
+      if (!isAssignmentActiveOnDate(a, tanggal)) return
       const sch = schoolById.get(a.sekolahId)
       if (!sch) return
       // BUG3 (D-PS4): the slot predicate gains the assignment scope —

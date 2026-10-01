@@ -161,3 +161,40 @@ describe('CS.C.1 role-first honor (COVER_SLOT)', () => {
     expect(out.totalBebanHonor).toBe(0)
   })
 })
+
+// D-SB14 — trainerNama/sekolahNama display labels must derive from the
+// SAME absensiPengajar hadir records that drive sesiHadir/bebanHonor,
+// falling back to legacy trainerIds/sekolahIds only when there is no
+// attendance history yet. Fixes the bug where "Kehadiran Mengajar: 1
+// Sesi" / "Beban Honor: Rp 50.000" appeared next to "Belum Ditugaskan"
+// because the label and the numbers read from two different sources.
+describe('D-SB14 trainerNama/sekolahNama label derivation', () => {
+  it('derives both labels from absensiPengajar hadir records, ignoring stale/empty legacy fields', () => {
+    const sekolah = [{ id: 'skl-1', nama: 'SDN Test', spp: 0, trainerIds: [] }]
+    const siswa = []
+    const trainer = [{ id: 'trn-1', nama: 'Trainer Satu', honor: 50000, sekolahIds: [] }]
+    const absensiPengajar = [
+      { id: 'ap-1', sekolahId: 'skl-1', trainerId: 'trn-1', periode: '2026-10', status: 'Hadir', peran: 'I' },
+    ]
+    const data = financialData({ sekolah, siswa, trainer, absensi: [], absensiPengajar, honorPayments: [], sppPayments: [], periode: '2026-10' })
+    expect(data.sekolahFinance[0].trainerNama).toBe('Trainer Satu')
+    expect(data.trainerFinance[0].sekolahNama).toBe('SDN Test')
+  })
+
+  it('falls back to legacy trainerIds/sekolahIds when there are no hadir records that periode', () => {
+    const sekolah = [{ id: 'skl-2', nama: 'SDN Lain', spp: 0, trainerIds: ['trn-2'] }]
+    const siswa = []
+    const trainer = [{ id: 'trn-2', nama: 'Trainer Dua', honor: 50000, sekolahIds: ['skl-2'] }]
+    const data = financialData({ sekolah, siswa, trainer, absensi: [], absensiPengajar: [], honorPayments: [], sppPayments: [], periode: '2026-10' })
+    expect(data.sekolahFinance[0].trainerNama).toBe('Trainer Dua')
+    expect(data.trainerFinance[0].sekolahNama).toBe('SDN Lain')
+  })
+
+  it('shows "Belum Ditugaskan"/"Tidak ditugaskan" when neither hadir records nor legacy fields exist', () => {
+    const sekolah = [{ id: 'skl-3', nama: 'SDN Kosong', spp: 0 }]
+    const trainer = [{ id: 'trn-3', nama: 'Trainer Tiga', honor: 50000 }]
+    const data = financialData({ sekolah, siswa: [], trainer, absensi: [], absensiPengajar: [], honorPayments: [], sppPayments: [], periode: '2026-10' })
+    expect(data.sekolahFinance[0].trainerNama).toBe('Belum Ditugaskan')
+    expect(data.trainerFinance[0].sekolahNama).toBe('Tidak ditugaskan')
+  })
+})
