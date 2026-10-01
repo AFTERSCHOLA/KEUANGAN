@@ -73,3 +73,47 @@ try {
 $pdo->prepare('DELETE FROM users WHERE id = :id')->execute([':id' => $id1]);
 
 echo "M2.1 duplicate-username check passed\n";
+
+// --- Part 3: AA.A.1 service_tokens (Hybrid-Opaque service tokens) ---
+try {
+    $serviceColumns = tableColumns($pdo, 'service_tokens');
+} catch (PDOException $error) {
+    throw new RuntimeException('service_tokens table is missing');
+}
+check(count($serviceColumns) > 0, 'service_tokens table has no columns');
+
+$serviceIndexRows = $pdo->query('SHOW INDEX FROM `service_tokens`')->fetchAll();
+$uniqueSingleCols = [];
+foreach ($serviceIndexRows as $row) {
+    if ((int) $row['Non_unique'] === 0 && $row['Key_name'] !== 'PRIMARY') {
+        $uniqueSingleCols[$row['Key_name']][] = $row['Column_name'];
+    }
+}
+$uniqueCols = [];
+foreach ($uniqueSingleCols as $cols) {
+    if (count($cols) === 1) $uniqueCols[] = $cols[0];
+}
+check(in_array('prefix', $uniqueCols, true), 'service_tokens.prefix lacks UNIQUE');
+check(in_array('token_hash', $uniqueCols, true), 'service_tokens.token_hash lacks UNIQUE');
+
+echo "AA.A.1 service_tokens unique(prefix, token_hash) check passed\n";
+
+// Idempotency: re-applying the migration + schema changes nothing.
+$serviceIndexSig = fn(array $rows): array => array_map(
+    fn($row) => $row['Key_name'] . ':' . $row['Column_name'] . ':' . $row['Non_unique'] . ':' . ($row['Seq_in_index'] ?? ''),
+    $rows
+);
+$beforeService = $serviceColumns;
+$beforeServiceIndexes = $serviceIndexSig($serviceIndexRows);
+
+$migrationSql = file_get_contents(__DIR__ . '/../migrations/2026-09-24-service-tokens.sql');
+check($migrationSql !== false, 'Could not read 2026-09-24-service-tokens.sql migration');
+applySchema($pdo, $migrationSql);
+applySchema($pdo, $schemaSql);
+
+$afterService = tableColumns($pdo, 'service_tokens');
+$afterServiceIndexes = $serviceIndexSig($pdo->query('SHOW INDEX FROM `service_tokens`')->fetchAll());
+check($beforeService === $afterService, 'Re-applying service_tokens migration changed columns');
+check($beforeServiceIndexes === $afterServiceIndexes, 'Re-applying service_tokens migration changed indexes');
+
+echo "AA.A.1 service_tokens idempotency check passed\n";
