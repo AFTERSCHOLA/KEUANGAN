@@ -86,7 +86,7 @@ flowchart LR
 
 - **C1.** `cabang` entity + `cabangId` on schools
 - **C2.** Branch-prefixed IDs (`trn-PST-…`, `sw-BDG-…`) — *irreversible, do now*
-- **C3.** Server-first storage prep (PHP API client, IndexedDB outbox)
+- **C3.** Server-first storage prep (PHP API client, IndexedDB outbox) — Bearer gist live on test-stage for schools/siswa/SPP/trainers (AA.D.1; cookie path unchanged)
 - **C4.** Photos outside localStorage (IndexedDB or server)
 - **C5.** Unit tests for `finance.js`, `tunggakan.js`, `constants.js`, `backup.js`
 - **C6.** PWA shell (installable, offline-capable)

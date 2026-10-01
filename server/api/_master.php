@@ -38,7 +38,12 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
 {
     // FIX: was completely missing. Every other state-changing endpoint in
     // this codebase calls this before touching the DB — this one didn't.
-    requireCsrf();
+    // AA.D.1 (D-AA4, R-AA2): gate on the Bearer boundary — Bearer-only
+    // skips CSRF (no ambient credentials); any session/remember cookie
+    // presence still requires it, even with a valid Bearer header
+    // (fail-closed), so the cookie path is byte-identical to before.
+    // The cookie-or-Bearer 401 already fired in the endpoint preamble.
+    if (requestRequiresCsrf($user)) requireCsrf();
 
     $config = entityConfig($entity);
     $pdo = database();
@@ -165,7 +170,11 @@ function masterWrite(string $entity, array $user, bool $isCabang = false, ?array
 function masterDelete(string $entity, array $user, bool $isCabang = false): never
 {
     // FIX: was completely missing.
-    requireCsrf();
+    // AA.D.1 (D-AA4, R-AA2): same Bearer-boundary gate as masterWrite
+    // above — cookie path (including both-present) still requires CSRF,
+    // Bearer-only skips it. The cookie-or-Bearer 401 already fired in
+    // the endpoint preamble.
+    if (requestRequiresCsrf($user)) requireCsrf();
 
     $config = entityConfig($entity);
     $pdo = database();

@@ -10,7 +10,12 @@ require_once __DIR__ . '/../bootstrap.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
 // 401 — anonymous callers get nothing synced at all.
-$user = requireAuthenticatedUser();
+// AA.D.1 (D-AA9): Bearer-first via serviceBearerUser(), else today's
+// session; NO new CSRF (as today — legacy retained-only path).
+// Per-entry authorize('write') below stays as-is (deliberately not
+// requireAuthorization — one denied entry fails just itself).
+$bearer = serviceBearerUser();
+$user = is_array($bearer) ? $bearer : requireAuthenticatedUser();
 
 $body = requestJson();
 $entries = $body['entries'] ?? [];

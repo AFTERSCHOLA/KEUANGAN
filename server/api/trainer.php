@@ -4,7 +4,13 @@ require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/_master.php';
 require_once __DIR__ . '/../lib/assignments.php';
 
-$user = requireAuthenticatedUser();
+// AA.D.1 (D-AA4, R-AA2): 401 first (cookie OR Bearer). CSRF for the
+// cookie path is enforced inside masterWrite()/masterDelete() in
+// _master.php — gated on the Bearer boundary there so the
+// cookie path (including both-present) still requires it while
+// Bearer-only skips it. Scope stays in the SAME authorize() calls in
+// _master.php (R-AA1).
+$user = requireAuthUserOrBearer();
 $method = $_SERVER['REQUEST_METHOD'];
 $role = $user['role'] ?? null;
 

@@ -163,6 +163,7 @@ Before production promotion, create and verify a readable database backup, retai
 | Branch entity and branch filtering | Partial | M1.1, M3.2, M4.3 | Scope/policy |
 | PHP PDO/MySQL ledger scaffold | Partial | M2.1–M3.4 | Platform/auth |
 | Secure authentication and sessions | Partial | M2.1–M2.4, M4.1–M4.2 | Platform/auth |
+| API Bearer auth for entity writes (Hybrid-Opaque) | Live on test-stage (AA.A–AA.D: mint/revoke/me, attendance + schools/siswa/SPP/trainers gist; cookie+CSRF path unchanged) | AUTH_API_PLAN AA.D.1 | Platform/auth |
 | Server RBAC and branch authorization | M3.1 done (policy + full matrix tests pass, KI-1 resolved); M3.2–M3.5 remaining | M3.2–M3.5 | Scope/policy |
 | CSRF, headers, rate limiting, upload controls | Not implemented | M5.1–M5.2 | Platform/auth |
 | Authenticated offline outbox/conflicts | Partial | M5.3 | Product integration |
