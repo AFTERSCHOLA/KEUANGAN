@@ -1,6 +1,6 @@
 # Auth API Plan — Hybrid-Opaque (Browser Cookie + Service Bearer)
 
-**Status:** DRAFT 2026-09-23 — agreed common ground: hybrid-opaque. For team evaluation, no code executed yet.
+**Status:** IN PROGRESS 2026-10-01 — Gates AA.A → AA.C implemented on test-stage (commits 91ff74e..b574d67: service_tokens table, Bearer guard, mint/revoke/me, throttle off-by-one fix, attendance via Bearer). Gate AA.D (schools/siswa/SPP/trainers gist) OPEN. Observable outcome + falsifiable check above now hold for login/me/attendance (function-level EXIT 0; HTTP/playwright rows manual).
 **Position:** Temporary auth/API readiness chain. This document does **not** replace `PRODUCTION_PLAN.md`, `SCOPE_EXPANSION_PLAN.md`, `SCOPE_EXPANSION_PRIVILEGES.md`, or `IMPLEMENTATION_PLAN.md`. When Gate AA-D closes, §10 records write-back to source docs and this pair is folded or retired.
 **Trigger:** Persistent CSRF 403 drift on browser Login page across devices/setups/deploy + other division request for API readiness (login, attendance, schools, students/siswa, SPP financing, trainers, server-to-server token instead of session cookie).
 **Observable outcome:** Other-division script mints one service token once, then writes one attendance via `Authorization: Bearer` with zero CSRF traffic, while browser cookie login is untouched.
