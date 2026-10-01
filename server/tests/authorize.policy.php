@@ -12,6 +12,71 @@ function u(string $role, array $extra = []): array {
 }
 
 // ---------------------------------------------------------------------
+// AA.A.2 — service-token guard (Hybrid-Opaque Bearer, deny-closed).
+// Valid Bearer resolves scope through the SAME authorize();
+// revoked/expired/malformed Bearer resolves to null (401 at the edge);
+// CSRF boundary: cookie path requires CSRF, Bearer-only skips it, both
+// present requires it (fail-closed). NOTE: the trainer sekolah row at
+// :96 below still FAILs on the clean tree (trainerIds vs
+// _sekolahTrainerIds drift) — pre-existing, untouched by this task.
+// ---------------------------------------------------------------------
+policyCheck(function_exists('serviceBearerUser'), 'AA.A.2 service-token guard helper is missing');
+
+$__aa2Server = $_SERVER;
+$__aa2Cookie = $_COOKIE;
+$__aa2Pdo = database();
+$__aa2Pdo->exec("DELETE FROM service_tokens WHERE prefix IN ('tstbr001','tstbr002','tstbr003')");
+$__aa2Pdo->exec("DELETE FROM users WHERE id = 'usr-bearer-aa2'");
+$__aa2Pdo->prepare("INSERT INTO users (id, username, display_name, password_hash, role, cabang_id, active, must_change_password) VALUES ('usr-bearer-aa2','test_bearer_aa2','Bearer AA2',:ph,'admin_cabang','cab-bearer-1',1,0)")
+    ->execute([':ph' => password_hash('BearerTest123', PASSWORD_DEFAULT)]);
+$__aa2SecretOk = 'abcdefghijklmnopqrstuvwxyzABCDEFGH123456789';
+$__aa2SecretRevoked = 'ZYXWVUTSRQPONMLKJIHGFEDCBAhgfedcba987654321';
+$__aa2SecretExpired = '0123456789abcdefABCDEFGHIJKLMNOPQRSTUVWXYZa';
+$__aa2SeedToken = $__aa2Pdo->prepare("INSERT INTO service_tokens (id, prefix, token_hash, last4, user_id, role, cabang_id, trainer_id, name, expires_at, revoked_at, created_ip) VALUES (:id, :prefix, :hash, :last4, 'usr-bearer-aa2', 'admin_cabang', 'cab-bearer-1', NULL, 'AA.A.2 bearer case', :exp, :rev, '127.0.0.1')");
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-ok', ':prefix' => 'tstbr001', ':hash' => serviceTokenHash($__aa2SecretOk), ':last4' => '6789', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => null]);
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-rev', ':prefix' => 'tstbr002', ':hash' => serviceTokenHash($__aa2SecretRevoked), ':last4' => '4321', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => date('Y-m-d H:i:s', time())]);
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-exp', ':prefix' => 'tstbr003', ':hash' => serviceTokenHash($__aa2SecretExpired), ':last4' => 'XYZa', ':exp' => date('Y-m-d H:i:s', time() - 24 * 60 * 60), ':rev' => null]);
+
+// Valid Bearer resolves scope through the SAME authorize().
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . $__aa2SecretOk;
+$_COOKIE = [];
+$__aa2User = serviceBearerUser();
+policyCheck(is_array($__aa2User), 'AA.A.2 valid Bearer should resolve a user');
+policyCheck(array_keys($__aa2User) === ['id', 'username', 'displayName', 'role', 'cabangId', 'trainerId', 'active', 'mustChangePassword'], 'AA.A.2 Bearer identity must match the safeIdentity() shape');
+policyCheck($__aa2User['username'] === 'test_bearer_aa2' && $__aa2User['role'] === 'admin_cabang' && $__aa2User['cabangId'] === 'cab-bearer-1', 'AA.A.2 Bearer identity must carry the user row scope');
+policyCheck(authorize('read', 'siswa', ['cabangId' => 'cab-bearer-1'], $__aa2User), 'AA.A.2 valid Bearer should read own branch');
+policyCheck(!authorize('read', 'siswa', ['cabangId' => 'cab-other'], $__aa2User), 'AA.A.2 valid Bearer must NOT read cross-branch (scope still enforced)');
+policyCheck(requestRequiresCsrf($__aa2User) === false, 'AA.A.2 Bearer-only POST without CSRF must pass the CSRF gate');
+
+// Revoked / expired / wrong-secret / malformed / missing Bearer → null.
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr002_' . $__aa2SecretRevoked;
+$_COOKIE = [];
+policyCheck(serviceBearerUser() === null, 'AA.A.2 revoked Bearer must resolve to null (401 at the edge)');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr003_' . $__aa2SecretExpired;
+policyCheck(serviceBearerUser() === null, 'AA.A.2 expired Bearer must resolve to null (401 at the edge)');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . substr($__aa2SecretOk, 0, 42) . 'X';
+policyCheck(serviceBearerUser() === null, 'AA.A.2 wrong-secret Bearer must resolve to null');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer garbage';
+policyCheck(serviceBearerUser() === null, 'AA.A.2 malformed Bearer must resolve to null');
+unset($_SERVER['HTTP_AUTHORIZATION']);
+policyCheck(serviceBearerUser() === null, 'AA.A.2 missing Bearer header must resolve to null');
+
+// CSRF boundary: cookie path requires CSRF (403 at the edge); both
+// present (Bearer header + session cookie) requires CSRF (fail-closed).
+$__aa2SessionKey = serverConfig()['session_name'] ?? 'afterschola_session';
+$_COOKIE = [$__aa2SessionKey => 'dummy-session-id'];
+policyCheck(requestRequiresCsrf(null) === true, 'AA.A.2 cookie POST without CSRF must require CSRF (403 at the edge)');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . $__aa2SecretOk;
+policyCheck(requestRequiresCsrf($__aa2User) === true, 'AA.A.2 Bearer + session cookie must still require CSRF (fail-closed)');
+
+$__aa2Pdo->exec("DELETE FROM service_tokens WHERE prefix IN ('tstbr001','tstbr002','tstbr003')");
+$__aa2Pdo->exec("DELETE FROM users WHERE id = 'usr-bearer-aa2'");
+$_SERVER = $__aa2Server;
+$_COOKIE = $__aa2Cookie;
+
+echo "AA.A.2 service-token guard rows passed\n";
+
+// ---------------------------------------------------------------------
 // Superadmin: full access, including actions denied to everyone else.
 // ---------------------------------------------------------------------
 $superadmin = u('superadmin');

@@ -5,6 +5,11 @@ declare(strict_types=1);
 // server/validation/entities.php (pure, no side effects on load).
 require_once __DIR__ . '/../validation/entities.php';
 
+// AA.A.2 (D-AA2) — service-token guard (Bearer resolution + CSRF
+// boundary). Load-only: scope semantics below are unchanged; the guard
+// supplies the ?array $user authorize() already accepts, never a bypass.
+require_once __DIR__ . '/service-tokens.php';
+
 const CANONICAL_SERVER_ROLES = ['superadmin', 'admin_cabang', 'trainer'];
 
 function validServerRole(mixed $role): bool {
