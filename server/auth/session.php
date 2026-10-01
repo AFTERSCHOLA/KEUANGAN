@@ -303,7 +303,12 @@ function loginLocked(string $key): bool {
 
 function registerLoginFailure(string $key): void {
     $pdo = database();
-    $stmt = $pdo->prepare('INSERT INTO login_attempts (key_hash, failed_count, locked_until) VALUES (:key_hash, 1, NULL) ON DUPLICATE KEY UPDATE failed_count = failed_count + 1, locked_until = IF(failed_count + 1 >= 5, DATE_ADD(NOW(), INTERVAL 15 MINUTE), locked_until)');
+    // Throttle is 5 fails -> 15min lock (F-AA4/D-AA6). NOTE: in the
+    // ON DUPLICATE KEY UPDATE list MySQL evaluates left-to-right, so the
+    // second failed_count already sees the incremented (NEW) value — the
+    // lock predicate must compare the NEW count directly (>= 5). Using
+    // (failed_count + 1 >= 5) would lock one attempt early (on the 4th).
+    $stmt = $pdo->prepare('INSERT INTO login_attempts (key_hash, failed_count, locked_until) VALUES (:key_hash, 1, NULL) ON DUPLICATE KEY UPDATE failed_count = failed_count + 1, locked_until = IF(failed_count >= 5, DATE_ADD(NOW(), INTERVAL 15 MINUTE), locked_until)');
     $stmt->execute([':key_hash' => $key]);
 }
 
