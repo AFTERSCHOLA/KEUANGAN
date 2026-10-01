@@ -232,7 +232,7 @@ export default function PaymentTable() {
             </thead>
             <tbody className="divide-y text-sm">
               {trainers.map(t => {
-                const fin = financeByTrainerId[t.id] || { hadirSesi: 0, tarif: t.honor, bebanHonor: 0, dibayar: 0, sisaHonor: 0 }
+                const fin = financeByTrainerId[t.id] || { hadirSesi: 0, tarif: t.honor, bebanHonor: 0, dibayar: 0, sisaHonor: 0, sekolahNama: 'Tidak ditugaskan' }
                 // EF.B.2 — status Unpaid/Partially Paid/Paid + deferral note,
                 // pure derivation dari payable(fin.bebanHonor) vs fin.dibayar.
                 // Tidak menulis apa pun; deferredTrainerIds cuma state lokal.
@@ -241,7 +241,13 @@ export default function PaymentTable() {
                   dibayar: fin.dibayar,
                   deferred: deferredTrainerIds.has(t.id),
                 })
-                const sekolahNama = (t.sekolahIds || []).map(id => sekolah.find(s => s.id === id)).filter(Boolean).map(s => s.nama).join(', ')
+                // D-SB14 — pakai fin.sekolahNama (sudah derive dari
+                // absensiPengajar dulu, baru fallback ke t.sekolahIds di
+                // finance.js) daripada hitung ulang dari t.sekolahIds
+                // langsung di sini. Field legacy yang sama inilah yang
+                // bikin baris ini bisa bilang "Tidak ditugaskan" padahal
+                // kolom "Kehadiran" di baris yang sama sudah > 0 sesi.
+                const sekolahNama = fin.sekolahNama
                 // Pasangan entry asli + entry koreksinya (correctionOf) direpresentasikan
                 // sebagai "dihapus" di UI, tapi tetap utuh di database sebagai audit trail
                 // (ledger append-only — lihat honorPayments.php, tidak ada action delete).

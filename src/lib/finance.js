@@ -86,6 +86,21 @@ export function pengajarHonorStats(absensiPengajar = [], periode) {
   return { hadirByTrainer, hadirBySekolah, hadirRecords }
 }
 
+// D-SB14 — names derived from the SAME source used for the counts/honor
+// in that row, so a label and its numbers can never disagree (the bug
+// this fixes: "Kehadiran Mengajar: 1 Sesi" next to "Belum Ditugaskan").
+// Falls back to the legacy trainerIds/sekolahIds field only when there is
+// no attendance history yet to derive from (pengajarStats null, or no
+// hadir rows for this sekolah/trainer this periode) — preserves existing
+// behavior for schools/trainers with zero recorded sessions.
+function namesFromHadirRecords(records, idKey, lookupList, lookupKey = 'id') {
+  const ids = [...new Set(records.map(r => r[idKey]).filter(Boolean))]
+  return ids
+    .map(id => lookupList.find(item => item[lookupKey] === id)?.nama)
+    .filter(Boolean)
+    .join(', ')
+}
+
 export function financialData({ sekolah = [], siswa = [], trainer = [], absensi = [], honorPayments = [], sppPayments = [], periode, absensiPengajar = null }) {
   const stats = attendanceStats(absensi, periode)
   const dibayarByTrainer = honorPaidByTrainer(honorPayments, periode)
@@ -116,12 +131,6 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     potensiSpp += targetSpp
     pemasukanSpp += realisasiSpp
 
-
-    const trainerNama = (sch.trainerIds || [])
-      .map(id => trainer.find(t => t.id === id)?.nama)
-      .filter(Boolean)
-      .join(', ') || 'Belum Ditugaskan'
-
     // TA.C.3: with the Gate C source, beban per sekolah = Σ Hadir rows
     // in absensiPengajar × role-first honor (CS.C.1, D-CS6:
     // A -> 50k, I/legacy -> owner's trainer.honor per R-TA3).
@@ -131,6 +140,18 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
       : absensi.filter(
         a => a.sekolahId === sch.id && a.periode === periode && a.trainerStatus === 'Hadir'
       )
+
+    // D-SB14 — trainer label derived from the hadir rows above first
+    // (same rows that drove sesiHadir/bebanHonor); legacy trainerIds only
+    // when this school has no recorded teaching session yet.
+    const trainerNamaFromHadir = pengajarStats
+      ? namesFromHadirRecords(sesiHadir, 'trainerId', trainer)
+      : ''
+    const trainerNama = trainerNamaFromHadir || (sch.trainerIds || [])
+      .map(id => trainer.find(t => t.id === id)?.nama)
+      .filter(Boolean)
+      .join(', ') || 'Belum Ditugaskan'
+
     const bebanHonor = sesiHadir.reduce((sum, a) => {
       if (!pengajarStats) {
         const tr = trainer.find(t => t.id === a.trainerId)
@@ -158,16 +179,21 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     const hadirSesi = trainerSessionCount[t.id] || 0
     // CS.C.1: role-first honor when the Gate C source is active; legacy
     // count × tarif when absensiPengajar is absent (byte-identical).
+    const trainerHadirRecords = pengajarStats
+      ? pengajarStats.hadirRecords.filter(r => r.trainerId === t.id)
+      : []
     const bebanHonor = pengajarStats
-      ? pengajarStats.hadirRecords
-        .filter(r => r.trainerId === t.id)
-        .reduce((sum, r) => sum + honorForPengajarRow(r, trainer), 0)
+      ? trainerHadirRecords.reduce((sum, r) => sum + honorForPengajarRow(r, trainer), 0)
       : hadirSesi * t.honor
     totalBebanHonor += bebanHonor
     const dibayar = dibayarByTrainer[t.id] || 0
 
-
-    const sekolahNama = (t.sekolahIds || [])
+    // D-SB14 — same derive-then-fallback as trainerNama above, mirrored
+    // for the sekolah label on the trainer-facing row.
+    const sekolahNamaFromHadir = pengajarStats
+      ? namesFromHadirRecords(trainerHadirRecords, 'sekolahId', sekolah)
+      : ''
+    const sekolahNama = sekolahNamaFromHadir || (t.sekolahIds || [])
       .map(id => sekolah.find(s => s.id === id)?.nama)
       .filter(Boolean)
       .join(', ') || 'Tidak ditugaskan'
@@ -224,7 +250,7 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
   }
 }
 
-// ============================================
+// ============================================================
 // SB.A.2 — Per-meeting billing calculator (F-SB1; D-SB5, D-SB6, D-SB7, D-SB13)
 // Rumus dasar tunggal (SPP_BILLING_PLAN.md §6): tarifPerPertemuan ×
 // pertemuan_aktual, basis 'siswa' dikali jumlah siswa aktif non-Trial,
