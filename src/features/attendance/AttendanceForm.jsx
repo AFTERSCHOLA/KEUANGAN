@@ -3,6 +3,7 @@ import { readCached, read, writeRemote } from '../../lib/store.js'
 import { apiRequest, ApiError } from '../../lib/api.js'
 import { newAbsensi, localDateString } from '../../lib/constants.js'
 import { findIssuedInvoiceForPeriod } from '../../lib/invoices.js'
+import { trainerIdsForSekolahOnDate } from '../../lib/penugasan.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import QuickSession from './QuickSession.jsx'
@@ -49,7 +50,21 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
 
   const filteredSiswa = siswa.filter(s => s.sekolahId === sekolahId)
   const selectedSekolah = sekolah.find(s => s.id === sekolahId)
-  const availableTrainers = trainers.filter(t => selectedSekolah?.trainerIds?.includes(t.id))
+  // D-SB13 — sekolah.trainerIds was a legacy field never written by any
+  // assignment flow (Penugasan Pengajar writes to trainer.penugasanPengajar[]
+  // only). The old `trainers.filter(t => selectedSekolah?.trainerIds?.includes(t.id))`
+  // therefore always returned an empty list once a school had no legacy
+  // trainerIds seed — confirmed via manual repro (new school + active
+  // assignment via Penugasan Pengajar, dropdown stayed empty). Source of
+  // truth is now the same one TrainerAttendanceForm.jsx and
+  // buildDailyTimetable() already use: trainer.penugasanPengajar[],
+  // aktif=true, tanggal within periodeMulai..periodeSelesai, union read
+  // over trainerId/asistenId/asistenIds.
+  const availableTrainerIds = useMemo(
+    () => trainerIdsForSekolahOnDate(trainers, sekolahId, tanggal),
+    [trainers, sekolahId, tanggal]
+  )
+  const availableTrainers = trainers.filter(t => availableTrainerIds.has(t.id))
   const availableAsisten = availableTrainers.filter(t => t.id !== trainerId)
   const hadirCount = filteredSiswa.filter(s => siswaStatus[s.id] === 'Hadir').length
 
