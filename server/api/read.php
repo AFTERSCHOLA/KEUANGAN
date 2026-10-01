@@ -10,7 +10,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method tidak
 // cabang_id di level SQL sebelum masuk response.
 //
 // 401 — no session, no data.
-$user = requireAuthenticatedUser();
+// AA.C.1 (D-AA4 + me.php ruling): safe read — Bearer-first without
+// CSRF; else today's cookie session (no CSRF on GET).
+$bearer = serviceBearerUser();
+$user = is_array($bearer) ? $bearer : requireAuthenticatedUser();
 
 $entity = $_GET['entity'] ?? null;
 $allEntities = [

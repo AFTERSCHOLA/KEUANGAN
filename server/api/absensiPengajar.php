@@ -11,10 +11,11 @@ require_once __DIR__ . '/../bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
-// 401 first (who are you), then CSRF (403) — both before touching the
-// body or the database, same ordering as absensi.php.
-$user = requireAuthenticatedUser();
-requireCsrf();
+// AA.C.1 (D-AA4, R-AA2): 401 first (cookie OR Bearer), then 403 CSRF
+// on the cookie path only (Bearer-only skips, both-present requires) —
+// both before touching the body or the database, same ordering as
+// absensi.php. Scope stays in the SAME authorize() calls below (R-AA1).
+$user = requireAuthUserOrBearer();
 
 $data = requestJson();
 

@@ -5,11 +5,11 @@ require_once __DIR__ . '/../validation/entities.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
-// 401 first (who are you), then CSRF (403 — proves this came from our own
-// app, not a forged cross-site request) — both before we touch the body
-// or the database at all.
-$user = requireAuthenticatedUser();
-requireCsrf();
+// AA.C.1 (D-AA4, R-AA2): 401 first (cookie OR Bearer), then 403 CSRF
+// on the cookie path only (Bearer-only skips, both-present requires) —
+// both before we touch the body or the database at all. Scope stays in
+// the SAME authorize() calls below (R-AA1).
+$user = requireAuthUserOrBearer();
 
 $data = requestJson();
 $pdo = database();      
