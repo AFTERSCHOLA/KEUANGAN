@@ -62,7 +62,7 @@ function serviceBearerUser(): ?array {
         $secret = $matches[2];
 
         $pdo = database();
-        $stmt = $pdo->prepare('SELECT token_hash, user_id, expires_at, revoked_at FROM service_tokens WHERE prefix = :prefix LIMIT 1');
+        $stmt = $pdo->prepare('SELECT token_hash, user_id, role, cabang_id, trainer_id, expires_at, revoked_at FROM service_tokens WHERE prefix = :prefix LIMIT 1');
         $stmt->execute([':prefix' => $prefix]);
         $row = $stmt->fetch();
         if (!is_array($row)) return null;
@@ -74,6 +74,16 @@ function serviceBearerUser(): ?array {
         $userStmt->execute([':id' => $row['user_id']]);
         $userRow = $userStmt->fetch();
         if (!is_array($userRow)) return null;
+        // Token-bound scope (D-AA4; minted with user_id + role + cabang_id
+        // (+ trainer_id) in AA.B.1): the token carries the scope it was
+        // minted with, so a stale token — e.g. user transferred branch or
+        // role changed since mint — fails closed here instead of riding
+        // the live row into a new branch. Strict compare: NULL (superadmin
+        // without branch / non-trainer) only matches NULL. Live branch /
+        // assignment checks still stay in authorize() downstream (R-AA1).
+        if ($row['role'] !== $userRow['role']) return null;
+        if ($row['cabang_id'] !== $userRow['cabang_id']) return null;
+        if ($row['trainer_id'] !== $userRow['trainer_id']) return null;
         return safeIdentity([
             'id' => $userRow['id'],
             'username' => $userRow['username'],

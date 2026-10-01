@@ -25,17 +25,21 @@ policyCheck(function_exists('serviceBearerUser'), 'AA.A.2 service-token guard he
 $__aa2Server = $_SERVER;
 $__aa2Cookie = $_COOKIE;
 $__aa2Pdo = database();
-$__aa2Pdo->exec("DELETE FROM service_tokens WHERE prefix IN ('tstbr001','tstbr002','tstbr003')");
+$__aa2Pdo->exec("DELETE FROM service_tokens WHERE prefix IN ('tstbr001','tstbr002','tstbr003','tstbr004','tstbr005')");
 $__aa2Pdo->exec("DELETE FROM users WHERE id = 'usr-bearer-aa2'");
 $__aa2Pdo->prepare("INSERT INTO users (id, username, display_name, password_hash, role, cabang_id, active, must_change_password) VALUES ('usr-bearer-aa2','test_bearer_aa2','Bearer AA2',:ph,'admin_cabang','cab-bearer-1',1,0)")
     ->execute([':ph' => password_hash('BearerTest123', PASSWORD_DEFAULT)]);
 $__aa2SecretOk = 'abcdefghijklmnopqrstuvwxyzABCDEFGH123456789';
 $__aa2SecretRevoked = 'ZYXWVUTSRQPONMLKJIHGFEDCBAhgfedcba987654321';
 $__aa2SecretExpired = '0123456789abcdefABCDEFGHIJKLMNOPQRSTUVWXYZa';
-$__aa2SeedToken = $__aa2Pdo->prepare("INSERT INTO service_tokens (id, prefix, token_hash, last4, user_id, role, cabang_id, trainer_id, name, expires_at, revoked_at, created_ip) VALUES (:id, :prefix, :hash, :last4, 'usr-bearer-aa2', 'admin_cabang', 'cab-bearer-1', NULL, 'AA.A.2 bearer case', :exp, :rev, '127.0.0.1')");
-$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-ok', ':prefix' => 'tstbr001', ':hash' => serviceTokenHash($__aa2SecretOk), ':last4' => '6789', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => null]);
-$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-rev', ':prefix' => 'tstbr002', ':hash' => serviceTokenHash($__aa2SecretRevoked), ':last4' => '4321', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => date('Y-m-d H:i:s', time())]);
-$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-exp', ':prefix' => 'tstbr003', ':hash' => serviceTokenHash($__aa2SecretExpired), ':last4' => 'XYZa', ':exp' => date('Y-m-d H:i:s', time() - 24 * 60 * 60), ':rev' => null]);
+$__aa2SecretStaleBranch = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
+$__aa2SeedToken = $__aa2Pdo->prepare("INSERT INTO service_tokens (id, prefix, token_hash, last4, user_id, role, cabang_id, trainer_id, name, expires_at, revoked_at, created_ip) VALUES (:id, :prefix, :hash, :last4, 'usr-bearer-aa2', 'admin_cabang', :cabang, NULL, 'AA.A.2 bearer case', :exp, :rev, '127.0.0.1')");
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-ok', ':prefix' => 'tstbr001', ':hash' => serviceTokenHash($__aa2SecretOk), ':last4' => '6789', ':cabang' => 'cab-bearer-1', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => null]);
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-rev', ':prefix' => 'tstbr002', ':hash' => serviceTokenHash($__aa2SecretRevoked), ':last4' => '4321', ':cabang' => 'cab-bearer-1', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => date('Y-m-d H:i:s', time())]);
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-exp', ':prefix' => 'tstbr003', ':hash' => serviceTokenHash($__aa2SecretExpired), ':last4' => 'XYZa', ':cabang' => 'cab-bearer-1', ':exp' => date('Y-m-d H:i:s', time() - 24 * 60 * 60), ':rev' => null]);
+// Fix round 1/5, Finding 1: token minted for another branch (stale scope
+// after a branch transfer) — must fail closed against the live user row.
+$__aa2SeedToken->execute([':id' => 'srv-bearer-aa2-stale', ':prefix' => 'tstbr004', ':hash' => serviceTokenHash($__aa2SecretStaleBranch), ':last4' => 'NOPQ', ':cabang' => 'cab-other', ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60), ':rev' => null]);
 
 // Valid Bearer resolves scope through the SAME authorize().
 $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . $__aa2SecretOk;
@@ -58,6 +62,11 @@ $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . substr($__aa2SecretOk,
 policyCheck(serviceBearerUser() === null, 'AA.A.2 wrong-secret Bearer must resolve to null');
 $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer garbage';
 policyCheck(serviceBearerUser() === null, 'AA.A.2 malformed Bearer must resolve to null');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_zzzz9999_' . $__aa2SecretOk;
+$_COOKIE = [];
+policyCheck(serviceBearerUser() === null, 'AA.A.2 unknown-prefix Bearer must resolve to null');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr004_' . $__aa2SecretStaleBranch;
+policyCheck(serviceBearerUser() === null, 'AA.A.2 branch-stale Bearer must resolve to null (token cabang differs from live user row)');
 unset($_SERVER['HTTP_AUTHORIZATION']);
 policyCheck(serviceBearerUser() === null, 'AA.A.2 missing Bearer header must resolve to null');
 
@@ -69,7 +78,31 @@ policyCheck(requestRequiresCsrf(null) === true, 'AA.A.2 cookie POST without CSRF
 $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . $__aa2SecretOk;
 policyCheck(requestRequiresCsrf($__aa2User) === true, 'AA.A.2 Bearer + session cookie must still require CSRF (fail-closed)');
 
-$__aa2Pdo->exec("DELETE FROM service_tokens WHERE prefix IN ('tstbr001','tstbr002','tstbr003')");
+// Fix round 1/5, Finding 2: SERVICE_TOKEN_PEPPER path — the HMAC hash
+// resolves while the pepper is set (and the plain-SHA256 token stops
+// resolving, proving the hash mode actually switched); env restored
+// after so later rows run pepper-free.
+$__aa2PriorPepper = getenv('SERVICE_TOKEN_PEPPER');
+putenv('SERVICE_TOKEN_PEPPER=aa2-test-pepper');
+$__aa2SecretPeppered = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg';
+$__aa2Pdo->prepare("INSERT INTO service_tokens (id, prefix, token_hash, last4, user_id, role, cabang_id, trainer_id, name, expires_at, revoked_at, created_ip) VALUES ('srv-bearer-aa2-pep','tstbr005',:hash,'defg','usr-bearer-aa2','admin_cabang','cab-bearer-1',NULL,'AA.A.2 pepper case',:exp,NULL,'127.0.0.1')")
+    ->execute([':hash' => serviceTokenHash($__aa2SecretPeppered), ':exp' => date('Y-m-d H:i:s', time() + 90 * 24 * 60 * 60)]);
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr005_' . $__aa2SecretPeppered;
+$_COOKIE = [];
+$__aa2PepperUser = serviceBearerUser();
+policyCheck(is_array($__aa2PepperUser) && $__aa2PepperUser['username'] === 'test_bearer_aa2', 'AA.A.2 peppered Bearer should resolve under SERVICE_TOKEN_PEPPER');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . $__aa2SecretOk;
+policyCheck(serviceBearerUser() === null, 'AA.A.2 plain-hash Bearer must NOT resolve while SERVICE_TOKEN_PEPPER is set');
+if ($__aa2PriorPepper === false) {
+    putenv('SERVICE_TOKEN_PEPPER');
+} else {
+    putenv('SERVICE_TOKEN_PEPPER=' . $__aa2PriorPepper);
+}
+$_SERVER['HTTP_AUTHORIZATION'] = 'Bearer aft_tstbr001_' . $__aa2SecretOk;
+$_COOKIE = [];
+policyCheck(is_array(serviceBearerUser()), 'AA.A.2 plain-hash Bearer should resolve again after pepper restore');
+
+$__aa2Pdo->exec("DELETE FROM service_tokens WHERE prefix IN ('tstbr001','tstbr002','tstbr003','tstbr004','tstbr005')");
 $__aa2Pdo->exec("DELETE FROM users WHERE id = 'usr-bearer-aa2'");
 $_SERVER = $__aa2Server;
 $_COOKIE = $__aa2Cookie;
