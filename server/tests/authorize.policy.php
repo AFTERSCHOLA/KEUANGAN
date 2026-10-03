@@ -321,6 +321,15 @@ $__rptPdo->prepare("INSERT INTO trainer (id, cabang_id, payload) VALUES ('trn-rp
 $trainerRpt = u('trainer', ['trainerId' => 'trn-rpt-1']);
 policyCheck(authorize('write', 'raport', ['id' => 'rpt-live-1', 'siswaId' => 'sis-rpt-a', 'cabangId' => 'cab-1', 'status' => 'Draft'], $trainerRpt), 'Trainer should write raport for live-assigned school (DB fallback)');
 policyCheck(!authorize('write', 'raport', ['id' => 'rpt-live-2', 'siswaId' => 'sis-rpt-b', 'cabangId' => 'cab-1', 'status' => 'Draft'], $trainerRpt), 'Trainer should NOT write raport for live-unassigned school (DB fallback)');
+// Review finding 1 (forged-enrichment probe): raport.php strips any
+// client-sent _sekolahTrainerIds before authorization, so the record that
+// reaches authorize() carries no enrichment and the live-DB branch
+// decides — cross-school siswa + forged ids must 403. (The enriched-first
+// branch still exists at the authorize() layer for read-path-shaped
+// callers; the endpoint strip is what keeps writes server-authoritative.)
+$forged = ['id' => 'rpt-forge-1', 'siswaId' => 'sis-rpt-b', 'cabangId' => 'cab-1', 'status' => 'Draft', '_sekolahTrainerIds' => ['trn-rpt-1']];
+unset($forged['_sekolahTrainerIds']);
+policyCheck(!authorize('write', 'raport', $forged, $trainerRpt), 'Stripped forged _sekolahTrainerIds must NOT grant cross-school raport write (live-DB 403)');
 $__rptPdo->exec("DELETE FROM siswa WHERE id IN ('sis-rpt-a','sis-rpt-b')");
 $__rptPdo->exec("DELETE FROM trainer WHERE id IN ('trn-rpt-1')");
 

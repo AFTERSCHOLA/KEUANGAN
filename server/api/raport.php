@@ -32,7 +32,17 @@ $method = $_SERVER['REQUEST_METHOD'];
 $role = $user['role'] ?? null;
 
 if ($method === 'POST' || $method === 'PUT') {
+    // PUT tolerated (eksternal.php/siswa.php parity): the brief's "405
+    // non-POST" means non-write methods 405, not POST-only.
     $data = requestJson();
+    // Server-authoritative scope (Global Constraint): _sekolahTrainerIds
+    // is a server-side enrichment (read.php), never a client claim. A
+    // forged key forwarded into requireAuthorization() would be honoured
+    // by trainerScopedToRaport()'s enriched-first branch, and forwarded
+    // into masterWrite() it would persist verbatim in the stored payload.
+    // Strip it here — before validation, authorization, and storage alike —
+    // so the write path always resolves scope live from the DB.
+    unset($data['_sekolahTrainerIds']);
     $action = $data['action'] ?? 'create';
     if (!in_array($action, ['create', 'update', 'delete'], true)) {
         jsonResponse(['error' => 'Operasi tidak didukung'], 400);
@@ -117,6 +127,9 @@ if ($method === 'POST' || $method === 'PUT') {
     // probe must not become an existence oracle (403 first, then 409).
     // masterWrite() re-checks authorize() against the stored branch on
     // updates, so a forged cross-branch move still 403s there.
+    // $data carries no _sekolahTrainerIds here (stripped above), so the
+    // trainer lane always resolves live-DB — a forged key can never reach
+    // the trust check.
     $authRecord = array_merge($data, ['cabangId' => $cabangId]);
     requireAuthorization('write', 'raport', $authRecord, $user);
 
@@ -124,6 +137,11 @@ if ($method === 'POST' || $method === 'PUT') {
     // koreksi record yang sama (load-to-correct), bukan duplikat.
     // Payload JSON has no DB-level unique key (meniru tabel sekolah),
     // so the endpoint enforces it here with the correct-to-form message.
+    // TOCTOU posture (document-only, plan-mandated): the app-level SELECT
+    // probe below cannot serialize concurrent creates — two simultaneous
+    // writes can both pass it (second wins silently). No DB unique key per
+    // the frozen Task-2 schema; same posture as existing master-data and
+    // acceptable for the single-writer UI flow (409 → load-to-correct).
     $dupSql = "SELECT id FROM raport
         WHERE JSON_UNQUOTE(JSON_EXTRACT(payload, '$.siswaId')) = :siswaId
           AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.semester')) = :semester
