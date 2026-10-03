@@ -1,3 +1,5 @@
+import { RAPORT_ASPECT_KEYS, buildRaportSnapshot, raportRataRata, raportTotal } from './raport.js'
+
 export const MONTHS = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -87,6 +89,8 @@ export function newSiswa(sekolahId, sekolahNama, cabangKode) {
     nama: '',
     wa: '',
     kelas: '',
+    tingkat: '',
+    mapel: '',
     sekolahId,
     sekolahNama,
     foto: '',
@@ -111,6 +115,28 @@ export function newSiswa(sekolahId, sekolahNama, cabangKode) {
   }
 
   return siswa
+}
+
+// Slice 1 Raport — factory record raport semester per siswa. Snapshot
+// tingkat/mapel/sekolah dikunci saat create; edit Data Siswa setelahnya
+// tidak menulis ulang record ini. `cabangId` diisi server dari
+// siswaId → sekolah.cabang_id, bukan dari klien (lihat Task 3).
+export function newRaport(siswa, semester = 'Ganjil', tahunAjaran = defaultAcademicYear(), cabangKode) {
+  const nilai = Object.fromEntries(RAPORT_ASPECT_KEYS.map(kunci => [kunci, null]))
+  return {
+    id: generateId('rpt', cabangKode),
+    siswaId: siswa?.id ?? '',
+    cabangId: siswa?.cabangId ?? null,
+    semester,
+    tahunAjaran,
+    ...buildRaportSnapshot(siswa),
+    nilai,
+    total: raportTotal(nilai),
+    rataRata: raportRataRata(nilai),
+    grade: '',
+    catatan: '',
+    status: 'Draft',
+  }
 }
 
 function branchId(id, prefix, kode, usedIds) {
