@@ -73,7 +73,13 @@ export default function RaportList() {
       if (!q) return true
       return (siswaById.get(r.siswaId)?.nama || '').toLowerCase().includes(q)
     })
-    .sort((a, b) => (a.updatedAt || a.createdAt || '') < (b.updatedAt || b.createdAt || '') ? 1 : -1),
+    .sort((a, b) => {
+      const ta = a.updatedAt || a.createdAt || ''
+      const tb = b.updatedAt || b.createdAt || ''
+      if (ta < tb) return 1
+      if (ta > tb) return -1
+      return 0
+    }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [raport, semesterFilter, sekolahFilter, cari, tick])
 
@@ -97,7 +103,10 @@ export default function RaportList() {
     if (acting) return
     setActing(true)
     try {
-      const result = await writeRemote('raport', { ...r, status })
+      // cabangId dibuang agar update superadmin tidak 422
+      // (server memakai cabang tersimpan).
+      const { cabangId: _buangCabang, _sekolahTrainerIds: _buangEnrich, ...dasar } = r
+      const result = await writeRemote('raport', { ...dasar, status })
       if (result.status === 'forbidden') {
         showToast(result.message || 'Kamu tidak punya izin mengubah raport ini.')
         return
@@ -327,6 +336,7 @@ export default function RaportList() {
         body="Hapus raport ini? Tindakan ini tidak bisa dibatalkan."
         danger={true}
         confirmLabel="Hapus"
+        cancelLabel="Batal"
       />
 
       {toast && (

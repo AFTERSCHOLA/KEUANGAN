@@ -130,11 +130,14 @@ export default function RaportForm({ open, onClose, editing, siswaList, onSaved,
 
       let record
       if (baseRecord) {
-        // Koreksi: snapshot (tingkatSnapshot/mapelSnapshot/sekolahId)
+        // Koreksi: siswaId terkunci struktural (select disabled) +
+        // snapshot (tingkatSnapshot/mapelSnapshot/sekolahId)
         // TIDAK ditulis-ulang — edit Data Siswa tidak mengubah raport lama.
+        // cabangId dibuang agar update superadmin tidak 422
+        // (server memakai cabang tersimpan).
+        const { cabangId: _buangCabang, _sekolahTrainerIds: _buangEnrich, ...dasar } = baseRecord
         record = {
-          ...baseRecord,
-          siswaId: form.siswaId,
+          ...dasar,
           semester: form.semester,
           tahunAjaran: tahun,
           nilai,
@@ -183,7 +186,7 @@ export default function RaportForm({ open, onClose, editing, siswaList, onSaved,
           setErrorMsg(RAPORT_DUPLICATE_MSG)
           return
         }
-        setErrorMsg('Data raport ini sudah berubah di server. Tutup lalu buka lagi.')
+        setErrorMsg(RAPORT_DUPLICATE_MSG)
         return
       }
       onSaved?.()

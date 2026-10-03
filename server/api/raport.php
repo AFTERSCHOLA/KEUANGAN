@@ -104,8 +104,15 @@ if ($method === 'POST' || $method === 'PUT') {
         // roles) so the shape gate below can cross-check the branch.
         raportDerivedCabangId($siswaId);
     } else {
+        // Final-fix wave: superadmin update tolerates a matching cabangId
+        // (client roundtrip keeps the stored value); only a differing
+        // value is a branch-move attempt → 422. Either way the stored
+        // branch wins.
         if (array_key_exists('cabangId', $data)) {
-            jsonResponse(['error' => 'cabangId tidak boleh diubah lewat form ini'], 422);
+            if ($data['cabangId'] !== $storedCabangId) {
+                jsonResponse(['error' => 'cabangId tidak boleh diubah lewat form ini'], 422);
+            }
+            unset($data['cabangId']);
         }
         $cabangId = $storedCabangId;
     }

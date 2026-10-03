@@ -103,7 +103,7 @@ test('S5.1: admin set Tingkat Beginner + Mapel Scratch 3 tersimpan dan bertahan 
 
   // Badge tampil di baris (gaya badge Trial).
   await expect(row.getByText('Beginner', { exact: true })).toBeVisible()
-  await expect(row.getByText('Scratch 3')).toBeVisible()
+  await expect(row.getByText('Scratch 3', { exact: true })).toBeVisible()
 
   // Reload → nilai tetap (bukti persist server, bukan sekadar cache lokal).
   await page.reload()
@@ -111,7 +111,7 @@ test('S5.1: admin set Tingkat Beginner + Mapel Scratch 3 tersimpan dan bertahan 
   await openTab(page, 'Data Siswa')
   const rowAfter = page.locator('tr', { has: page.getByText(SIM_SW_NAME) }).first()
   await expect(rowAfter.getByText('Beginner', { exact: true })).toBeVisible({ timeout: 15000 })
-  await expect(rowAfter.getByText('Scratch 3')).toBeVisible()
+  await expect(rowAfter.getByText('Scratch 3', { exact: true })).toBeVisible()
 
   // Nilai form ikut bertahan bila dialog dibuka ulang.
   const aksiAfter = rowAfter.locator('td div.flex button')
@@ -643,4 +643,65 @@ test('S5.2: trainer Data Siswa read-only — tombol tulis tak ada', async ({ pag
   await expect(page.getByRole('button', { name: 'Simpan', exact: true })).toHaveCount(0)
 
   expect(pageErrors).toHaveLength(0)
+})
+
+test('S6.4: superadmin koreksi grade → tersimpan (toleransi cabangId cocok)', async ({ page, pageErrors }) => {
+  const SUFFIX = String(Date.now()).slice(-6)
+  const SCH_NAME = `SD S6D Sim ${SUFFIX}`
+  const SW_NAME = `Siswa S6D Sim ${SUFFIX}`
+  const RAPORT_ID = `rpt-s6d-${SUFFIX}`
+  let schoolId = null
+  let siswaId = null
+
+  await resetStorage(page)
+
+  // Seed sekolah + siswa + raport sebagai superadmin (create wajib cabangId).
+  await loginViaApi(page, 'superadmin')
+  const csrf = await primeCsrf(page)
+  const sch = await apiPost(page, csrf, '/api/sekolah.php', {
+    action: 'create', id: `skl-s6d-${SUFFIX}`, nama: SCH_NAME, spp: 150000, cabangId: 'cbg-test-pusat',
+  })
+  if (sch.status !== 201 && sch.status !== 200) throw new Error(`seed sekolah gagal: ${sch.status}`)
+  schoolId = sch.body.id || `skl-s6d-${SUFFIX}`
+  siswaId = `sw-s6d-${SUFFIX}`
+  const ssw = await apiPost(page, csrf, '/api/siswa.php', {
+    action: 'create', id: siswaId, nama: SW_NAME, sekolahId: schoolId, status: 'Aktif',
+  })
+  if (ssw.status !== 201 && ssw.status !== 200) throw new Error(`seed siswa gagal: ${ssw.status}`)
+  const rpt = await apiPost(page, csrf, '/api/raport.php', {
+    action: 'create',
+    id: RAPORT_ID,
+    siswaId,
+    cabangId: 'cbg-test-pusat',
+    semester: 'Ganjil',
+    tahunAjaran: academicYearNow(),
+    nilai: { helpingTeam: 80, computationalThinking: 80, problemSolving: 80, creativity: 80 },
+    total: 320,
+    rataRata: 80,
+    grade: 'B',
+    catatan: 'Seed S6D',
+    status: 'Draft',
+  })
+  if (rpt.status !== 201 && rpt.status !== 200) throw new Error(`seed raport gagal: ${rpt.status} ${JSON.stringify(rpt.body)}`)
+
+  // Superadmin koreksi grade lewat UI — record roundtrip membawa
+  // cabangId tersimpan; pre-fix selalu 422 di sini.
+  await page.goto(APP)
+  await page.waitForLoadState('domcontentloaded')
+  await openTab(page, 'Raport')
+  const row = page.locator('tr', { has: page.getByText(SW_NAME) }).first()
+  await expect(row).toBeVisible({ timeout: 15000 })
+  await expect(row.getByText('B', { exact: true })).toBeVisible()
+  await row.getByRole('button', { name: 'Koreksi' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.getByLabel('Grade').fill('A-')
+  await dialog.getByRole('button', { name: 'Simpan', exact: true }).click()
+  await expect(dialog).toHaveCount(0, { timeout: 15000 })
+  const rowAfter = page.locator('tr', { has: page.getByText(SW_NAME) }).first()
+  await expect(rowAfter.getByText('A-', { exact: true })).toBeVisible({ timeout: 15000 })
+
+  expect(pageErrors).toHaveLength(0)
+
+  await cleanupRaportSeeds(page, { raportIds: [RAPORT_ID], siswaIds: [siswaId], schoolIds: [schoolId] })
 })
