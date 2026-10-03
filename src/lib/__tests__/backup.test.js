@@ -67,7 +67,7 @@ describe('backup helpers', () => {
   it('rejects malformed top-level and entity fields', () => {
     expect(validateBackupShape(null).valid).toBe(false)
     expect(validateBackupShape({ version: '2' }).errors).toContain('Field "exportedAt" hilang atau bukan string.')
-    expect(validateBackupShape({ version: 2, exportedAt: 'now', data: {} }).errors).toHaveLength(10)
+    expect(validateBackupShape({ version: 2, exportedAt: 'now', data: {} }).errors).toHaveLength(9)
     expect(validateBackupShape({ ...validBackup(), data: { ...validData(), siswa: [{ nama: 'Tanpa ID' }] } }).valid).toBe(false)
   })
 
@@ -98,6 +98,24 @@ describe('backup helpers', () => {
     expect(JSON.parse(localStorage.getItem(keys.raport))).toEqual(backup.data.raport)
     expect(JSON.parse(localStorage.getItem(keys.settings))).toEqual(backup.data.settings)
     expect(() => restoreBackup({ version: 2 })).toThrow('Backup tidak valid')
+  })
+
+  it('accepts pre-raport v2 backups without data.raport and restores it as []', () => {
+    // Tolerant-restore: backups exported before Slice 1 Raport carry the
+    // 9 legacy keys and must stay restorable; raport defaults to [].
+    const legacy = validBackup()
+    delete legacy.data.raport
+    const check = validateBackupShape(legacy)
+    expect(check.valid).toBe(true)
+    expect(check.errors).toEqual([])
+    restoreBackup(legacy)
+    const keys = getKeys()
+    expect(JSON.parse(localStorage.getItem(keys.raport))).toEqual([])
+    expect(JSON.parse(localStorage.getItem(keys.cabang))).toEqual(legacy.data.cabang)
+    // Present-but-malformed raport is still rejected.
+    const malformed = validBackup()
+    malformed.data.raport = 'bukan-array'
+    expect(validateBackupShape(malformed).valid).toBe(false)
   })
 
   it('reports invalid JSON and validates parsed file contents', async () => {

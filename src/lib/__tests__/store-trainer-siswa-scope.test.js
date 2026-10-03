@@ -247,7 +247,8 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     expect(order[0]).toContain('entity=trainer')
   })
 
-  it('DC.C.1 union: trainer in asistenIds[1] only sees the assigned school students', async () => {    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
+  it('DC.C.1 union: trainer in asistenIds[1] only sees the assigned school students', async () => {
+    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
       { id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] },
       {
         id: 'trn-ins',

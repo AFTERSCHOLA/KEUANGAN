@@ -6,7 +6,7 @@ import { readCached, write, getKeys } from './store'
 
 export const BACKUP_VERSION = 2
 
-const ENTITY_KEYS = ['cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'sppPayments', 'invoices', 'settings', 'raport']
+const ENTITY_KEYS = ['cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'sppPayments', 'invoices', 'raport', 'settings']
 
 /**
  * Build the backup object from current localStorage state.
@@ -98,6 +98,10 @@ export function validateBackupShape(obj) {
 
   for (const key of ENTITY_KEYS) {
     if (!(key in obj.data)) {
+      // Slice 1 Raport — pre-raport v2 backups carry no data.raport.
+      // Tolerant-restore: a missing raport stays valid and defaults to
+      // [] on restore instead of rejecting the whole backup.
+      if (key === 'raport') continue
       errors.push(`"data.${key}" tidak ditemukan.`)
       continue
     }
@@ -140,7 +144,7 @@ export function restoreBackup(obj) {
   write('honorPayments', data.honorPayments)
   write('sppPayments', data.sppPayments)
   write('invoices', data.invoices)
-  write('raport', data.raport)
+  write('raport', data.raport ?? [])
 
   const keys = getKeys()
   localStorage.setItem(keys.settings, JSON.stringify(data.settings || {}))
