@@ -40,6 +40,10 @@ const MAX_RECORD_PAYLOAD_BYTES = 200 * 1024; // 200KB per record — CONFIRMED, 
 
 const SISWA_STATUS_VALUES = ['Aktif', 'Trial', 'Berhenti'];
 
+// Slice 1 Raport (D2) — vocabulary tingkat Data Siswa, dipakai
+// validateSiswa() di bawah dan di-snapshot ke record raport.
+const SISWA_TINGKAT_VALUES = ['', 'Beginner', 'Intermediate'];
+
 const TRAINER_STATUS_VALUES = ['Hadir', 'Izin', 'Alpa'];
 
 const TRAINER_TIPE_PENGAJAR_VALUES = ['instruktur', 'asisten'];
@@ -428,6 +432,20 @@ function validateSiswa(array $data, PDO $pdo): array {
     if (!in_array($status, SISWA_STATUS_VALUES, true)) {
         $errors[] = "siswa: status '" . var_export($status, true) . "' is not one of " . implode(', ', SISWA_STATUS_VALUES);
     }
+
+    // Slice 1 Raport — field tingkat/mapel Data Siswa (dressed-down D2:
+    // keduanya opsional agar payload siswa lama tetap valid; bila ada,
+    // tingkat harus dalam enum dropdown, mapel teks bebas maks 60 char).
+    if (array_key_exists('tingkat', $data) && $data['tingkat'] !== null) {
+        if (!in_array($data['tingkat'], SISWA_TINGKAT_VALUES, true)) {
+            $errors[] = "siswa: tingkat '" . var_export($data['tingkat'], true) . "' is not one of " . implode(', ', SISWA_TINGKAT_VALUES);
+        }
+    }
+    if (array_key_exists('mapel', $data) && $data['mapel'] !== null) {
+        if (!is_string($data['mapel']) || mb_strlen($data['mapel']) > 60) {
+            $errors[] = 'siswa: mapel must be a string of at most 60 characters';
+        }
+    }
     return $errors;
 }
 
@@ -647,12 +665,93 @@ function validateEksternal(array $data, PDO $pdo): array {
     return $errors;
 }
 
+// Slice 1 Raport — vocabulary record raport semester per siswa.
+// Kunci nilai meniru RAPORT_ASPECT_KEYS di src/lib/raport.js verbatim.
+const RAPORT_SEMESTER_VALUES = ['Ganjil', 'Genap'];
+const RAPORT_STATUS_VALUES = ['Draft', 'Diajukan', 'Terverifikasi'];
+const RAPORT_NILAI_KEYS = ['helpingTeam', 'computationalThinking', 'problemSolving', 'creativity'];
+
+// Slice 1 Raport — validator record raport semester per siswa.
+// Ownership pola validateSiswa(): cabangId wajib dan harus sama dengan
+// cabang sekolah tempat siswa terdaftar (bukan sekadar cabang yang ada).
+// Total/rata-rata TIDAK dihitung di sini — satu-satunya tempat hitung
+// adalah src/lib/raport.js (R4); server hanya menegakkan range tiap
+// aspek 0–100.
+function validateRaport(array $data, PDO $pdo): array {
+    $errors = array_merge([], checkPayloadSize($data, 'raport'));
+    if (!requireNonEmptyString($data['id'] ?? null)) $errors[] = 'raport: id is required';
+
+    $siswaId = $data['siswaId'] ?? null;
+    $sekolahCabangId = null;
+    if (!requireNonEmptyString($siswaId)) {
+        $errors[] = 'raport: siswaId is required';
+    } elseif (!rowExists($pdo, 'siswa', $siswaId)) {
+        $errors[] = 'raport: siswaId does not reference an existing siswa';
+    } else {
+        $siswaStmt = $pdo->prepare('SELECT payload FROM `siswa` WHERE id = :id LIMIT 1');
+        $siswaStmt->execute([':id' => $siswaId]);
+        $siswaRaw = $siswaStmt->fetchColumn();
+        $siswaPayload = is_string($siswaRaw) ? json_decode($siswaRaw, true) : null;
+        $siswaSekolahId = is_array($siswaPayload) ? ($siswaPayload['sekolahId'] ?? null) : null;
+        if (is_string($siswaSekolahId) && trim($siswaSekolahId) !== '') {
+            $sekolahCabangId = cabangIdOf($pdo, 'sekolah', $siswaSekolahId);
+        }
+    }
+
+    $cabangId = $data['cabangId'] ?? null;
+    if (!requireNonEmptyString($cabangId)) {
+        $errors[] = 'raport: cabangId is required (ownership)';
+    } elseif ($sekolahCabangId !== null && $cabangId !== $sekolahCabangId) {
+        $errors[] = 'raport: cabangId does not match the branch of the referenced sekolah';
+    }
+
+    if (!in_array($data['semester'] ?? null, RAPORT_SEMESTER_VALUES, true)) {
+        $errors[] = "raport: semester '" . var_export($data['semester'] ?? null, true) . "' is not one of " . implode(', ', RAPORT_SEMESTER_VALUES);
+    }
+
+    $tahunAjaran = $data['tahunAjaran'] ?? null;
+    if (!is_int($tahunAjaran) || $tahunAjaran < 2000) {
+        $errors[] = 'raport: tahunAjaran must be an integer greater than or equal to 2000';
+    }
+
+    $nilai = $data['nilai'] ?? null;
+    if (!is_array($nilai)) {
+        $errors[] = 'raport: nilai is required';
+    } else {
+        foreach (RAPORT_NILAI_KEYS as $key) {
+            $value = $nilai[$key] ?? null;
+            if (!is_int($value) || $value < 0 || $value > 100) {
+                $errors[] = "raport: nilai.{$key} must be an integer between 0 and 100";
+            }
+        }
+    }
+
+    $grade = $data['grade'] ?? null;
+    if (!is_string($grade) || trim($grade) === '') {
+        $errors[] = 'raport: grade is required';
+    } elseif (mb_strlen($grade) > 5) {
+        $errors[] = 'raport: grade must be at most 5 characters';
+    }
+
+    if (array_key_exists('catatan', $data) && $data['catatan'] !== null) {
+        if (!is_string($data['catatan']) || mb_strlen($data['catatan']) > 500) {
+            $errors[] = 'raport: catatan must be a string of at most 500 characters';
+        }
+    }
+
+    if (!in_array($data['status'] ?? null, RAPORT_STATUS_VALUES, true)) {
+        $errors[] = "raport: status '" . var_export($data['status'] ?? null, true) . "' is not one of " . implode(', ', RAPORT_STATUS_VALUES);
+    }
+    return $errors;
+}
+
 /** @return array<int,string> */
 function validateRecord(string $entity, array $data, PDO $pdo): array {
     return match ($entity) {
         'sekolah' => validateSekolah($data, $pdo),
         'trainer' => validateTrainer($data, $pdo),
         'siswa' => validateSiswa($data, $pdo),
+        'raport' => validateRaport($data, $pdo),
         'absensi' => validateAbsensi($data, $pdo),
         'absensiPengajar' => validateAbsensiPengajar($data, $pdo),
         'honorPayments' => validateHonorPayment($data, $pdo),

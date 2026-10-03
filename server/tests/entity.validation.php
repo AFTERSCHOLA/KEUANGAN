@@ -693,6 +693,61 @@ try {
     assertContains('at most 2', validateTrainer($multiMany, $pdo), 'CS.B.2 asistenIds with 3 entries rejected');
 
     echo "CS.B.2 role + external validation check passed\n";
+
+    // ================= Task 2 (Slice 1 Raport): validateRaport + dispatch =================
+    // Kontrak server raport — tabel + validator (pola fixtureCheck/hasError).
+    // $siswaId/$sekolahId/$cabangId/$otherCabangId dari seed di atas.
+    $raportBase = [
+        'id' => 'rpt-t2-' . bin2hex(random_bytes(3)),
+        'siswaId' => $siswaId,
+        'cabangId' => $cabangId,
+        'semester' => 'Ganjil',
+        'tahunAjaran' => 2026,
+        'nilai' => ['helpingTeam' => 90, 'computationalThinking' => 88, 'problemSolving' => 89, 'creativity' => 90],
+        'grade' => 'A-',
+        'catatan' => '',
+        'status' => 'Draft',
+    ];
+
+    // Exemplar penuh → nol error (via validateRaport langsung + dispatch validateRecord).
+    $errors = validateRaport($raportBase, $pdo);
+    fixtureCheck($errors === [], 'exemplar raport should validate, got: ' . implode('; ', $errors));
+    $errors = validateRecord('raport', $raportBase, $pdo);
+    fixtureCheck($errors === [], 'validateRecord dispatch for raport should validate the exemplar, got: ' . implode('; ', $errors));
+
+    // id kosong → error.
+    $errors = validateRaport(array_merge($raportBase, ['id' => '']), $pdo);
+    fixtureCheck(hasError($errors, 'raport: id'), 'raport with empty id should fail');
+
+    // siswaId menunjuk id tak-ada → error referensi.
+    $errors = validateRaport(array_merge($raportBase, ['siswaId' => 'sw-does-not-exist']), $pdo);
+    fixtureCheck(hasError($errors, 'siswaId'), 'raport with a fake siswaId should fail reference check');
+
+    // cabangId beda dari cabang sekolah siswa → error mismatch.
+    $errors = validateRaport(array_merge($raportBase, ['cabangId' => $otherCabangId]), $pdo);
+    fixtureCheck(hasError($errors, 'does not match the branch'), 'raport cabangId mismatched against its sekolah should fail');
+
+    // Nilai 150 → error range.
+    $badNilai = $raportBase;
+    $badNilai['nilai'] = ['helpingTeam' => 150, 'computationalThinking' => 88, 'problemSolving' => 89, 'creativity' => 90];
+    $errors = validateRaport($badNilai, $pdo);
+    fixtureCheck(hasError($errors, 'helpingTeam'), 'raport with nilai 150 should fail range check');
+
+    // grade kosong → error.
+    $errors = validateRaport(array_merge($raportBase, ['grade' => '']), $pdo);
+    fixtureCheck(hasError($errors, 'grade'), 'raport with empty grade should fail');
+
+    // Aturan opsional tingkat/mapel di validateSiswa(): absen = valid (legacy),
+    // nilai di luar enum / terlalu panjang ditolak.
+    $siswaTingkatBase = ['id' => 'sw-x', 'sekolahId' => $sekolahId, 'cabangId' => $cabangId, 'status' => 'Aktif'];
+    $errors = validateSiswa($siswaTingkatBase + ['tingkat' => 'Beginner', 'mapel' => 'Scratch 3'], $pdo);
+    fixtureCheck($errors === [], 'siswa with tingkat=Beginner + mapel should validate, got: ' . implode('; ', $errors));
+    $errors = validateSiswa($siswaTingkatBase + ['tingkat' => 'Expert'], $pdo);
+    fixtureCheck(hasError($errors, 'tingkat'), 'siswa with out-of-enum tingkat should be rejected');
+    $errors = validateSiswa($siswaTingkatBase + ['mapel' => str_repeat('x', 61)], $pdo);
+    fixtureCheck(hasError($errors, 'mapel'), 'siswa with mapel over 60 chars should be rejected');
+
+    echo "Task 2 raport contract check passed\n";
 } finally {
     $pdo->prepare('DELETE FROM eksternal WHERE cabang_id = :c')->execute([':c' => $cabangId]);
     $pdo->prepare('DELETE FROM invoices WHERE cabang_id = :c')->execute([':c' => $cabangId]);

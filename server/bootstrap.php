@@ -196,6 +196,7 @@ function entityConfig(string $entity): array {
         // CS.B.2 (D-CS5) — minimal external-assistant person record.
         'eksternal' => ['table' => 'eksternal', 'path' => 'eksternal.php'],
         'siswa' => ['table' => 'siswa', 'path' => 'siswa.php'],
+        'raport' => ['table' => 'raport', 'path' => 'raport.php'],
         'cabang' => ['table' => 'cabang', 'path' => 'cabang.php'],
 
     ];
