@@ -25,11 +25,16 @@ function roleCanReadEntity(string $role, string $entity): bool {
         // CS.B.2 (D-CS5) — 'eksternal' added: admin_cabang writes own
         // branch only via the generic branch-scoped path below.
         'cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'invoices', 'audit_log', 'eksternal',
+        // Slice 1 Raport (2026-10-03) — admin_cabang reads/writes raport
+        // branch-scoped via the generic recordOwnsBranch path below.
+        'raport',
     ], true);
     // CS.B.2 (D-CS5) — trainer may READ externals in assigned schools
     // (reference-only for the attendance picker); external-person create
     // stays denied (reference-only; deferred inline creation).
-    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'eksternal'], true);
+    // Slice 1 Raport (2026-10-03) — trainer reads/writes raport for
+    // assigned schools (scope via _sekolahTrainerIds, BUG2 parity).
+    if ($role === 'trainer') return in_array($entity, ['sekolah', 'trainer', 'siswa', 'absensi', 'absensiPengajar', 'sppPayments', 'honorPayments', 'eksternal', 'raport'], true);
     return false;
 }
 
@@ -194,11 +199,97 @@ function trainerOwnsRecord(string $resource, array $data, array $user): bool {
         return in_array($trainerId, $data['_sekolahTrainerIds'] ?? [], true);
     }
 
+    if ($resource === 'raport') {
+        // Slice 1 Raport — school-scoped exactly like siswa: read.php
+        // enriches _sekolahTrainerIds from the raport's siswa's sekolah.
+        // Ownership-only, no date gate (absensiPengajar BUG2 parity).
+        // Missing enrichment data fails closed.
+        $assigned = $data['_sekolahTrainerIds'] ?? [];
+        return is_array($assigned) && in_array($trainerId, $assigned, true);
+    }
+
     if ($resource === 'honorPayments') {
     return is_string($data['trainerId'] ?? null) && $data['trainerId'] === ($user['trainerId'] ?? null);
     }
 
     return false;
+}
+
+// Slice 1 Raport (2026-10-03) — live scope resolution for the raport
+// write/delete path (server/api/raport.php -> masterWrite/masterDelete).
+// masterWrite() persists the exact record it receives, so the endpoint
+// cannot smuggle a freshly-enriched _sekolahTrainerIds through it
+// without baking stale scope into the stored payload; the lanes below
+// therefore resolve the student's school + the trainer's assignment
+// from the live DB whenever the record carries no enrichment (the
+// endpoint path). trainerOwnsRecord('raport') keeps the enriched
+// variant for the read path (read.php) — same ownership-only rule
+// (no date gate, BUG2 parity), both ends.
+function raportSekolahId(PDO $pdo, string $siswaId): ?string {
+    $stmt = $pdo->prepare('SELECT payload FROM siswa WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $siswaId]);
+    $raw = $stmt->fetchColumn();
+    if (!is_string($raw)) return null;
+    $payload = json_decode($raw, true);
+    if (!is_array($payload)) return null;
+    $sekolahId = $payload['sekolahId'] ?? null;
+    return is_string($sekolahId) && trim($sekolahId) !== '' ? $sekolahId : null;
+}
+
+// Ownership-only assignment check mirroring read.php's
+// $sekolahTrainerIds index (penugasanPengajar union trainerId /
+// asistenId / asistenIds[] + legacy sekolahIds[] links). No aktif or
+// date gate — BUG2 parity with the read scope.
+function trainerAssignedToSekolah(string $trainerId, string $sekolahId, PDO $pdo): bool {
+    if ($trainerId === '' || $sekolahId === '') return false;
+    $rows = $pdo->query('SELECT payload FROM trainer ORDER BY created_at, id')->fetchAll();
+    foreach ($rows as $row) {
+        $payload = json_decode((string) ($row['payload'] ?? ''), true);
+        if (!is_array($payload)) continue;
+        $assignments = $payload['penugasanPengajar'] ?? [];
+        if (is_array($assignments)) {
+            foreach ($assignments as $assignment) {
+                if (!is_array($assignment)) continue;
+                if (($assignment['sekolahId'] ?? null) !== $sekolahId) continue;
+                if (($assignment['trainerId'] ?? null) === $trainerId) return true;
+                if (($assignment['asistenId'] ?? null) === $trainerId) return true;
+                $extraIds = $assignment['asistenIds'] ?? null;
+                if (is_array($extraIds) && in_array($trainerId, $extraIds, true)) return true;
+            }
+        }
+        // Legacy links: trainer assigned via `sekolahIds[]` scopes
+        // exactly like penugasan links (read.php parity).
+        if (($payload['id'] ?? null) === $trainerId) {
+            $legacyIds = $payload['sekolahIds'] ?? [];
+            if (is_array($legacyIds) && in_array($sekolahId, $legacyIds, true)) return true;
+        }
+    }
+    return false;
+}
+
+// Enriched-first scope for raport writes/deletes: honors
+// _sekolahTrainerIds when the caller provides it (policy fixtures,
+// read-path-shaped callers); otherwise resolves live from the DB
+// (the masterWrite/masterDelete endpoint path, whose stored records
+// carry no enrichment). Both ends enforce the same ownership-only
+// rule; missing/unresolvable scope fails closed.
+function trainerScopedToRaport(array $data, array $user): bool {
+    $trainerId = $user['trainerId'] ?? null;
+    if (!is_string($trainerId) || $trainerId === '') return false;
+    if (array_key_exists('_sekolahTrainerIds', $data)) {
+        $assigned = $data['_sekolahTrainerIds'];
+        return is_array($assigned) && in_array($trainerId, $assigned, true);
+    }
+    $siswaId = $data['siswaId'] ?? null;
+    if (!is_string($siswaId) || $siswaId === '') return false;
+    try {
+        $pdo = database();
+        $sekolahId = raportSekolahId($pdo, $siswaId);
+        if ($sekolahId === null) return false;
+        return trainerAssignedToSekolah($trainerId, $sekolahId, $pdo);
+    } catch (Throwable) {
+        return false;
+    }
 }
 
 function authorize(string $action, string $resource, ?array $data = null, ?array $user = null): bool {
@@ -288,6 +379,22 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         // (reference-only; deferred inline creation, taste #33).
         if ($resource === 'eksternal') {
             return false;
+        }
+        // Slice 1 Raport — trainer writes iff scope-assigned to the
+        // student's school (trainerScopedToRaport: enriched or live-DB,
+        // ownership-only without a date gate, BUG2 parity). Writing a
+        // Terverifikasi status IS verification — admin_cabang/superadmin
+        // only, so it never passes on the trainer lane (this also locks
+        // verified rows against trainer edits; corrections go through an
+        // admin returning the row to Draft first).
+        if ($resource === 'raport' && $action === 'write') {
+            if (($data['status'] ?? null) === 'Terverifikasi') return false;
+            return trainerScopedToRaport($data, $user);
+        }
+        // Slice 1 Raport — trainer deletes only own-scope Draft rows.
+        if ($resource === 'raport' && $action === 'delete') {
+            if (($data['status'] ?? null) !== 'Draft') return false;
+            return trainerScopedToRaport($data, $user);
         }
         // Trainer sengaja TIDAK punya jalur 'correct' di sini — koreksi
         // absensiPengajar adalah scope Admin Cabang/Superadmin saja

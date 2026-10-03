@@ -191,7 +191,7 @@ foreach (['create', 'update', 'delete', 'write'] as $action) {
 policyCheck(authorize('read', 'trainer', ['id' => 'trn-1'], $trainer), 'Trainer should read own record');
 policyCheck(!authorize('read', 'trainer', ['id' => 'trn-2'], $trainer), 'Trainer should NOT read another trainer record');
 
-policyCheck(authorize('read', 'sekolah', ['trainerIds' => ['trn-1', 'trn-9']], $trainer), 'Trainer should read assigned sekolah');
+policyCheck(authorize('read', 'sekolah', ['id' => 'sch-1', 'trainerIds' => ['trn-1', 'trn-9'], '_sekolahTrainerIds' => ['trn-1', 'trn-9']], $trainer), 'Trainer should read assigned sekolah');
 policyCheck(!authorize('read', 'sekolah', ['trainerIds' => ['trn-9']], $trainer), 'Trainer should NOT read unassigned sekolah');
 
 policyCheck(authorize('read', 'absensi', ['trainerId' => 'trn-1'], $trainer), 'Trainer should read own absensi');
@@ -282,6 +282,47 @@ foreach (['create', 'update', 'delete', 'write'] as $action) {
         "Trainer should NOT {$action} sppPayments"
     );
 }
+
+// ---------------------------------------------------------------------
+// Slice 1 Raport (2026-10-03) — trainer/manager RBAC for 'raport'.
+// Trainer writes iff scope-assigned to the student's school (via
+// _sekolahTrainerIds, ownership-only without a date gate, BUG2
+// parity); deletes only own-scope Draft rows; verification
+// (Diajukan->Terverifikasi) is admin_cabang/superadmin only.
+// Admin Cabang is branch-scoped via cabangId, like other master data.
+// ---------------------------------------------------------------------
+$raportAssigned = ['id' => 'rpt-1', 'siswaId' => 'sis-1', 'cabangId' => 'cab-1', 'status' => 'Draft', '_sekolahTrainerIds' => ['trn-1']];
+$raportUnassigned = ['id' => 'rpt-2', 'siswaId' => 'sis-2', 'cabangId' => 'cab-1', 'status' => 'Draft', '_sekolahTrainerIds' => ['trn-9']];
+$raportVerified = ['id' => 'rpt-3', 'siswaId' => 'sis-1', 'cabangId' => 'cab-1', 'status' => 'Terverifikasi', '_sekolahTrainerIds' => ['trn-1']];
+policyCheck(authorize('read', 'raport', $raportAssigned, $trainer), 'Trainer should read raport for assigned sekolah');
+policyCheck(!authorize('read', 'raport', $raportUnassigned, $trainer), 'Trainer should NOT read raport for unassigned sekolah');
+policyCheck(authorize('write', 'raport', $raportAssigned, $trainer), 'Trainer should write raport for assigned sekolah');
+policyCheck(!authorize('write', 'raport', $raportUnassigned, $trainer), 'Trainer should NOT write raport for unassigned sekolah');
+policyCheck(authorize('delete', 'raport', $raportAssigned, $trainer), 'Trainer should delete own-scope Draft raport');
+policyCheck(!authorize('delete', 'raport', $raportVerified, $trainer), 'Trainer should NOT delete Terverifikasi raport');
+policyCheck(!authorize('write', 'raport', array_merge($raportAssigned, ['status' => 'Terverifikasi']), $trainer), 'Trainer should NOT verify (write Terverifikasi) raport');
+policyCheck(authorize('write', 'raport', ['cabangId' => 'cab-1'], $adminCabang), 'Admin Cabang should write own-branch raport');
+policyCheck(!authorize('write', 'raport', ['cabangId' => 'cab-2'], $adminCabang), 'Admin Cabang should NOT write cross-branch raport');
+
+// Slice 1 Raport — live-DB fallback for the endpoint write path
+// (server/api/raport.php -> masterWrite): the stored record carries no
+// _sekolahTrainerIds enrichment, so authorize() resolves the student's
+// school + the trainer assignment from the live DB. Seeds mirror the
+// AA.A.2 style above; pre-cleanup keeps re-runs idempotent.
+$__rptPdo = database();
+$__rptPdo->exec("DELETE FROM siswa WHERE id IN ('sis-rpt-a','sis-rpt-b')");
+$__rptPdo->exec("DELETE FROM trainer WHERE id IN ('trn-rpt-1')");
+$__rptPdo->prepare("INSERT INTO siswa (id, cabang_id, payload) VALUES ('sis-rpt-a','cab-1',:p)")
+    ->execute([':p' => json_encode(['id' => 'sis-rpt-a', 'sekolahId' => 'sch-rpt-a', 'cabangId' => 'cab-1', 'status' => 'Aktif'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+$__rptPdo->prepare("INSERT INTO siswa (id, cabang_id, payload) VALUES ('sis-rpt-b','cab-1',:p)")
+    ->execute([':p' => json_encode(['id' => 'sis-rpt-b', 'sekolahId' => 'sch-rpt-b', 'cabangId' => 'cab-1', 'status' => 'Aktif'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+$__rptPdo->prepare("INSERT INTO trainer (id, cabang_id, payload) VALUES ('trn-rpt-1','cab-1',:p)")
+    ->execute([':p' => json_encode(['id' => 'trn-rpt-1', 'cabangId' => 'cab-1', 'penugasanPengajar' => [['sekolahId' => 'sch-rpt-a', 'trainerId' => 'trn-rpt-1', 'aktif' => true]]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+$trainerRpt = u('trainer', ['trainerId' => 'trn-rpt-1']);
+policyCheck(authorize('write', 'raport', ['id' => 'rpt-live-1', 'siswaId' => 'sis-rpt-a', 'cabangId' => 'cab-1', 'status' => 'Draft'], $trainerRpt), 'Trainer should write raport for live-assigned school (DB fallback)');
+policyCheck(!authorize('write', 'raport', ['id' => 'rpt-live-2', 'siswaId' => 'sis-rpt-b', 'cabangId' => 'cab-1', 'status' => 'Draft'], $trainerRpt), 'Trainer should NOT write raport for live-unassigned school (DB fallback)');
+$__rptPdo->exec("DELETE FROM siswa WHERE id IN ('sis-rpt-a','sis-rpt-b')");
+$__rptPdo->exec("DELETE FROM trainer WHERE id IN ('trn-rpt-1')");
 
 // ---------------------------------------------------------------------
 // Invalid / malformed role input never authorizes anything.

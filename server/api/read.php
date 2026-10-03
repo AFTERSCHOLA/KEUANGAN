@@ -21,6 +21,8 @@ $allEntities = [
     'sekolah', 'trainer', 'siswa', 'cabang',
     // CS.B.2 (D-CS5) — external assistants read like other master data.
     'eksternal',
+    // Slice 1 Raport (2026-10-03) — raport semester per siswa.
+    'raport',
 ];
 
 // Validate the entity name itself first (400) before any permission check,
@@ -71,6 +73,8 @@ $sekolahTrainerIds = [];
 // lewat SQL langsung, bukan lewat trainer.php).
 // CS.B.2 (D-CS5) — 'eksternal' joins the school-scoped set: trainers
 // read externals exactly like siswa (by the external's sekolahId).
+// Slice 1 Raport (2026-10-03) — 'raport' joins too: trainers read
+// raport exactly like sppPayments (by the raport's siswa's sekolahId).
 if (
     $user['role'] === 'trainer'
     && (
@@ -78,6 +82,7 @@ if (
         || in_array('sekolah', $entities, true)
         || in_array('sppPayments', $entities, true)
         || in_array('eksternal', $entities, true)
+        || in_array('raport', $entities, true)
     )
 ) {
     $trainerRows = $pdo
@@ -172,8 +177,10 @@ if (
 // sppPayments butuh 1 hop tambahan: siswaId -> sekolahId. Precompute
 // sekali di sini juga, sama alasannya kayak $sekolahTrainerIds di atas —
 // hindari query berulang per-record di loop filter di bawah.
+// Slice 1 Raport (2026-10-03) — 'raport' needs the same hop (raport
+// scopes by its siswa's school, sppPayments-style).
 $siswaSekolahId = [];
-if ($user['role'] === 'trainer' && in_array('sppPayments', $entities, true)) {
+if ($user['role'] === 'trainer' && (in_array('sppPayments', $entities, true) || in_array('raport', $entities, true))) {
     $siswaRows = $pdo->query('SELECT payload FROM siswa ORDER BY created_at, id')->fetchAll();
     foreach ($siswaRows as $row) {
         $sw = json_decode($row['payload'], true);
@@ -298,7 +305,10 @@ if ($user['role'] === 'superadmin') {
             $sekolahTrainerIds[$sekolahId] ?? [];
     }
 
-    if ($name === 'sppPayments') {
+    if ($name === 'sppPayments' || $name === 'raport') {
+        // sppPayments: payment scopes by its siswa's school. raport:
+        // same hop — the raport scopes by its siswa's school,
+        // siswa-style (trainerOwnsRecord 'raport' lane).
         $sekolahId =
             $siswaSekolahId[$record['siswaId'] ?? null] ?? null;
 
