@@ -10,6 +10,12 @@ import SppPaymentModal from '../payments/SppPaymentModal.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import PeriodFilter from '../../components/PeriodFilter.jsx'
 
+// Slice 1 Raport (D2) — vocabulary tingkat + saran mapel Data Siswa.
+// Mapel sugestif dari nilai KETERANGAN jadwal yang sudah ada; input tetap
+// teks bebas (server: string maks 60 char).
+const TINGKAT_OPTIONS = ['', 'Beginner', 'Intermediate']
+const MAPEL_SUGGESTIONS = ['Scratch Jr', 'Scratch 3', 'Roblox Studio', 'Python/VsCode', 'IoT']
+
 export default function StudentList({ readOnly = false }) {
   const [siswa, setSiswa] = useState(() => readCached('siswa'))
   const [modalOpen, setModalOpen] = useState(false)
@@ -78,7 +84,8 @@ export default function StudentList({ readOnly = false }) {
   function openEdit(s) {
     // M5.4 — legacy siswa records predate `status`; default to 'Aktif' for display only,
     // real data untouched unless user actually saves.
-    setForm({ status: 'Aktif', trialMulai: null, ...s })
+    // Slice 1 Raport — legacy records also predate tingkat/mapel.
+    setForm({ status: 'Aktif', trialMulai: null, tingkat: '', mapel: '', ...s })
     setModalOpen(true)
   }
 
@@ -306,6 +313,18 @@ export default function StudentList({ readOnly = false }) {
                         {s.status === 'Trial' && (
                           <span className="text-[9px] font-extrabold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full border border-yellow-200">
                             Trial
+                          </span>
+                        )}
+
+                        {!!s.tingkat && (
+                          <span className="text-[9px] font-extrabold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full border border-yellow-200">
+                            {s.tingkat}
+                          </span>
+                        )}
+
+                        {!!s.mapel && (
+                          <span className="text-[9px] font-extrabold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full border border-yellow-200">
+                            {s.mapel}
                           </span>
                         )}
                       </p>
@@ -597,6 +616,47 @@ function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
           onChange={e => setForm({ ...form, kelas: e.target.value })}
           className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
         />
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Tingkat
+        </label>
+
+        <select
+          value={form.tingkat || ''}
+          onChange={e =>
+            setForm({ ...form, tingkat: e.target.value })
+          }
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
+        >
+          <option value="">-- Pilih Tingkat --</option>
+
+          {TINGKAT_OPTIONS.filter(Boolean).map(opt => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">
+          Mapel
+        </label>
+
+        <input
+          value={form.mapel || ''}
+          onChange={e => setForm({ ...form, mapel: e.target.value })}
+          list="siswa-mapel-suggestions"
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
+        />
+
+        <datalist id="siswa-mapel-suggestions">
+          {MAPEL_SUGGESTIONS.map(m => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
       </div>
 
       <div>
