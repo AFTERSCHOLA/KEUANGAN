@@ -6,7 +6,7 @@ import { readCached, write, getKeys } from './store'
 
 export const BACKUP_VERSION = 2
 
-const ENTITY_KEYS = ['cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'sppPayments', 'invoices', 'settings']
+const ENTITY_KEYS = ['cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'sppPayments', 'invoices', 'settings', 'raport']
 
 /**
  * Build the backup object from current localStorage state.
@@ -33,6 +33,7 @@ function collectData() {
     honorPayments: readCached('honorPayments'),
     sppPayments: readCached('sppPayments'),
     invoices: readCached('invoices'),
+    raport: readCached('raport'),
     settings,
   }
 }
@@ -139,6 +140,7 @@ export function restoreBackup(obj) {
   write('honorPayments', data.honorPayments)
   write('sppPayments', data.sppPayments)
   write('invoices', data.invoices)
+  write('raport', data.raport)
 
   const keys = getKeys()
   localStorage.setItem(keys.settings, JSON.stringify(data.settings || {}))

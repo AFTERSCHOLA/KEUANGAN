@@ -247,8 +247,7 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     expect(order[0]).toContain('entity=trainer')
   })
 
-  it('DC.C.1 union: trainer in asistenIds[1] only sees the assigned school students', async () => {
-    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
+  it('DC.C.1 union: trainer in asistenIds[1] only sees the assigned school students', async () => {    localStorage.setItem('afterschola_v4_trainer', JSON.stringify([
       { id: 'trn-self', nama: 'Asisten Sim', sekolahIds: [], penugasanPengajar: [] },
       {
         id: 'trn-ins',
@@ -275,5 +274,69 @@ describe('G2 trainer siswa scope follows penugasanPengajar', () => {
     const store = await freshStore()
     expect(store.readCached('siswa').map(s => s.id)).toEqual(['sw-1'])
     expect(store.trainerHasAnyActiveAssignmentToSekolahClient('trn-self', 'sch-A')).toBe(true)
+  })
+})
+
+describe('Slice 1 Raport store scope (Task 4)', () => {
+  function seedRaportScope() {
+    seedAssignmentOnlyTrainer()
+    localStorage.setItem('afterschola_v4_sekolah', JSON.stringify([
+      { id: 'sch-A', nama: 'Sekolah A', cabangId: 'cbg-1' },
+      { id: 'sch-B', nama: 'Sekolah B', cabangId: 'cbg-2' },
+    ]))
+    localStorage.setItem('afterschola_v4_raport', JSON.stringify([
+      { id: 'rpt-1', siswaId: 'sw-1', sekolahId: 'sch-A', cabangId: 'cbg-1', semester: 'Ganjil', tahunAjaran: 2026 },
+      { id: 'rpt-2', siswaId: 'sw-2', sekolahId: 'sch-B', cabangId: 'cbg-2', semester: 'Ganjil', tahunAjaran: 2026 },
+    ]))
+  }
+
+  const adminCabangIdentity = {
+    id: 'usr-cab',
+    role: 'admin_cabang',
+    cabangId: 'cbg-1',
+    trainerId: null,
+    active: true,
+    mustChangePassword: false,
+  }
+
+  const superadminIdentity = {
+    id: 'usr-pusat',
+    role: 'superadmin',
+    cabangId: null,
+    trainerId: null,
+    active: true,
+    mustChangePassword: false,
+  }
+
+  it('assignment-only trainer sees only the assigned-school raport', async () => {
+    seedRaportScope()
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    expect(store.readCached('raport').map(r => r.id)).toEqual(['rpt-1'])
+  })
+
+  it('admin_cabang sees only own-branch raport', async () => {
+    seedRaportScope()
+    setIdentity(adminCabangIdentity)
+    const store = await freshStore()
+    expect(store.readCached('raport').map(r => r.id)).toEqual(['rpt-1'])
+  })
+
+  it('superadmin sees all raport rows', async () => {
+    seedRaportScope()
+    setIdentity(superadminIdentity)
+    const store = await freshStore()
+    expect(store.readCached('raport').map(r => r.id).sort()).toEqual(['rpt-1', 'rpt-2'])
+  })
+
+  it('trainer scope resolves via the siswa hop when the snapshot sekolahId is missing', async () => {
+    seedRaportScope()
+    // Drop the locked snapshot: scope must still resolve sch-A through sw-1.
+    localStorage.setItem('afterschola_v4_raport', JSON.stringify([
+      { id: 'rpt-1', siswaId: 'sw-1', cabangId: 'cbg-1', semester: 'Ganjil', tahunAjaran: 2026 },
+    ]))
+    setIdentity(trainerIdentity)
+    const store = await freshStore()
+    expect(store.readCached('raport').map(r => r.id)).toEqual(['rpt-1'])
   })
 })

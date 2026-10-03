@@ -93,6 +93,25 @@ describe('M-MAS1.1 prepareWritePayload', () => {
     expect(prepareWritePayload('absensi', absensi, ctx.adminCabang)).toEqual(absensi)
   })
 
+  it('strips cabangId from raport payloads for admin_cabang and trainer, keeps it for superadmin', () => {
+    // Task 3 handoff (binding): raport.php 422s a client-sent cabangId for
+    // admin_cabang AND trainer (branch derived server-side from siswaId);
+    // superadmin create states it explicitly (sekolah/eksternal pattern).
+    const payload = { id: 'rpt-1', siswaId: 'sw-1', sekolahId: 'sch-A', cabangId: 'cbg-other', semester: 'Ganjil', tahunAjaran: 2026 }
+    expect(prepareWritePayload('raport', payload, ctx.superadmin)).toHaveProperty('cabangId', 'cbg-other')
+    expect(prepareWritePayload('raport', payload, ctx.adminCabang)).not.toHaveProperty('cabangId')
+    expect(prepareWritePayload('raport', payload, ctx.trainer)).not.toHaveProperty('cabangId')
+  })
+
+  it('never sends the server _sekolahTrainerIds enrichment on raport payloads', () => {
+    // _sekolahTrainerIds is a read.php enrichment, never a client claim
+    // (server strips forged keys before authorize + storage).
+    const payload = { id: 'rpt-1', siswaId: 'sw-1', _sekolahTrainerIds: ['trn-self'] }
+    for (const role of [ctx.superadmin, ctx.adminCabang, ctx.trainer]) {
+      expect(prepareWritePayload('raport', payload, role)).not.toHaveProperty('_sekolahTrainerIds')
+    }
+  })
+
   it('does not mutate the caller-supplied record', () => {
     const payload = { id: 'sch-1', nama: 'SDK A', cabangId: 'cbg-other' }
     const before = JSON.stringify(payload)

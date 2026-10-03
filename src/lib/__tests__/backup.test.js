@@ -20,7 +20,7 @@ import {
   validateBackupShape,
 } from '../backup.js'
 
-const collections = ['cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'sppPayments', 'invoices']
+const collections = ['cabang', 'sekolah', 'trainer', 'siswa', 'absensi', 'honorPayments', 'sppPayments', 'invoices', 'raport']
 
 function validData() {
   return {
@@ -32,6 +32,7 @@ function validData() {
     honorPayments: [],
     sppPayments: [],
     invoices: [],
+    raport: [{ id: 'raport-1', siswaId: 'student-1', semester: 'Ganjil', tahunAjaran: 2026 }],
     settings: { title: 'Afterschola' },
   }
 }
@@ -66,7 +67,7 @@ describe('backup helpers', () => {
   it('rejects malformed top-level and entity fields', () => {
     expect(validateBackupShape(null).valid).toBe(false)
     expect(validateBackupShape({ version: '2' }).errors).toContain('Field "exportedAt" hilang atau bukan string.')
-    expect(validateBackupShape({ version: 2, exportedAt: 'now', data: {} }).errors).toHaveLength(9)
+    expect(validateBackupShape({ version: 2, exportedAt: 'now', data: {} }).errors).toHaveLength(10)
     expect(validateBackupShape({ ...validBackup(), data: { ...validData(), siswa: [{ nama: 'Tanpa ID' }] } }).valid).toBe(false)
   })
 
@@ -82,6 +83,7 @@ describe('backup helpers', () => {
     expect(result.data.cabang).toEqual(validData().cabang)
     expect(result.data.sppPayments).toEqual([])
     expect(result.data.invoices).toEqual([])
+    expect(result.data.raport).toEqual(validData().raport)
   })
 
   it('restores entities and settings after validating shape', () => {
@@ -93,6 +95,7 @@ describe('backup helpers', () => {
     expect(JSON.parse(localStorage.getItem(keys.sekolah))).toEqual(backup.data.sekolah)
     expect(JSON.parse(localStorage.getItem(keys.sppPayments))).toEqual([])
     expect(JSON.parse(localStorage.getItem(keys.invoices))).toEqual([])
+    expect(JSON.parse(localStorage.getItem(keys.raport))).toEqual(backup.data.raport)
     expect(JSON.parse(localStorage.getItem(keys.settings))).toEqual(backup.data.settings)
     expect(() => restoreBackup({ version: 2 })).toThrow('Backup tidak valid')
   })

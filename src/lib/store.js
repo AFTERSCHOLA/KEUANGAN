@@ -29,6 +29,8 @@ const READABLE_SERVER_KEYS = new Set([
   'invoices',
   // CS.B.2 (D-CS5) — external assistants sync like other master data.
   'eksternal',
+  // Slice 1 Raport (2026-10-03) — raport semester per siswa.
+  'raport',
 ])
 
 function notifyStoreChanged() {
@@ -39,6 +41,17 @@ const UI_STATE_KEY = `${STORE_KEY}_ui`
 
 function schoolIdsForBranch(cabangId) {
   return new Set(readCollection('sekolah').filter(s => s.cabangId === cabangId).map(s => s.id))
+}
+
+// Slice 1 Raport (2026-10-03) — raport scopes by its siswa's school
+// (server: read.php sppPayments-style hop via siswaId). Prefer the live
+// siswa row; fall back to the locked snapshot sekolahId on the record.
+function sekolahIdForRaport(record) {
+  if (!record || typeof record !== 'object') return undefined
+  const viaSiswa = readCollection('siswa').find(s => s && s.id === record.siswaId)
+  const hop = viaSiswa && typeof viaSiswa.sekolahId === 'string' ? viaSiswa.sekolahId : ''
+  if (hop !== '') return hop
+  return typeof record.sekolahId === 'string' ? record.sekolahId : undefined
 }
 
 export function getRoleContext() {
@@ -137,12 +150,12 @@ function persistTrainerScopeSnapshot(ctx, key, remote) {
       if (Array.isArray(r._sekolahTrainerIds) && !r._sekolahTrainerIds.includes(ctx.trainerId)) continue
       if (key === 'sekolah') {
         if (typeof r.id === 'string' && r.id !== '') observed.add(r.id)
-      } else if (key === 'siswa' || key === 'sppPayments' || key === 'eksternal' || key === 'absensi') {
+      } else if (key === 'siswa' || key === 'sppPayments' || key === 'eksternal' || key === 'absensi' || key === 'raport') {
         if (typeof r.sekolahId === 'string' && r.sekolahId !== '') {
           observed.add(r.sekolahId)
-        } else if (key === 'sppPayments' && typeof r.siswaId === 'string' && r.siswaId !== '') {
-          // sppPayments rows scoped via the siswa hop may carry only
-          // siswaId: resolve through the local siswa cache (already
+        } else if ((key === 'sppPayments' || key === 'raport') && typeof r.siswaId === 'string' && r.siswaId !== '') {
+          // sppPayments/raport rows scoped via the siswa hop may carry
+          // only siswaId: resolve through the local siswa cache (already
           // server-synced for this trainer by hydrate order).
           const sw = readCollection('siswa').find(s => s && s.id === r.siswaId)
           if (sw && typeof sw.sekolahId === 'string' && sw.sekolahId !== '') observed.add(sw.sekolahId)
@@ -197,6 +210,9 @@ function isWithinScope(key, record, ctx) {
       case 'absensiPengajar': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
       // CS.B.2 (D-CS5) — externals scope by their sekolahId, siswa-style.
       case 'eksternal': return schoolIds.has(record.sekolahId) || record.cabangId === ctx.cabangId
+      // Slice 1 Raport — branch-scoped, siswa-style: via the raport's
+      // siswa (student hop, then the siswa's school, then direct cabang).
+      case 'raport': return studentIds.has(record.siswaId) || schoolIds.has(sekolahIdForRaport(record)) || record.cabangId === ctx.cabangId
       default: return false
     }
   }
@@ -226,6 +242,13 @@ function isWithinScope(key, record, ctx) {
       // CS.B.2 (D-CS5) — trainers read externals in assigned schools
       // (reference-only for the attendance picker).
       case 'eksternal': return schoolIds.has(record.sekolahId) || snapshotIds.has(record.sekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, record.sekolahId)
+      // Slice 1 Raport — scope via the raport's siswa's school (the
+      // record carries no trainerId): siswa hop, legacy links, server
+      // snapshot, then live assignment — mirroring the siswa case above.
+      case 'raport': {
+        const rptSekolahId = sekolahIdForRaport(record)
+        return studentIds.has(record.siswaId) || schoolIds.has(rptSekolahId) || snapshotIds.has(rptSekolahId) || trainerHasAnyActiveAssignmentToSekolahClient(ctx.trainerId, rptSekolahId)
+      }
       default: return false
     }
   }
@@ -252,6 +275,8 @@ export function getKeys() {
     // Stale "undefined" rows in old browsers are inert — login hydrate
     // repopulates this key from the server.
     absensiPengajar: `${STORE_KEY}_absensiPengajar`,
+    // Slice 1 Raport (2026-10-03) — raport semester per siswa.
+    raport: `${STORE_KEY}_raport`,
   }
 }
 
@@ -452,6 +477,8 @@ const WRITE_ENDPOINTS = {
   // Korelasinya jadi konsisten juga sama correctLedgerEntry() yang
   // MEMANG udah langsung POST (bukan queue) buat koreksi entity ini.
   absensiPengajar: '/api/absensiPengajar.php',
+  // Slice 1 Raport (2026-10-03) — raport semester per siswa.
+  raport: '/api/raport.php',
 }
 
 export function prepareWritePayload(key, record, ctx) {
@@ -479,6 +506,18 @@ export function prepareWritePayload(key, record, ctx) {
 
     case 'siswa':
       delete copy.cabangId
+      return copy
+
+    // Slice 1 Raport — Task 3 handoff (binding): raport.php 422s a
+    // client-sent cabangId for admin_cabang AND trainer (the branch is
+    // derived server-side from siswaId → sekolah.cabang_id); superadmin
+    // create states it explicitly (sekolah/eksternal pattern).
+    // _sekolahTrainerIds is a read.php server enrichment, never a client
+    // claim — strip it so a read-then-write roundtrip cannot forward a
+    // forged key into authorize/storage (server strips it too).
+    case 'raport':
+      if (role === 'admin_cabang' || role === 'trainer') delete copy.cabangId
+      delete copy._sekolahTrainerIds
       return copy
 
     case 'users':
