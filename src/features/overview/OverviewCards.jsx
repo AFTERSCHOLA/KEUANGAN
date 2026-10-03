@@ -1,4 +1,5 @@
-import { readCached, useBranch, usePeriod, getRoleContext } from '../../lib/store.js'
+import { useState } from 'react'
+import { readCached, useBranch, usePeriod, getRoleContext, getUiState, setUiState } from '../../lib/store.js'
 import { formatRupiah } from '../../lib/format.js'
 import { MONTHS, MONTH_KEYS, periodeKey } from '../../lib/constants.js'
 import { financialData, billingForSekolah } from '../../lib/finance.js'
@@ -53,6 +54,15 @@ export default function OverviewCards() {
   const period = usePeriod()
   const { branches, selectedCabangId, setSelectedCabangId } = useBranch()
   const role = getRoleContext().role
+  // Slice 2 — Ringkas/Lengkap. Default Ringkas saat unset; persist via
+  // uiState key overviewMode (setUiState merge, tanpa ubah store.js).
+  const [overviewMode, setOverviewModeState] = useState(
+    () => (getUiState().overviewMode === 'Lengkap' ? 'Lengkap' : 'Ringkas')
+  )
+  const setOverviewMode = (mode) => {
+    setOverviewModeState(mode)
+    setUiState({ overviewMode: mode })
+  }
   const allEntities = {
     cabang: readCached('cabang'),
     sekolah: readCached('sekolah'),
@@ -100,6 +110,9 @@ export default function OverviewCards() {
 
   const collectionRate = current.potensiSpp > 0 ? current.pemasukanSpp / current.potensiSpp : 0
 
+  // Slice 2 — hitung dari variabel entities yang sudah ada (scope berlaku).
+  const siswaAktifCount = entities.siswa.filter(s => s.status === 'Aktif').length
+
   if (noData) {
     return (
       <div className="space-y-6 animate-fadeIn">
@@ -140,10 +153,46 @@ export default function OverviewCards() {
               </label>
             )}
             <PeriodFilter period={period} />
+            <div role="group" aria-label="Mode tampilan Overview" className="flex rounded-lg border border-slate-200 overflow-hidden">
+              {['Ringkas', 'Lengkap'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setOverviewMode(mode)}
+                  aria-pressed={overviewMode === mode}
+                  className={`px-3 py-2 text-sm font-semibold ${overviewMode === mode ? 'bg-slate-800 text-white' : 'bg-white text-slate-500'}`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
           </div>
         }
       />
 
+      {/* Slice 2 — Ringkas: tepat 4 kartu dari current/entities yang sudah dihitung */}
+      {overviewMode === 'Ringkas' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div data-testid="ringkas-card" className="bg-white rounded-2xl shadow-sm border p-5">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Jumlah Siswa Aktif</p>
+            <h3 className="text-2xl font-extrabold text-slate-800 mt-1">{siswaAktifCount}</h3>
+          </div>
+          <div data-testid="ringkas-card" className="bg-white rounded-2xl shadow-sm border p-5">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Pemasukan bulan berjalan</p>
+            <h3 className="text-2xl font-extrabold text-slate-800 mt-1">{formatRupiah(current.pemasukanSpp)}</h3>
+          </div>
+          <div data-testid="ringkas-card" className="bg-white rounded-2xl shadow-sm border p-5">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Laba/Rugi berjalan</p>
+            <h3 className={`text-2xl font-extrabold mt-1 ${current.labaRugi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {formatRupiah(current.labaRugi)}
+            </h3>
+          </div>
+          <div data-testid="ringkas-card" className="bg-white rounded-2xl shadow-sm border p-5">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Jumlah Sekolah Mitra</p>
+            <h3 className="text-2xl font-extrabold text-slate-800 mt-1">{entities.sekolah.length}</h3>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* M6.3.3 — Executive Summary: Laba/Rugi + kolektibilitas + red flags */}
       <ExecutiveSummary entities={entities} />
 
@@ -222,6 +271,8 @@ export default function OverviewCards() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }
