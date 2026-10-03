@@ -6,6 +6,7 @@ import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import RaportForm from './RaportForm.jsx'
+import RaportTemplate from './RaportTemplate.jsx'
 
 // Slice 1 Raport (Task 6) — daftar raport semester per siswa.
 // Tabel + filter + modal idiom meniru StudentList.jsx (header
@@ -38,6 +39,9 @@ export default function RaportList() {
   const [cari, setCari] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  // Task 7 — navigasi cetak: id raport yang cetakannya dibuka
+  // (pola printInvoice di SchoolList.jsx).
+  const [printId, setPrintId] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   const [acting, setActing] = useState(false)
   const [toast, setToast] = useState('')
@@ -129,6 +133,20 @@ export default function RaportList() {
     } finally {
       setActing(false)
     }
+  }
+
+  // Cetakan menggantikan daftar selama dibuka (pola SchoolList
+  // printInvoice): Kembali menutup via onBack.
+  const printRaport = printId ? raport.find(r => r.id === printId) || null : null
+  if (printRaport) {
+    return (
+      <RaportTemplate
+        raport={printRaport}
+        siswa={siswaById.get(printRaport.siswaId)}
+        sekolah={sekolahById.get(sekolahIdOf(printRaport))}
+        onBack={() => setPrintId(null)}
+      />
+    )
   }
 
   return (
@@ -255,6 +273,12 @@ export default function RaportList() {
                             Verifikasi
                           </button>
                         )}
+                        <button
+                          onClick={() => setPrintId(r.id)}
+                          className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                        >
+                          Cetak
+                        </button>
                         {canDelete && (
                           <button
                             onClick={() => setConfirmId(r.id)}

@@ -497,6 +497,140 @@ test('S6.3: admin verifikasi raport Diajukan → badge Terverifikasi', async ({ 
   await cleanupRaportSeeds(page, { raportIds: [RAPORT_ID], siswaIds: [siswaId], schoolIds: [schoolId] })
 })
 
+// ============================================================
+// S7 (Task 7) — Template cetak RaportTemplate + navigasi cetak.
+// Kontrak komponen (RaportTemplate.jsx + tombol Cetak di
+// RaportList.jsx): baris aksi "Cetak" membuka cetakan berisi kop
+// logo (fallback bila kosong), judul PENILAIAN AKHIR SISWA,
+// Nama/Kelas/Tingkat/Mapel/Semester, tabel 4 aspek + Total, baris
+// Nilai Akhir + Grade, Catatan, baris tanggal Bandung + tanda
+// tangan Instruktur; toolbar no-print berisi tombol Kembali /
+// Cetak Raport (window.print); root printable-report. Nilai cetak
+// = record (tidak dihitung-ulang di render).
+// ============================================================
+
+async function seedExemplarRaport(page, suffix, tag) {
+  const SCH_NAME = `SD ${tag} Sim ${suffix}`
+  const SW_NAME = `Siswa ${tag} Sim ${suffix}`
+  const CATATAN = `Catatan ${tag} ${suffix}`
+  await loginViaApi(page, 'superadmin')
+  const csrf = await primeCsrf(page)
+  const sch = await apiPost(page, csrf, '/api/sekolah.php', {
+    action: 'create', id: `skl-${tag.toLowerCase()}-${suffix}`, nama: SCH_NAME, spp: 150000, cabangId: 'cbg-test-pusat',
+  })
+  if (sch.status !== 201 && sch.status !== 200) throw new Error(`seed sekolah gagal: ${sch.status}`)
+  const schoolId = sch.body.id || `skl-${tag.toLowerCase()}-${suffix}`
+  const siswaId = `sw-${tag.toLowerCase()}-${suffix}`
+  const ssw = await apiPost(page, csrf, '/api/siswa.php', {
+    action: 'create', id: siswaId, nama: SW_NAME, sekolahId: schoolId, status: 'Aktif',
+    kelas: '3A', tingkat: 'Beginner', mapel: 'Scratch 3',
+  })
+  if (ssw.status !== 201 && ssw.status !== 200) throw new Error(`seed siswa gagal: ${ssw.status}`)
+  const raportId = `rpt-${tag.toLowerCase()}-${suffix}`
+  const rpt = await apiPost(page, csrf, '/api/raport.php', {
+    action: 'create',
+    id: raportId,
+    siswaId,
+    cabangId: 'cbg-test-pusat',
+    semester: 'Ganjil',
+    tahunAjaran: academicYearNow(),
+    nilai: { helpingTeam: 90, computationalThinking: 88, problemSolving: 89, creativity: 90 },
+    total: 357,
+    rataRata: 89.25,
+    grade: 'A-',
+    catatan: CATATAN,
+    status: 'Terverifikasi',
+  })
+  if (rpt.status !== 201 && rpt.status !== 200) throw new Error(`seed raport gagal: ${rpt.status} ${JSON.stringify(rpt.body)}`)
+  return { schoolId, siswaId, raportId, schName: SCH_NAME, swName: SW_NAME, catatan: CATATAN }
+}
+
+async function openPrintView(page, swName) {
+  await openTab(page, 'Raport')
+  const row = page.locator('tr', { has: page.getByText(swName) }).first()
+  await expect(row).toBeVisible({ timeout: 15000 })
+  await row.getByRole('button', { name: 'Cetak', exact: true }).click()
+  const printable = page.locator('.printable-report')
+  await expect(printable).toBeVisible({ timeout: 10000 })
+  return printable
+}
+
+test('S7.1: cetakan exemplar memuat 357/89,25/A-/catatan; Cetak Raport memanggil window.print', async ({ page, pageErrors }) => {
+  const SUFFIX = String(Date.now()).slice(-6)
+
+  await resetStorage(page)
+  const seed = await seedExemplarRaport(page, SUFFIX, 'S7A')
+
+  await loginViaApi(page, 'adminCabang')
+  await page.goto(APP)
+  await page.waitForLoadState('domcontentloaded')
+
+  const printable = await openPrintView(page, seed.swName)
+  await expect(printable.getByText('PENILAIAN AKHIR SISWA')).toBeVisible()
+  await expect(printable.getByText(seed.swName)).toBeVisible()
+  await expect(printable.getByText('Helping Team')).toBeVisible()
+  await expect(printable.getByText('Computational Thinking')).toBeVisible()
+  await expect(printable.getByText('357', { exact: true })).toBeVisible()
+  await expect(printable.getByText('89,25', { exact: true })).toBeVisible()
+  await expect(printable.getByText('A-', { exact: true })).toBeVisible()
+  await expect(printable.getByText(seed.catatan)).toBeVisible()
+  await expect(printable.getByText('Instruktur')).toBeVisible()
+  await expect(printable.getByText(/Bandung,/)).toBeVisible()
+
+  // Intercept window.print + assert terpanggil (testing taste).
+  await page.evaluate(() => {
+    window.__printCalled = false
+    window.print = () => { window.__printCalled = true }
+  })
+  await page.getByRole('button', { name: 'Cetak Raport', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__printCalled), { timeout: 5000 }).toBe(true)
+
+  // Kembali menutup cetakan → daftar tampil lagi.
+  await page.getByRole('button', { name: 'Kembali', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Tambah Raport' })).toBeVisible({ timeout: 10000 })
+
+  expect(pageErrors).toHaveLength(0)
+
+  await cleanupRaportSeeds(page, { raportIds: [seed.raportId], siswaIds: [seed.siswaId], schoolIds: [seed.schoolId] })
+})
+
+test('S7.2: cetakan tetap render saat logo/pengaturan kosong', async ({ page, pageErrors }) => {
+  const SUFFIX = String(Date.now()).slice(-6)
+
+  await resetStorage(page)
+  const seed = await seedExemplarRaport(page, SUFFIX, 'S7B')
+
+  await loginViaApi(page, 'adminCabang')
+  await page.goto(APP)
+  await page.waitForLoadState('domcontentloaded')
+
+  // Kosongkan logo + pengaturan cetak (Review Focus 5) lalu reload.
+  await page.evaluate(() => {
+    try {
+      const raw = localStorage.getItem('afterschola_v4_settings')
+      const parsed = raw ? JSON.parse(raw) : {}
+      delete parsed.logoUrl
+      delete parsed.logoEntry
+      delete parsed.penandatangan
+      localStorage.setItem('afterschola_v4_settings', JSON.stringify(parsed))
+    } catch {
+      /* abaikan — template harus tetap render */
+    }
+  })
+  await page.reload()
+  await page.waitForLoadState('domcontentloaded')
+
+  const printable = await openPrintView(page, seed.swName)
+  await expect(printable.getByText('PENILAIAN AKHIR SISWA')).toBeVisible()
+  await expect(printable.getByText(seed.swName)).toBeVisible()
+  await expect(printable.getByText('357', { exact: true })).toBeVisible()
+  await expect(printable.getByText('89,25', { exact: true })).toBeVisible()
+
+  expect(pageErrors).toHaveLength(0)
+
+  await cleanupRaportSeeds(page, { raportIds: [seed.raportId], siswaIds: [seed.siswaId], schoolIds: [seed.schoolId] })
+})
+
 test('S5.2: trainer Data Siswa read-only — tombol tulis tak ada', async ({ page, pageErrors }) => {
   await resetStorage(page)
   await loginViaApi(page, 'trainer')
