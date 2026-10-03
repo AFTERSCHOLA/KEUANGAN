@@ -14,12 +14,14 @@ import { test, expect, loginViaApi, logout } from './fixtures.js'
 //
 //   1. loginViaApi(superadmin) + seed one school via the API
 //      (PM.0.1 helpers).
-//   2. Assert the 14-button nav registry (10 M5.1/M7 + Absensi Tenaga
+//   2. Assert the 15-button nav registry (10 M5.1/M7 + Absensi Tenaga
 //      Pengajar from TA.B.4 + Penugasan Pengajar/Jadwal Penugasan from
-//      the Penugasan chain + Asisten Eksternal from CS.D.3 — DL-7 drift
-//      recorded, spec updated here).
-//   3. logout() + loginViaApi(trainer) → assert 6-button trainer
-//      registry (4 legacy + Absensi Saya TA.B.3 + Ringkasan Saya TA.C.1)
+//      the Penugasan chain + Asisten Eksternal from CS.D.3 + Raport
+//      from Slice 1 Raport Task 7 — DL-7 drift recorded, spec updated
+//      here; Raport bump recorded in this spec update).
+//   3. logout() + loginViaApi(trainer) → assert 7-button trainer
+//      registry (4 legacy + Absensi Saya TA.B.3 + Ringkasan Saya TA.C.1
+//      + Raport Slice 1)
 //      and that admin-only tabs are hidden.
 //   4. The trainer impersonation dropdown the old test used to
 //      select Budi is gone; the trainer account is now a server
@@ -39,18 +41,18 @@ async function openTab(page, label) {
   await page.getByRole('navigation').getByRole('button', { name: label, exact: true }).click()
 }
 
-test('M5.1.2: role-branched tab registry (superadmin 14 / trainer 6) + hidden-tab redirect', async ({ page, pageErrors }) => {
+test('M5.1.2: role-branched tab registry (superadmin 15 / trainer 7) + hidden-tab redirect', async ({ page, pageErrors }) => {
   // ---- 1. Establish a superadmin session and visit the app. ----
   await loginViaApi(page, 'superadmin')
   await gotoApp(page)
 
-  // ---- 2. Superadmin sees the 14 tabs (10 M5.1/M7 + Absensi Tenaga
+  // ---- 2. Superadmin sees the 15 tabs (10 M5.1/M7 + Absensi Tenaga
   // Pengajar TA.B.4 + Penugasan Pengajar/Jadwal Penugasan PG.A.1/PG.B.1 +
-  // Asisten Eksternal CS.D.3; TA.C.2 matrix lives inside its tab, no new
+  // Asisten Eksternal CS.D.3 + Raport Slice 1; TA.C.2 matrix lives inside its tab, no new
   // top-level tab). ----
   const superadminNav = page.getByRole('navigation').getByRole('button')
-  await expect(superadminNav).toHaveCount(14)
-  for (const label of ['Overview', 'Data Sekolah', 'Data Siswa', 'Data Trainer', 'Penugasan Pengajar', 'Jadwal Penugasan', 'Data Absensi', 'Riwayat Absensi', 'Absensi Tenaga Pengajar', 'Asisten Eksternal', 'Data Pembayaran', 'Data Keuangan', 'Umur Piutang', 'Data Cabang']) {
+  await expect(superadminNav).toHaveCount(15)
+  for (const label of ['Overview', 'Data Sekolah', 'Data Siswa', 'Raport', 'Data Trainer', 'Penugasan Pengajar', 'Jadwal Penugasan', 'Data Absensi', 'Riwayat Absensi', 'Absensi Tenaga Pengajar', 'Asisten Eksternal', 'Data Pembayaran', 'Data Keuangan', 'Umur Piutang', 'Data Cabang']) {
     await expect(superadminNav.filter({ hasText: label })).toHaveCount(1)
   }
 
@@ -65,11 +67,11 @@ test('M5.1.2: role-branched tab registry (superadmin 14 / trainer 6) + hidden-ta
   await loginViaApi(page, 'trainer')
   await gotoApp(page)
 
-  // Trainer sees exactly 6 tabs (4 legacy + Absensi Saya TA.B.3 +
-  // Ringkasan Saya TA.C.1).
+  // Trainer sees exactly 7 tabs (4 legacy + Absensi Saya TA.B.3 +
+  // Ringkasan Saya TA.C.1 + Raport Slice 1).
   const trainerNav = page.getByRole('navigation').getByRole('button')
-  await expect(trainerNav).toHaveCount(6)
-  for (const label of ['Absensi Saya', 'Ringkasan Saya', 'Data Absensi', 'Riwayat Absensi', 'Data Siswa', 'Rekap Saya']) {
+  await expect(trainerNav).toHaveCount(7)
+  for (const label of ['Absensi Saya', 'Ringkasan Saya', 'Data Absensi', 'Riwayat Absensi', 'Data Siswa', 'Raport', 'Rekap Saya']) {
     await expect(trainerNav.filter({ hasText: label })).toHaveCount(1)
   }
   // Admin-only tabs are hidden for the trainer.
@@ -88,7 +90,7 @@ test('M5.1.2: role-branched tab registry (superadmin 14 / trainer 6) + hidden-ta
   await page.context().clearCookies()
   await loginViaApi(page, 'superadmin')
   await gotoApp(page)
-  await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(14)
+  await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(15)
   await expect(page.getByRole('button', { name: 'Data Keuangan' })).toBeVisible()
 
   expect(pageErrors).toHaveLength(0)
