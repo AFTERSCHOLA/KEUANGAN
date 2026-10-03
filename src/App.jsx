@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import SchoolList from './features/schools/SchoolList.jsx'
 import StudentList from './features/students/StudentList.jsx'
+import RaportList from './features/raport/RaportList.jsx'
 import TrainerList from './features/trainers/TrainerList.jsx'
 import AttendanceTab from './features/attendance/index.jsx'
 import PaymentTable from './features/payments/PaymentTable.jsx'
@@ -38,6 +39,10 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: 'M4 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 14a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3z' },
   { id: 'sekolah', label: 'Data Sekolah', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
   { id: 'siswa', label: 'Data Siswa', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  // Slice 1 Raport (Task 6) — daftar + form raport semester per siswa.
+  // Ikon reuse path Data Absensi verbatim (taste #11, do not invent).
+  // Task 7 hanya menambah navigasi cetak, bukan registrasi awal.
+  { id: 'raport', label: 'Raport', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   { id: 'trainer', label: 'Data Trainer', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   // PG.A.1 — explicit assignment management (F-PG1; D-PG2): writes
   // trainer.penugasanPengajar[] so Absensi Saya becomes selectable.
@@ -111,6 +116,7 @@ const TRAINER_TABS = [
   TABS.find(t => t.id === 'absensi'),
   TABS.find(t => t.id === 'riwayat'),
   TABS.find(t => t.id === 'siswa'),
+  TABS.find(t => t.id === 'raport'),
   REKAP_TAB,
 ]
 
@@ -329,6 +335,7 @@ if (currentUser?.mustChangePassword) {
           {activeTab === 'overview' && <OverviewCards />}
           {activeTab === 'sekolah' && <SchoolList />}
           {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
+          {activeTab === 'raport' && <RaportList />}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'penugasan' && <PenugasanManager />}
           {activeTab === 'jadwalPenugasan' && <PenugasanTimetable />}
