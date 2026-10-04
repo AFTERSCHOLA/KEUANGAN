@@ -22,4 +22,5 @@ login.json
 dump_e2e.txt
 docs/exemplar
 docs/EVALUATION_LOG.md
+.worktrees/
 .gitignore
