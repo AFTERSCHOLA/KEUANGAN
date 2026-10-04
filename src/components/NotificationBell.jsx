@@ -203,7 +203,6 @@ export default function NotificationBell({ onOpenJadwal }) {
           <div className="p-2">
             <button
               type="button"
-              role="menuitem"
               onClick={() => { setOpen(false); onOpenJadwal?.() }}
               className="w-full px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 rounded-lg transition"
             >
