@@ -13,6 +13,7 @@ import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import SidebarLayout from './components/SidebarLayout.jsx'
 import AccountMenu from './components/AccountMenu.jsx'
+import NotificationBell from './components/NotificationBell.jsx'
 import { usePeriod, getUiState, setUiState, getSettings, setSettings as persistSettings, hydrateServerData } from './lib/store'
 import { fetchLogoCurrent, loadPhotoDataUrl } from './lib/photoStorage.js'
 import TrainerDashboard from './features/auth/TrainerDashboard.jsx'
@@ -322,12 +323,12 @@ if (currentUser?.mustChangePassword) {
                 {settings.title || 'Afterschola'}
               </h1>
             </div>
-            <AccountMenu
+            <div className="flex items-center gap-2"><NotificationBell onOpenJadwal={() => setActiveTab('jadwalPenugasan')} /><AccountMenu
               username={currentUser?.username || 'Akun'}
               onOpenBackup={() => setBackupModalOpen(true)}
               onOpenSettings={() => setSettingsModalOpen(true)}
               onLogout={async () => { await logout(); setActiveTab('overview') }}
-            />
+            /></div>
           </div>
         </header>
 
