@@ -288,3 +288,106 @@ test.describe('notif', () => {
     }
   })
 })
+
+test.describe('ringkas', () => {
+  // ============================================================
+  // Task 3 (ringkas) — pin: unset uiState.overviewMode → Ringkas
+  // with exactly 4 ringkas-cards; Lengkap persists across reload.
+  // Task 4 appends describe('kalender') below — keep append-clean.
+  //
+  // Hermetic seed: ONE fixed-id school (delete-then-create, deleted
+  // in finally) so Overview never hits its noData empty-state
+  // regardless of baseline DB content. No run suffixes, no residue.
+  // NOTE: product copy is `Laba/Rugi berjalan` (slash, verbatim from
+  // OverviewCards.jsx:184); the plan/brief text `Laba-Rugi` (hyphen)
+  // is a doc typo — assertions below use the real on-screen copy and
+  // match tests/overview-ringkas.spec.js.
+  // ============================================================
+
+  const APP = 'http://localhost:5173'
+  const UI_KEY = 'afterschola_v4_ui'
+  const SEED_SCHOOL_ID = 'skl-ringkas-pin'
+
+  async function apiPost(page, csrf, url, data) {
+    const res = await page.request.post(url, {
+      headers: { 'X-CSRF-Token': csrf },
+      data,
+    })
+    const body = await res.json().catch(() => ({}))
+    return { status: res.status(), body }
+  }
+
+  async function ensureSeedSchool(page, csrf) {
+    await apiPost(page, csrf, '/api/sekolah.php', { action: 'delete', id: SEED_SCHOOL_ID }).catch(() => {})
+    const r = await apiPost(page, csrf, '/api/sekolah.php', {
+      action: 'create', id: SEED_SCHOOL_ID, nama: 'SD Ringkas Pin', spp: 150000, cabangId: 'cbg-test-pusat',
+    })
+    if (r.status !== 201 && r.status !== 200) throw new Error(`seed sekolah gagal: ${r.status} ${JSON.stringify(r.body)}`)
+  }
+
+  async function clearOverviewMode(page) {
+    await page.evaluate((key) => {
+      try {
+        const raw = localStorage.getItem(key)
+        const state = raw ? JSON.parse(raw) : {}
+        delete state.overviewMode
+        localStorage.setItem(key, JSON.stringify(state))
+      } catch {
+        localStorage.removeItem(key)
+      }
+    }, UI_KEY)
+  }
+
+  async function openOverview(page) {
+    await page.getByRole('navigation').getByRole('button', { name: 'Overview', exact: true }).click()
+  }
+
+  test('unset overviewMode defaults to Ringkas with 4 cards; Lengkap persists across reload', async ({ page, pageErrors }) => {
+    test.setTimeout(180000)
+
+    // ---- hermetic setup as superadmin: one fixed-id school.
+    await loginViaApi(page, 'superadmin')
+    const csrf = await primeCsrf(page)
+    await ensureSeedSchool(page, csrf)
+
+    try {
+      // ---- fresh uiState for the app origin: drop overviewMode only.
+      await page.goto(APP)
+      await page.waitForLoadState('domcontentloaded')
+      await clearOverviewMode(page)
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await openOverview(page)
+
+      // ---- default is Ringkas: toggle state + exactly 4 labeled cards.
+      const ringkasBtn = page.getByRole('button', { name: 'Ringkas', exact: true })
+      const lengkapBtn = page.getByRole('button', { name: 'Lengkap', exact: true })
+      await expect(ringkasBtn).toBeVisible({ timeout: 15000 })
+      await expect(ringkasBtn).toHaveAttribute('aria-pressed', 'true')
+      await expect(lengkapBtn).toHaveAttribute('aria-pressed', 'false')
+      const cards = page.getByTestId('ringkas-card')
+      await expect(cards).toHaveCount(4, { timeout: 15000 })
+      for (const label of ['Jumlah Siswa Aktif', 'Pemasukan bulan berjalan', 'Laba/Rugi berjalan', 'Jumlah Sekolah Mitra']) {
+        await expect(cards.filter({ hasText: label })).toBeVisible()
+      }
+
+      // ---- switch to Lengkap, reload, Lengkap persists.
+      await lengkapBtn.click()
+      await expect(page.getByTestId('ringkas-card')).toHaveCount(0)
+      await expect(lengkapBtn).toHaveAttribute('aria-pressed', 'true')
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await openOverview(page)
+      await expect(page.getByRole('button', { name: 'Lengkap', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 15000 })
+      await expect(page.getByRole('button', { name: 'Ringkas', exact: true })).toHaveAttribute('aria-pressed', 'false')
+      await expect(page.getByTestId('ringkas-card')).toHaveCount(0)
+
+      expect(pageErrors).toHaveLength(0)
+    } finally {
+      await page.request.post('/api/auth/logout.php').catch(() => {})
+      await loginViaApi(page, 'superadmin')
+      const csrf2 = await primeCsrf(page)
+      await apiPost(page, csrf2, '/api/sekolah.php', { action: 'delete', id: SEED_SCHOOL_ID }).catch(() => {})
+    }
+  })
+})
