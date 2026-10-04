@@ -131,6 +131,12 @@ test('J1: switcher tampil default Harian; pindah Mingguan → reload → tetap M
   await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('button', { name: 'Unduh CSV' })).toHaveCount(0)
 
+  await kalenderBtn.click()
+  await expect(kalenderBtn).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Unduh CSV' })).toHaveCount(0)
+  await mingguanBtn.click()
+  await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'true')
+
   await page.reload()
   await page.waitForLoadState('domcontentloaded')
   await openJadwal(page)

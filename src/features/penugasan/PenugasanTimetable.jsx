@@ -88,16 +88,21 @@ export default function PenugasanTimetable() {
     return all
   }, [trainers, sekolah, tanggal, ctx.role, ctx.trainerId])
 
+  // Slice 3 — jangkar aman untuk derivasi minggu/bulan: input date
+  // yang dikosongkan menghasilkan "" (Invalid Date bila di-parse) —
+  // fallback ke hari ini agar Mingguan/Kalender tidak crash.
+  const safeTanggal = /^\d{4}-\d{2}-\d{2}$/.test(tanggal) ? tanggal : localDateString()
+
   // Slice 3 — tanggal-tanggal yang terlihat per view. Harian: jangkar
   // saja; Mingguan: Senin–Minggu pada minggu jangkar; Kalender: semua
   // hari pada bulan jangkar.
   const visibleDates = useMemo(() => {
     if (view === 'mingguan') {
-      const monday = mondayOfWeekISO(tanggal)
+      const monday = mondayOfWeekISO(safeTanggal)
       return [0, 1, 2, 3, 4, 5, 6].map(i => addDaysISO(monday, i))
     }
     if (view === 'kalender') {
-      const [y, m] = String(tanggal).split('-').map(Number)
+      const [y, m] = String(safeTanggal).split('-').map(Number)
       const count = new Date(y, m, 0).getDate()
       const out = []
       for (let d = 1; d <= count; d++) {
@@ -106,7 +111,7 @@ export default function PenugasanTimetable() {
       return out
     }
     return [tanggal]
-  }, [view, tanggal])
+  }, [view, tanggal, safeTanggal])
 
   // Slice 3 — join yang sama per tanggal terlihat (scope trainer ikut,
   // meniru filter `rows` di atas). Keyed by iso agar Mingguan/Kalender
@@ -249,19 +254,19 @@ export default function PenugasanTimetable() {
   }
 
   // Slice 3 — label ringkas per view untuk header.
-  const weekStart = mondayOfWeekISO(tanggal)
+  const weekStart = mondayOfWeekISO(safeTanggal)
   const weekEnd = addDaysISO(weekStart, 6)
   const viewSubtitle = view === 'mingguan'
     ? <>Minggu: <b>{weekStart}</b> s.d. <b>{weekEnd}</b></>
     : view === 'kalender'
-      ? <>Bulan: <b>{monthLabel(tanggal)}</b></>
+      ? <>Bulan: <b>{monthLabel(safeTanggal)}</b></>
       : <>Tanggal: <b>{tanggal}</b>{hari ? ` · ${hari}` : ''}</>
 
   // Slice 3 — Kalender: sel kosong pembuka agar tanggal 1 jatuh di
   // kolom hari yang benar (Senin-first).
   const calendarLeading = (() => {
     if (view !== 'kalender') return 0
-    const [y, m] = String(tanggal).split('-').map(Number)
+    const [y, m] = String(safeTanggal).split('-').map(Number)
     return (new Date(y, m - 1, 1).getDay() + 6) % 7
   })()
 
