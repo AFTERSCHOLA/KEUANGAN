@@ -391,3 +391,92 @@ test.describe('ringkas', () => {
     }
   })
 })
+
+test.describe('kalender', () => {
+  // ============================================================
+  // Task 4 (kalender) — `Kalender` navbar shortcut opens Jadwal
+  // Penugasan in Kalender view. No new route: shortcut sets
+  // activeTab='jadwalPenugasan' + jadwalView='kalender'; remount via
+  // key so clicking while already on the tab still flips the view.
+  // Hermetic: no seeded rows — the kalender grid renders day cells
+  // from visibleDates regardless of data. Wipe-guard idiom reused
+  // from the describes above (fresh afterschola_v4 keys per run).
+  // ============================================================
+
+  const APP = 'http://localhost:5173'
+
+  async function resetStorage(page) {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('__kal_reset_done')) return
+      const prefix = 'afterschola_v4'
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith(prefix)) localStorage.removeItem(k)
+      }
+      sessionStorage.setItem('__kal_reset_done', '1')
+    })
+  }
+
+  function navKalender(page) {
+    return page.getByRole('navigation').getByRole('button', { name: 'Kalender', exact: true })
+  }
+
+  function navJadwal(page) {
+    return page.getByRole('navigation').getByRole('button', { name: 'Jadwal Penugasan', exact: true })
+  }
+
+  function viewGroup(page) {
+    return page.getByRole('group', { name: 'Tampilan jadwal' })
+  }
+
+  async function expectKalenderView(page) {
+    await expect(page.getByRole('heading', { name: 'Jadwal Penugasan' })).toBeVisible({ timeout: 15000 })
+    const group = viewGroup(page)
+    await expect(group.getByRole('button', { name: 'Kalender', exact: true })).toHaveAttribute('aria-pressed', 'true', { timeout: 15000 })
+    await expect(group.getByRole('button', { name: 'Harian', exact: true })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByTestId('kalender-hari').first()).toBeVisible()
+  }
+
+  test('shortcut opens Kalender view, persists across reload, remounts from Harian', async ({ page, pageErrors }) => {
+    test.setTimeout(180000)
+    await resetStorage(page)
+    await loginViaApi(page, 'superadmin')
+    await page.goto(APP)
+    await page.waitForLoadState('domcontentloaded')
+
+    // ---- from Overview, nav Kalender lands on Jadwal Penugasan in Kalender view.
+    await navKalender(page).click()
+    await expectKalenderView(page)
+
+    // ---- active-highlight stays on Jadwal Penugasan (no dual-highlight).
+    await expect(navJadwal(page)).toHaveClass(/bg-yellow-400/)
+    await expect(navKalender(page)).not.toHaveClass(/bg-yellow-400/)
+
+    // ---- reload keeps the Kalender view (jadwalView persisted).
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await expectKalenderView(page)
+
+    // ---- remount case: switch to Harian, click nav Kalender again flips back.
+    await viewGroup(page).getByRole('button', { name: 'Harian', exact: true }).click()
+    await expect(viewGroup(page).getByRole('button', { name: 'Harian', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await navKalender(page).click()
+    await expectKalenderView(page)
+
+    expect(pageErrors).toHaveLength(0)
+  })
+
+  test('trainer role sees Kalender nav and lands in Kalender view', async ({ page, pageErrors }) => {
+    test.setTimeout(180000)
+    await resetStorage(page)
+    await loginViaApi(page, 'trainer')
+    await page.goto(APP)
+    await page.waitForLoadState('domcontentloaded')
+
+    await expect(navKalender(page)).toBeVisible({ timeout: 15000 })
+    await navKalender(page).click()
+    await expectKalenderView(page)
+
+    expect(pageErrors).toHaveLength(0)
+  })
+})

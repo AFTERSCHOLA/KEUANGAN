@@ -65,7 +65,28 @@ const TABS = [
   { id: 'pembayaran', label: 'Data Pembayaran', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'keuangan', label: 'Data Keuangan', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
    { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
- ]
+  ]
+
+// Task 4 — `Kalender` navbar shortcut (no new route): sets
+// activeTab='jadwalPenugasan' + jadwalView='kalender'. Icon reuses the
+// Jadwal Penugasan path verbatim (taste #11, do not invent).
+const KALENDER_SHORTCUT = {
+  id: 'kalender',
+  label: 'Kalender',
+  icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+}
+
+// Task 4 — splice the shortcut after `jadwalPenugasan` in the RENDERED
+// tab arrays only. The shared TABS const is left untouched so the
+// role-redirect allowlist (line ~232) keeps its existing membership.
+function withKalenderShortcut(tabs) {
+  const out = []
+  for (const t of tabs) {
+    out.push(t)
+    if (t && t.id === 'jadwalPenugasan') out.push(KALENDER_SHORTCUT)
+  }
+  return out
+}
 
 const CABANG_TAB = {
   id: 'cabang',
@@ -164,6 +185,10 @@ useEffect(() => {
   }, [settings.title])
 
   const [activeTab, setActiveTabState] = useState(() => getUiState().activeTab || 'overview')
+  // Task 4 — remount nonce: PenugasanTimetable reads jadwalView only in
+  // its useState initializer, so clicking nav Kalender while already on
+  // the tab needs a remount (key) to flip the view.
+  const [kalenderNonce, setKalenderNonce] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => !!getUiState().sidebarCollapsed)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [backupModalOpen, setBackupModalOpen] = useState(false)
@@ -208,6 +233,16 @@ useEffect(() => {
   }, [currentUser?.id])
 
   function setActiveTab(tabId) {
+    // Task 4 — Kalender shortcut: no new route; land on Jadwal
+    // Penugasan with the Kalender view. Active-highlight stays on
+    // Jadwal Penugasan (no dual-highlight state).
+    if (tabId === 'kalender') {
+      setUiState({ activeTab: 'jadwalPenugasan', jadwalView: 'kalender' })
+      setActiveTabState('jadwalPenugasan')
+      setKalenderNonce(n => n + 1)
+      setMobileDrawerOpen(false)
+      return
+    }
     setActiveTabState(tabId)
     setUiState({ activeTab: tabId })
     setMobileDrawerOpen(false)
@@ -264,7 +299,7 @@ if (currentUser?.mustChangePassword) {
   return <MustChangePasswordPage />
 }
 
-  const visibleTabs = role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS
+  const visibleTabs = withKalenderShortcut(role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS)
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
@@ -342,7 +377,7 @@ if (currentUser?.mustChangePassword) {
           {activeTab === 'raport' && <RaportList />}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'penugasan' && <PenugasanManager />}
-          {activeTab === 'jadwalPenugasan' && <PenugasanTimetable />}
+          {activeTab === 'jadwalPenugasan' && <PenugasanTimetable key={kalenderNonce} />}
           {activeTab === 'absensi' && <AttendanceTab />}
           {activeTab === 'riwayat' && (role === 'trainer' ? <TrainerHistory trainerId={trainerId} /> : <AttendanceTab initialView="riwayat" />)}
           {activeTab === 'absensiPengajarAdmin' && <TrainerAttendanceAdminView />}
