@@ -31,7 +31,16 @@
 - F4 (MA tariff, zero attendance), F14 (SMP Sains sessions, zero pupils), Q7/Q8 (zero payment samples — Accepted-Unverified): lubang ground truth, bukan defect kode. Tetap carry, jangan diisi dengan data invensi.
 - F12 invoice follow-up: editor follow-up sudah ada di InvoiceModal (fuEditing) — anggap tertutup kecuali tim meminta view follow-up global (itu masuk Q-S4-2 Slice 4).
 
-## E. Open questions per slice (diputuskan saat gilirannya, bukan di sini)
+## F. Sisa Slice 3 (diterima apa adanya, 2026-10-04)
+
+| # | Item | Status |
+|---|------|--------|
+| F1 | Chip kalender memakai nama sekolah penuh (brief bilang "singkat") — diterima, lebih informatif | Accepted as-is |
+| F2 | J4 hanya membuktikan klik hari-jangkar (handler `openDayInHarian` identik semua hari) | Accepted — coverage cukup |
+| F3 | `penugasan-timetable.spec.js` PG.B.1 gagal di tree bersih juga (ekspektasi copy empty-state basi dari T2.C.1) — JANGAN patch di Slice 3 | Pre-existing, pemilik: yang menyentuh area itu |
+| F4 | Pelajaran proses: dispatch subagent menggantung 3× saat Playwright run panjang tanpa output; inline + bounded timeouts + `--reporter=line` jalan. Selalu cek :8000 hidup sebelum run panjang (PHP mati = proxy ECONNREFUSED; PHP wedged = stall sampai timeout) | Proses — diingat untuk Slice 4 |
+
+## G. Open questions per slice (diputuskan saat gilirannya, bukan di sini)
 
 - Slice 2: Q-S2-1 (4 metrik final), Q-S2-2 (toggle semua role?)
 - Slice 3: Q-S3-1 (satu tab + switcher vs tab terpisah), Q-S3-2 (scope cabang kalender?)
