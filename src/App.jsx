@@ -90,8 +90,9 @@ const ABSENSI_PENGAJAR_TAB = {
   icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
 }
 
-// Trainer melihat 7 tab (M5.1.2 + Raport-era): Absensi Saya, Ringkasan Saya,
-// Data Absensi, Riwayat Absensi, Data Siswa read-only, Raport,
+// Trainer melihat 8 tab (M5.1.2 + Raport-era + Slice 3): Absensi Saya,
+// Ringkasan Saya, Data Absensi, Riwayat Absensi, Jadwal Penugasan
+// (sesi sendiri), Data Siswa read-only, Raport,
 // dan Rekap Saya sebagai landing view. Objek tab di-reuse dari TABS.
 const REKAP_TAB = {
   id: 'rekap',
@@ -116,6 +117,7 @@ const TRAINER_TABS = [
   RINGKASAN_PENGAJAR_TAB,
   TABS.find(t => t.id === 'absensi'),
   TABS.find(t => t.id === 'riwayat'),
+  TABS.find(t => t.id === 'jadwalPenugasan'),
   TABS.find(t => t.id === 'siswa'),
   TABS.find(t => t.id === 'raport'),
   REKAP_TAB,

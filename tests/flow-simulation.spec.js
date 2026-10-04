@@ -66,13 +66,14 @@ test('flow simulation: trainer reaches the dashboard via loginViaApi', async ({ 
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
 
-  // Trainer landing is the 7-tab reduced surface (Absensi Saya,
-  // Ringkasan Saya, Data Absensi, Riwayat Absensi, Data Siswa, Raport,
-  // Rekap Saya), not the full admin nav. Was 4 before TA.B.3 added "Absensi
+  // Trainer landing is the 8-tab reduced surface (Absensi Saya,
+  // Ringkasan Saya, Data Absensi, Riwayat Absensi, Jadwal Penugasan,
+  // Data Siswa, Raport, Rekap Saya), not the full admin nav. Was 4 before TA.B.3 added "Absensi
   // Saya", 5 before TA.C.1 added "Ringkasan Saya" (absensiPengajar), 6
-  // before Slice 1 Raport added "Raport" — see header note.
+  // before Slice 1 Raport added "Raport", 7 before Slice 3 added
+  // "Jadwal Penugasan" — see header note.
   const nav = page.getByRole('navigation').getByRole('button')
-  await expect(nav).toHaveCount(7)
+  await expect(nav).toHaveCount(8)
   await expect(page.getByRole('navigation').getByRole('button', { name: 'Ringkasan Saya', exact: true })).toBeVisible()
 
   expect(pageErrors).toHaveLength(0)

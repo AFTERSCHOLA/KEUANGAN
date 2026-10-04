@@ -41,7 +41,7 @@ async function openTab(page, label) {
   await page.getByRole('navigation').getByRole('button', { name: label, exact: true }).click()
 }
 
-test('M5.1.2: role-branched tab registry (superadmin 15 / trainer 7) + hidden-tab redirect', async ({ page, pageErrors }) => {
+test('M5.1.2: role-branched tab registry (superadmin 15 / trainer 8) + hidden-tab redirect', async ({ page, pageErrors }) => {
   // ---- 1. Establish a superadmin session and visit the app. ----
   await loginViaApi(page, 'superadmin')
   await gotoApp(page)
@@ -67,11 +67,11 @@ test('M5.1.2: role-branched tab registry (superadmin 15 / trainer 7) + hidden-ta
   await loginViaApi(page, 'trainer')
   await gotoApp(page)
 
-  // Trainer sees exactly 7 tabs (4 legacy + Absensi Saya TA.B.3 +
-  // Ringkasan Saya TA.C.1 + Raport Slice 1).
+  // Trainer sees exactly 8 tabs (4 legacy + Absensi Saya TA.B.3 +
+  // Ringkasan Saya TA.C.1 + Raport Slice 1 + Jadwal Penugasan Slice 3).
   const trainerNav = page.getByRole('navigation').getByRole('button')
-  await expect(trainerNav).toHaveCount(7)
-  for (const label of ['Absensi Saya', 'Ringkasan Saya', 'Data Absensi', 'Riwayat Absensi', 'Data Siswa', 'Raport', 'Rekap Saya']) {
+  await expect(trainerNav).toHaveCount(8)
+  for (const label of ['Absensi Saya', 'Ringkasan Saya', 'Data Absensi', 'Riwayat Absensi', 'Jadwal Penugasan', 'Data Siswa', 'Raport', 'Rekap Saya']) {
     await expect(trainerNav.filter({ hasText: label })).toHaveCount(1)
   }
   // Admin-only tabs are hidden for the trainer.

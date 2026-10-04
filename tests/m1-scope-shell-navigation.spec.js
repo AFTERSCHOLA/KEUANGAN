@@ -32,7 +32,10 @@ test.describe('M1.3 — scope shell navigation (authenticated)', () => {
   // Slice 1 Raport (2026-10-03, Task 7): trainer surface is 7 tabs
   // (+ Raport from TRAINER_TABS in src/App.jsx). Same intentional
   // scope change, not a regression.
-  test('Trainer sees exactly the seven allowed tabs', async ({ page, pageErrors }) => {
+  // Slice 3 (2026-10-04): trainer surface is 8 tabs
+  // (+ Jadwal Penugasan, own sessions only). Same intentional
+  // scope change, not a regression.
+  test('Trainer sees exactly the eight allowed tabs', async ({ page, pageErrors }) => {
     await loginViaApi(page, 'trainer')
     await page.goto(APP)
     await page.waitForLoadState('domcontentloaded')
@@ -42,7 +45,7 @@ test.describe('M1.3 — scope shell navigation (authenticated)', () => {
 
     const trainerNav = page.getByRole('navigation').filter({ has: page.getByRole('button', { name: 'Rekap Saya', exact: true }) }).getByRole('button')
     const labels = await trainerNav.allTextContents()
-    expect(labels).toEqual(['Absensi Saya', 'Ringkasan Saya', 'Data Absensi', 'Riwayat Absensi', 'Data Siswa', 'Raport', 'Rekap Saya'])
+    expect(labels).toEqual(['Absensi Saya', 'Ringkasan Saya', 'Data Absensi', 'Riwayat Absensi', 'Jadwal Penugasan', 'Data Siswa', 'Raport', 'Rekap Saya'])
     expect(pageErrors).toHaveLength(0)
   })
 
