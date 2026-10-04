@@ -268,9 +268,12 @@ export default function PenugasanTimetable() {
     })))
   }, [view, displayRows, visibleDates, rowsByDate, marksByDate, trainerById, eksternalById, crossScopeNames, coverMarks])
 
+  // Slice 3 — rentang minggu jangkar (dipakai subtitle + label file CSV).
+  const weekStart = mondayOfWeekISO(safeTanggal)
+  const weekEnd = addDaysISO(weekStart, 6)
+
   function handleExportCSV() {
-    // P2 — filename label per view (weekStart/weekEnd/safeTanggal are
-    // defined below; resolved at click time, after full render).
+    // P2 — filename label per view.
     const label = view === 'mingguan'
       ? `${weekStart}_s.d._${weekEnd}`
       : view === 'kalender'
@@ -280,8 +283,6 @@ export default function PenugasanTimetable() {
   }
 
   // Slice 3 — label ringkas per view untuk header.
-  const weekStart = mondayOfWeekISO(safeTanggal)
-  const weekEnd = addDaysISO(weekStart, 6)
   const viewSubtitle = view === 'mingguan'
     ? <>Minggu: <b>{weekStart}</b> s.d. <b>{weekEnd}</b></>
     : view === 'kalender'

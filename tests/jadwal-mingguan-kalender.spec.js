@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { test, expect, loginViaApi, primeCsrf, readEntity } from './fixtures.js'
 
 // ============================================================
@@ -5,9 +6,11 @@ import { test, expect, loginViaApi, primeCsrf, readEntity } from './fixtures.js'
 // Switcher segmented Harian/Mingguan/Kalender di toolbar Jadwal
 // Penugasan (persist jadwalView); Mingguan = Senin–Minggu pada
 // minggu yang memuat tanggal; Kalender = grid sebulan (Senin-first).
-// Semua views reuse buildDailyTimetable per tanggal; CSV tetap
-// Harian-only. Pola seed: tests/raport-verify.spec.js (API seed +
-// disposable data + webServer self-boot).
+// Semua views reuse buildDailyTimetable per tanggal; CSV parity
+// visible-view (P2: Unduh CSV di semua view + kolom Tanggal per
+// baris cocok tbody[data-tanggal]). Pola seed:
+// tests/raport-verify.spec.js (API seed + disposable data +
+// webServer self-boot).
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -22,6 +25,26 @@ function todayISO() {
 function daysInMonthOf(iso) {
   const [y, m] = iso.split('-').map(Number)
   return new Date(y, m, 0).getDate()
+}
+
+// Minimal quote-aware CSV parse (matches downloadCSV quoting in csv.js:
+// fields with , \n " come wrapped in ", inner " doubled as "").
+function parseCSV(text) {
+  const rows = []
+  let row = [], field = '', quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quoted) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ } else quoted = false
+      } else field += c
+    } else if (c === '"') quoted = true
+    else if (c === ',') { row.push(field); field = '' }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+    else if (c === '\r') { /* skip */ } else field += c
+  }
+  row.push(field); rows.push(row)
+  return rows.filter(r => !(r.length === 1 && r[0] === ''))
 }
 
 async function resetStorage(page) {
@@ -111,39 +134,76 @@ async function cleanupSeeds(page, { trainerIds = [], schoolIds = [] } = {}) {
   }
 }
 
-test('J1: switcher tampil default Harian; pindah Mingguan → reload → tetap Mingguan; CSV Harian-only', async ({ page, pageErrors }) => {  await resetStorage(page)
-  await loginViaApi(page, 'adminCabang')
-  await page.goto(APP)
-  await page.waitForLoadState('domcontentloaded')
-  await openJadwal(page)
+test('J1: switcher tampil default Harian; pindah Mingguan → reload → tetap Mingguan; CSV parity visible view', async ({ page, pageErrors }) => {
+  test.setTimeout(120_000)
+  await resetStorage(page)
+  const SUFFIX = String(Date.now()).slice(-6)
+  const SCH_NAME = `SD J1 ${SUFFIX}`
+  const TRAINER_ID = `trn-J1-${SUFFIX}`
+  let schoolId = null
+  try {
+    schoolId = await seedSchoolAllDays(page, SUFFIX, 'j1', SCH_NAME)
+    await seedTrainerWithAssignment(page, {
+      trainerId: TRAINER_ID, nama: `Host J1 ${SUFFIX}`, sekolahId: schoolId, rowId: `pgs-j1-${SUFFIX}`,
+    })
 
-  const harianBtn = page.getByRole('button', { name: 'Harian', exact: true })
-  const mingguanBtn = page.getByRole('button', { name: 'Mingguan', exact: true })
-  const kalenderBtn = page.getByRole('button', { name: 'Kalender', exact: true })
-  await expect(harianBtn).toBeVisible({ timeout: 15000 })
-  await expect(mingguanBtn).toBeVisible()
-  await expect(kalenderBtn).toBeVisible()
-  await expect(harianBtn).toHaveAttribute('aria-pressed', 'true')
-  await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.getByRole('button', { name: 'Unduh CSV' })).toBeVisible()
+    await loginViaApi(page, 'adminCabang')
+    await page.goto(APP)
+    await page.waitForLoadState('domcontentloaded')
+    await openJadwal(page)
 
-  await mingguanBtn.click()
-  await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Unduh CSV' })).toHaveCount(0)
+    // Switcher di grup Tampilan (scope grup: tombol navbar KALENDER_SHORTCUT
+    // punya nama aksesibel yang sama — tanpa scope, strict-mode violation).
+    const viewGroup = page.getByRole('group', { name: 'Tampilan jadwal' })
+    const harianBtn = viewGroup.getByRole('button', { name: 'Harian', exact: true })
+    const mingguanBtn = viewGroup.getByRole('button', { name: 'Mingguan', exact: true })
+    const kalenderBtn = viewGroup.getByRole('button', { name: 'Kalender', exact: true })
+    const unduhCsv = page.getByRole('button', { name: 'Unduh CSV', exact: true })
+    await expect(harianBtn).toBeVisible({ timeout: 15000 })
+    await expect(mingguanBtn).toBeVisible()
+    await expect(kalenderBtn).toBeVisible()
+    await expect(harianBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(unduhCsv).toBeVisible()
 
-  await kalenderBtn.click()
-  await expect(kalenderBtn).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Unduh CSV' })).toHaveCount(0)
-  await mingguanBtn.click()
-  await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'true')
+    // P2 parity — Mingguan: Unduh CSV visible + row-count = tbody terlihat.
+    await mingguanBtn.click()
+    await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(unduhCsv).toBeVisible()
+    const seedRows = page.locator('tbody[data-tanggal] tr', { hasText: SUFFIX })
+    await expect(seedRows.first()).toBeVisible({ timeout: 15000 })
+    const visibleCount = await seedRows.count()
+    expect(visibleCount).toBe(7)
+    const isoSet = new Set(await page.locator('tbody[data-tanggal]').evaluateAll(
+      els => els.map(e => e.getAttribute('data-tanggal'))))
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15000 }),
+      unduhCsv.click(),
+    ])
+    const raw = fs.readFileSync(await download.path(), 'utf8')
+    const csvRows = parseCSV(raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw)
+    expect(csvRows[0]).toEqual(['Sekolah', 'Trainer', 'Asisten', 'Waktu', 'Tanggal'])
+    const seedCsv = csvRows.slice(1).filter(r => (r[0] || '').includes(SUFFIX))
+    expect(seedCsv).toHaveLength(visibleCount)
+    for (const r of seedCsv) expect(isoSet.has(r[4])).toBe(true)
 
-  await page.reload()
-  await page.waitForLoadState('domcontentloaded')
-  await openJadwal(page)
-  await expect(page.getByRole('button', { name: 'Mingguan', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Harian', exact: true })).toHaveAttribute('aria-pressed', 'false')
+    // P2 parity — Kalender: Unduh CSV visible.
+    await kalenderBtn.click()
+    await expect(kalenderBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(unduhCsv).toBeVisible()
+    await mingguanBtn.click()
+    await expect(mingguanBtn).toHaveAttribute('aria-pressed', 'true')
 
-  expect(pageErrors).toHaveLength(0)
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await openJadwal(page)
+    await expect(page.getByRole('group', { name: 'Tampilan jadwal' }).getByRole('button', { name: 'Mingguan', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('group', { name: 'Tampilan jadwal' }).getByRole('button', { name: 'Harian', exact: true })).toHaveAttribute('aria-pressed', 'false')
+
+    expect(pageErrors).toHaveLength(0)
+  } finally {
+    await cleanupSeeds(page, { trainerIds: [TRAINER_ID], schoolIds: schoolId ? [schoolId] : [] })
+  }
 })
 
 test('J2: sesi yang dikenal muncul di grup hari yang benar (Mingguan)', async ({ page, pageErrors }) => {
