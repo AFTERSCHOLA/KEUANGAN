@@ -120,7 +120,10 @@ export function exportAgingCSV(agingRows, periode) {
 
 // ============================================
 // PG.C.1 (F-PG3; D-PG6) — export tabel Jadwal Penugasan harian.
-// displayRows: [{ sekolah, trainer, asisten, waktu }] — baris tampil yang
+// P2 — visible-view parity: rows may carry their own `tanggal`
+// (Mingguan/Kalender per-iso); rows without it fall back to the label
+// arg. Second arg doubles as the filename suffix.
+// displayRows: [{ sekolah, trainer, asisten, waktu, tanggal? }] — baris tampil yang
 // sudah difilter scope (export tidak pernah lebih dari yang terlihat di
 // tabel, D-PG7). tanggal: "YYYY-MM-DD" pilihan user (bukan periode
 // bulanan — D-PG5), menjadi kolom Tanggal + suffix nama file:
@@ -130,7 +133,7 @@ export function exportAgingCSV(agingRows, periode) {
 export function exportJadwalPenugasanCSV(displayRows, tanggal) {
   const headers = ["Sekolah", "Trainer", "Asisten", "Waktu", "Tanggal"]
   const rows = (displayRows || []).map(r => [
-    r.sekolah, r.trainer, r.asisten, r.waktu, tanggal,
+    r.sekolah, r.trainer, r.asisten, r.waktu, r.tanggal ?? tanggal,
   ])
   downloadCSV(headers, rows, 'Jadwal_Penugasan', tanggal)
 }

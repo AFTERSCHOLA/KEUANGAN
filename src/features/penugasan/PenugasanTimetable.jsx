@@ -239,18 +239,44 @@ export default function PenugasanTimetable() {
   // PG.C.1 (D-PG6, D-PG7) — export payload mirrors the visible table
   // exactly (same filtered array + same name resolution); scope filtered
   // upstream, so the file can never contain rows the table hides.
-  const displayRows = useMemo(() => rows.map(r => ({
-  sekolah: r.sekolahNama,
-  trainer: trainerCellText(r),
-  // DC.C.2 — union display mirrors the manager table.
-  asisten: [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length
-    ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => asistenName(id, 'Trainer tidak ditemukan')).join(', ')
-    : '—',
-  waktu: r.waktu,
-})), [rows, trainerById, eksternalById, crossScopeNames, coverMarks])
+  // P2 — shared row builder so Harian and visible-view exports resolve
+  // names identically (trainer cover marks passed per-day by callers).
+  function buildDisplayRow(r, marks) {
+    return {
+    sekolah: r.sekolahNama,
+    trainer: trainerCellText(r, marks),
+    // DC.C.2 — union display mirrors the manager table.
+    asisten: [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).length
+      ? [r.asistenId, ...(Array.isArray(r.asistenIds) ? r.asistenIds : [])].filter(Boolean).map(id => asistenName(id, 'Trainer tidak ditemukan')).join(', ')
+      : '—',
+    waktu: r.waktu,
+    }
+  }
+
+  const displayRows = useMemo(() => rows.map(r => buildDisplayRow(r, coverMarks)),
+    [rows, trainerById, eksternalById, crossScopeNames, coverMarks])
+
+  // P2 — CSV parity for the visible view: Harian exports the anchor day;
+  // Mingguan/Kalender flatten the visible dates with per-row Tanggal so
+  // the file matches the stacked tbody dates / kalender cells (csv.js
+  // prefers r.tanggal over the filename label).
+  const displayRowsForView = useMemo(() => {
+    if (view === 'harian') return displayRows
+    return visibleDates.flatMap(iso => (rowsByDate[iso] || []).map(r => ({
+      ...buildDisplayRow(r, marksByDate[iso]),
+      tanggal: iso,
+    })))
+  }, [view, displayRows, visibleDates, rowsByDate, marksByDate, trainerById, eksternalById, crossScopeNames, coverMarks])
 
   function handleExportCSV() {
-    exportJadwalPenugasanCSV(displayRows, tanggal)
+    // P2 — filename label per view (weekStart/weekEnd/safeTanggal are
+    // defined below; resolved at click time, after full render).
+    const label = view === 'mingguan'
+      ? `${weekStart}_s.d._${weekEnd}`
+      : view === 'kalender'
+        ? safeTanggal.slice(0, 7)
+        : tanggal
+    exportJadwalPenugasanCSV(displayRowsForView, label)
   }
 
   // Slice 3 — label ringkas per view untuk header.
@@ -310,14 +336,12 @@ export default function PenugasanTimetable() {
               className="block mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600"
             />
           </div>
-          {view === 'harian' && (
-            <button
-              onClick={handleExportCSV}
-              className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
-            >
-              Unduh CSV
-            </button>
-          )}
+          <button
+            onClick={handleExportCSV}
+            className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
+          >
+            Unduh CSV
+          </button>
           <PrintButton />
         </div>
       </div>
