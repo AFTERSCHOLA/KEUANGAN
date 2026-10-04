@@ -179,12 +179,12 @@ export default function NotificationBell({ onOpenJadwal }) {
                   key={e.sekolahId}
                   type="button"
                   onClick={() => { setOpen(false); onOpenJadwal?.({ iso: todayISO, view: 'harian' }) }}
-                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50 hover:bg-slate-50 transition"
+                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50 transition"
                 >
-                  <div className="min-w-0">
+                  <span className="min-w-0 block">
                     <p className="text-sm font-bold text-slate-800 truncate">{e.nama}</p>
                     {e.waktu ? <p className="text-xs text-slate-500">{e.waktu}</p> : null}
-                  </div>
+                  </span>
                   <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${e.done ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
                     {e.done ? 'Selesai' : 'Belum Diisi'}
                   </span>
@@ -204,12 +204,12 @@ export default function NotificationBell({ onOpenJadwal }) {
                   key={e.sekolahId}
                   type="button"
                   onClick={() => { setOpen(false); onOpenJadwal?.({ iso: tomorrowISO, view: 'harian' }) }}
-                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50 hover:bg-slate-50 transition"
+                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50 transition"
                 >
-                  <div className="min-w-0">
+                  <span className="min-w-0 block">
                     <p className="text-sm font-bold text-slate-800 truncate">{e.nama}</p>
                     {e.waktu ? <p className="text-xs text-slate-500">{e.waktu}</p> : null}
-                  </div>
+                  </span>
                 </button>
               ))
             )}

@@ -18,6 +18,18 @@ function formatISODate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// P3 — transient-anchor guard (mirrors App.jsx; keep in sync): only a
+// real calendar day passes, so a garbage persisted value falls back to
+// today instead of blanking/overflowing the date input.
+function isValidISODate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''))
+  if (!m) return false
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false
+  const dt = new Date(y, mo - 1, d)
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d
+}
+
 function mondayOfWeekISO(iso) {
   const d = parseISODate(iso)
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
@@ -52,12 +64,14 @@ export default function PenugasanTimetable() {
 
   // P3 — bell deep-link anchor: App.setActiveTab('jadwalPenugasan',
   // {iso}) persists jadwalTanggal in uiState; the kalenderNonce remount
-  // re-reads it here. Invalid/missing falls back to today (safeTanggal
-  // guards the cleared-input "" case below). Reuses openDayInHarian
-  // for in-view day jumps; no new route/id.
+  // re-reads it here. Transient by controller ruling (spec §2 amendment):
+  // consumed on mount only; manual setView below clears it while the
+  // explicit date-input anchor (local state) is kept. Invalid/missing
+  // falls back to today (round-trip check: format regex alone accepts
+  // 2026-99-99). Reuses openDayInHarian for in-view day jumps.
   const [tanggal, setTanggal] = useState(() => {
     const s = getUiState().jadwalTanggal
-    return /^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : localDateString()
+    return isValidISODate(s) ? s : localDateString()
   })
 
   // Slice 3 — Harian/Mingguan/Kalender. Persisted seperti overviewMode
@@ -68,7 +82,9 @@ export default function PenugasanTimetable() {
   })
   function setView(v) {
     setViewState(v)
-    setUiState({ jadwalView: v })
+    // Manual view switch consumes the transient bell anchor (the local
+    // date-input state above is kept); a later reload returns to today.
+    setUiState({ jadwalView: v, jadwalTanggal: undefined })
   }
 
   // readCached is already role-scoped; trainer rows are narrowed to self

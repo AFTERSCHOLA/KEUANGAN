@@ -145,6 +145,19 @@ const TRAINER_TABS = [
   REKAP_TAB,
 ]
 
+// P3 — transient bell anchor validation: format regex alone accepts
+// impossible dates (2026-99-99); round-trip through the local calendar
+// so only a real day passes. Mirrored in PenugasanTimetable.jsx (keep
+// the two in sync; no new shared module for one predicate).
+function isValidISODate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''))
+  if (!m) return false
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false
+  const dt = new Date(y, mo - 1, d)
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d
+}
+
 export default function App() {
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
@@ -235,9 +248,11 @@ useEffect(() => {
   function setActiveTab(tabId, ctx) {
     // Task 4 — Kalender shortcut: no new route; land on Jadwal
     // Penugasan with the Kalender view. Active-highlight stays on
-    // Jadwal Penugasan (no dual-highlight state).
+    // Jadwal Penugasan (no dual-highlight state). Manual nav clears
+    // the transient bell anchor (undefined keys are dropped by
+    // JSON.stringify in setUiState, so the key is removed, not nulled).
     if (tabId === 'kalender') {
-      setUiState({ activeTab: 'jadwalPenugasan', jadwalView: 'kalender' })
+      setUiState({ activeTab: 'jadwalPenugasan', jadwalView: 'kalender', jadwalTanggal: undefined })
       setActiveTabState('jadwalPenugasan')
       setKalenderNonce(n => n + 1)
       setMobileDrawerOpen(false)
@@ -246,7 +261,10 @@ useEffect(() => {
     // P3 — Bell deep-link: dated entry lands on that iso/view via
     // uiState + remount (PenugasanTimetable reads jadwalTanggal in
     // its useState initializer). Highlight stays Jadwal Penugasan.
-    if (tabId === 'jadwalPenugasan' && ctx && /^\d{4}-\d{2}-\d{2}$/.test(ctx.iso || '')) {
+    // Spec §2 amendment (controller ruling): jadwalTanggal is the one
+    // authorized transient anchor key — never read except on mount,
+    // cleared on every manual nav below.
+    if (tabId === 'jadwalPenugasan' && ctx && isValidISODate(ctx.iso)) {
       const view = ctx.view === 'mingguan' || ctx.view === 'kalender' ? ctx.view : 'harian'
       setUiState({ activeTab: 'jadwalPenugasan', jadwalView: view, jadwalTanggal: ctx.iso })
       setActiveTabState('jadwalPenugasan')
@@ -254,8 +272,10 @@ useEffect(() => {
       setMobileDrawerOpen(false)
       return
     }
+    // Generic (manual) nav: clear the transient anchor so a later
+    // reload/remount returns to today instead of a stale deep-link date.
     setActiveTabState(tabId)
-    setUiState({ activeTab: tabId })
+    setUiState({ activeTab: tabId, jadwalTanggal: undefined })
     setMobileDrawerOpen(false)
   }
 
