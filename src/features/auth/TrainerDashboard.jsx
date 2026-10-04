@@ -62,6 +62,11 @@ export default function TrainerDashboard({ trainerId }) {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayName = DAY_NAMES[now.getDay()]
+  // Slice 4 — H-1: besok dalam wall-clock lokal yang sama (batas minggu
+  // ditangani Date, tidak ada logika hari manual).
+  const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`
+  const tomorrowName = DAY_NAMES[tomorrowDate.getDay()]
   const assignedSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
     return sekolah
@@ -71,6 +76,13 @@ export default function TrainerDashboard({ trainerId }) {
         done: absensi.some(a => a.tanggal === today && a.sekolahId === s.id && a.trainerId === trainerId),
       }))
   }, [absensi, sekolah, today, todayName, trainer, trainerId])
+  // Slice 4 — sekolah terjadwal besok (cermin Hari Ini, tanpa status
+  // pill: belum ada yang bisa ditandai selesai untuk besok).
+  const tomorrowSchools = useMemo(() => {
+    const schoolIds = new Set(trainer?.sekolahIds || [])
+    return sekolah
+      .filter(s => (schoolIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, tomorrowName))
+  }, [sekolah, tomorrowName, trainer, trainerId])
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -102,6 +114,27 @@ export default function TrainerDashboard({ trainerId }) {
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${s.done ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
                   {s.done ? 'Selesai' : 'Belum Diisi'}
                 </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        <div className="p-5 border-b border-slate-100">
+          <h3 className="text-base font-bold text-slate-800">Jadwal Sekolah Besok</h3>
+          <p className="text-xs text-slate-500">{tomorrow} · {tomorrowName}</p>
+        </div>
+        {tomorrowSchools.length === 0 ? (
+          <p className="p-8 text-center text-sm text-slate-400">Tidak ada sekolah terjadwal besok.</p>
+        ) : (
+          <div className="divide-y">
+            {tomorrowSchools.map(s => (
+              <div key={s.id} className="flex items-center justify-between gap-4 p-5">
+                <div>
+                  <p className="font-bold text-slate-800">{s.nama}</p>
+                  <p className="text-xs text-slate-500">{formatJadwalList(s.jadwalList) || s.jadwal}</p>
+                </div>
               </div>
             ))}
           </div>
