@@ -50,7 +50,15 @@ export default function PenugasanTimetable() {
   const bump = useCallback(() => setTick(t => t + 1), [])
   useEffect(() => subscribeStore(bump), [bump])
 
-  const [tanggal, setTanggal] = useState(localDateString())
+  // P3 — bell deep-link anchor: App.setActiveTab('jadwalPenugasan',
+  // {iso}) persists jadwalTanggal in uiState; the kalenderNonce remount
+  // re-reads it here. Invalid/missing falls back to today (safeTanggal
+  // guards the cleared-input "" case below). Reuses openDayInHarian
+  // for in-view day jumps; no new route/id.
+  const [tanggal, setTanggal] = useState(() => {
+    const s = getUiState().jadwalTanggal
+    return /^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : localDateString()
+  })
 
   // Slice 3 — Harian/Mingguan/Kalender. Persisted seperti overviewMode
   // Slice 2; default Harian bila unset/tak dikenal.

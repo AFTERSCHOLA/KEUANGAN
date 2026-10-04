@@ -93,7 +93,8 @@ function computeReminders(roleCtx, selectedCabangId) {
 
 /**
  * In-app H-1/H-day notification bell. Reads the store internally;
- * `onOpenJadwal` fires when the user clicks "Lihat Jadwal".
+ * `onOpenJadwal(ctx)` fires when the user clicks a dated entry or
+ * "Lihat Jadwal", with `{iso, view:'harian'}` date context.
  */
 export default function NotificationBell({ onOpenJadwal }) {
   const [open, setOpen] = useState(false)
@@ -127,7 +128,9 @@ export default function NotificationBell({ onOpenJadwal }) {
     () => computeReminders(roleCtx, selectedCabangId),
     [tick, roleCtx.role, roleCtx.trainerId, roleCtx.cabangId, selectedCabangId]
   )
-  const todayISO = localDateString(new Date())
+  const nowLocal = new Date()
+  const todayISO = localDateString(nowLocal)
+  const tomorrowISO = localDateString(new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate() + 1))
   // lastSeenReminders controls highlight emphasis only, NEVER the count.
   const hasNew = reminders.counts.total > 0 && getUiState().lastSeenReminders !== todayISO
   const total = reminders.counts.total
@@ -172,7 +175,12 @@ export default function NotificationBell({ onOpenJadwal }) {
               <p className="px-4 py-3 text-sm text-slate-400">Tidak ada sekolah terjadwal hari ini</p>
             ) : (
               reminders.today.map(e => (
-                <div key={e.sekolahId} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50">
+                <button
+                  key={e.sekolahId}
+                  type="button"
+                  onClick={() => { setOpen(false); onOpenJadwal?.({ iso: todayISO, view: 'harian' }) }}
+                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50 hover:bg-slate-50 transition"
+                >
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-800 truncate">{e.nama}</p>
                     {e.waktu ? <p className="text-xs text-slate-500">{e.waktu}</p> : null}
@@ -180,7 +188,7 @@ export default function NotificationBell({ onOpenJadwal }) {
                   <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${e.done ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
                     {e.done ? 'Selesai' : 'Belum Diisi'}
                   </span>
-                </div>
+                </button>
               ))
             )}
           </div>
@@ -192,19 +200,24 @@ export default function NotificationBell({ onOpenJadwal }) {
               <p className="px-4 py-3 text-sm text-slate-400">Tidak ada sekolah terjadwal besok</p>
             ) : (
               reminders.tomorrow.map(e => (
-                <div key={e.sekolahId} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50">
+                <button
+                  key={e.sekolahId}
+                  type="button"
+                  onClick={() => { setOpen(false); onOpenJadwal?.({ iso: tomorrowISO, view: 'harian' }) }}
+                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-50 hover:bg-slate-50 transition"
+                >
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-800 truncate">{e.nama}</p>
                     {e.waktu ? <p className="text-xs text-slate-500">{e.waktu}</p> : null}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
           <div className="p-2">
             <button
               type="button"
-              onClick={() => { setOpen(false); onOpenJadwal?.() }}
+              onClick={() => { setOpen(false); onOpenJadwal?.({ iso: todayISO, view: 'harian' }) }}
               className="w-full px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 rounded-lg transition"
             >
               Lihat Jadwal

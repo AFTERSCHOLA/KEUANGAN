@@ -232,12 +232,23 @@ useEffect(() => {
     return () => { cancelled = true }
   }, [currentUser?.id])
 
-  function setActiveTab(tabId) {
+  function setActiveTab(tabId, ctx) {
     // Task 4 — Kalender shortcut: no new route; land on Jadwal
     // Penugasan with the Kalender view. Active-highlight stays on
     // Jadwal Penugasan (no dual-highlight state).
     if (tabId === 'kalender') {
       setUiState({ activeTab: 'jadwalPenugasan', jadwalView: 'kalender' })
+      setActiveTabState('jadwalPenugasan')
+      setKalenderNonce(n => n + 1)
+      setMobileDrawerOpen(false)
+      return
+    }
+    // P3 — Bell deep-link: dated entry lands on that iso/view via
+    // uiState + remount (PenugasanTimetable reads jadwalTanggal in
+    // its useState initializer). Highlight stays Jadwal Penugasan.
+    if (tabId === 'jadwalPenugasan' && ctx && /^\d{4}-\d{2}-\d{2}$/.test(ctx.iso || '')) {
+      const view = ctx.view === 'mingguan' || ctx.view === 'kalender' ? ctx.view : 'harian'
+      setUiState({ activeTab: 'jadwalPenugasan', jadwalView: view, jadwalTanggal: ctx.iso })
       setActiveTabState('jadwalPenugasan')
       setKalenderNonce(n => n + 1)
       setMobileDrawerOpen(false)
@@ -358,7 +369,7 @@ if (currentUser?.mustChangePassword) {
                 {settings.title || 'Afterschola'}
               </h1>
             </div>
-            <div className="flex items-center gap-2"><NotificationBell onOpenJadwal={() => setActiveTab('jadwalPenugasan')} /><AccountMenu
+            <div className="flex items-center gap-2"><NotificationBell onOpenJadwal={(ctx) => setActiveTab('jadwalPenugasan', ctx)} /><AccountMenu
               username={currentUser?.username || 'Akun'}
               onOpenBackup={() => setBackupModalOpen(true)}
               onOpenSettings={() => setSettingsModalOpen(true)}
