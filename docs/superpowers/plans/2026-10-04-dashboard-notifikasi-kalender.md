@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Copy UI Indonesia dipin: `Jadwal Hari Ini`, `Jadwal Sekolah Besok`, `Tidak ada sekolah terjadwal hari ini`, `Tidak ada sekolah terjadwal besok`, `Selesai`, `Belum Diisi`, `Ringkas`, `Lengkap`, `Kalender`.
+- Copy UI Indonesia dipin: `Jadwal Hari Ini`, `Jadwal Sekolah Besok`, `Tidak ada sekolah terjadwal hari ini`, `Tidak ada sekolah terjadwal besok`, `Selesai`, `Belum Diisi`, `Ringkas`, `Lengkap`, `Kalender` (kartu ke-3 berlabel `Laba/Rugi berjalan` sesuai render).
 - Tanggal lokal wall-clock (`new Date(y,m,d)`), BUKAN `toISOString()`/UTC untuk H-day/H-1.
 - Angka Rupiah: input digit polos, tampil `formatRupiah`; tidak ada `console.log` di `src/`.
 - Ikon Kalender reuse path `jadwalPenugasan` verbatim; pill/class dropdown pinjam `TrainerDashboard.jsx:114-115` verbatim (taste #11, do not invent).
