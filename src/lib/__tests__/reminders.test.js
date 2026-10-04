@@ -67,4 +67,44 @@ describe('remindersForTrainer', () => {
     expect(out.today).toEqual([])
     expect(out.tomorrow).toEqual([])
   })
+
+  it('marks done from absensiPengajar internal row', () => {
+    const { nowLocal, todayName, todayISO } = dayFixture()
+    const trainer = { id: 'trn-1', sekolahIds: ['skl-today'], penugasanPengajar: [] }
+    const sekolah = [{ id: 'skl-today', nama: 'SD Hari Ini', jadwalList: [{ dayOfWeek: todayName, time: '14:00' }] }]
+    const absensiPengajar = [{ tanggal: todayISO, sekolahId: 'skl-today', trainerId: 'trn-1' }]
+    const out = remindersForTrainer({ trainerId: 'trn-1', sekolah, trainer, absensi: [], absensiPengajar, nowLocal })
+    expect(out.today[0].done).toBe(true)
+  })
+
+  it('marks done from absensiPengajar eksternal row recorded by owner', () => {
+    const { nowLocal, todayName, todayISO } = dayFixture()
+    const trainer = { id: 'trn-1', sekolahIds: ['skl-today'], penugasanPengajar: [] }
+    const sekolah = [{ id: 'skl-today', nama: 'SD Hari Ini', jadwalList: [{ dayOfWeek: todayName, time: '14:00' }] }]
+    const absensiPengajar = [{ tanggal: todayISO, sekolahId: 'skl-today', trainerId: 'ext-1', dicatatOleh: 'trn-1' }]
+    const out = remindersForTrainer({ trainerId: 'trn-1', sekolah, trainer, absensi: [], absensiPengajar, nowLocal })
+    expect(out.today[0].done).toBe(true)
+  })
+
+  it('keeps legacy absensi fallback when absensiPengajar is empty', () => {
+    const { nowLocal, todayName, todayISO } = dayFixture()
+    const trainer = { id: 'trn-1', sekolahIds: ['skl-today'], penugasanPengajar: [] }
+    const sekolah = [{ id: 'skl-today', nama: 'SD Hari Ini', jadwalList: [{ dayOfWeek: todayName, time: '14:00' }] }]
+    const absensi = [{ tanggal: todayISO, sekolahId: 'skl-today', trainerId: 'trn-1' }]
+    const out = remindersForTrainer({ trainerId: 'trn-1', sekolah, trainer, absensi, absensiPengajar: [], nowLocal })
+    expect(out.today[0].done).toBe(true)
+  })
+
+  it('uses local wall-clock at WIB boundary 00:30', () => {
+    const nowLocal = new Date(2026, 9, 4, 0, 30)
+    const todayName = DAY_NAMES[nowLocal.getDay()]
+    const todayISO = localISO(nowLocal)
+    expect(todayISO).toBe('2026-10-04')
+    const trainer = { id: 'trn-1', sekolahIds: ['skl-today'], penugasanPengajar: [] }
+    const sekolah = [{ id: 'skl-today', nama: 'SD Hari Ini', jadwalList: [{ dayOfWeek: todayName, time: '14:00' }] }]
+    const absensiPengajar = [{ tanggal: todayISO, sekolahId: 'skl-today', trainerId: 'trn-1' }]
+    const out = remindersForTrainer({ trainerId: 'trn-1', sekolah, trainer, absensi: [], absensiPengajar, nowLocal })
+    expect(out.today.length).toBe(1)
+    expect(out.today[0].done).toBe(true)
+  })
 })

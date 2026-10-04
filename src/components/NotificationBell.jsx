@@ -33,12 +33,12 @@ function emptyReminders() {
 // Admin/superadmin lane: union per-trainer reminders across the scoped
 // trainer set. `done` is OR across trainers (anyone's absensi marks the
 // school Selesai); tomorrow entries dedupe by school.
-function aggregateForTrainers(trainers, sekolah, absensi, nowLocal) {
+function aggregateForTrainers(trainers, sekolah, absensi, absensiPengajar, nowLocal) {
   const todayMap = new Map()
   const tomorrowMap = new Map()
   for (const t of trainers) {
     if (!t || !t.id) continue
-    const r = remindersForTrainer({ trainerId: t.id, sekolah, trainer: t, absensi, nowLocal })
+    const r = remindersForTrainer({ trainerId: t.id, sekolah, trainer: t, absensi, absensiPengajar, nowLocal })
     for (const e of r.today) {
       const prev = todayMap.get(e.sekolahId)
       todayMap.set(e.sekolahId, prev ? { ...e, nama: prev.nama, waktu: prev.waktu, done: prev.done || e.done } : e)
@@ -58,6 +58,7 @@ function computeReminders(roleCtx, selectedCabangId) {
   const sekolah = readCached('sekolah')
   const trainerRows = readCached('trainer')
   const absensi = readCached('absensi')
+  const absensiPengajar = readCached('absensiPengajar')
   if (roleCtx.role === 'trainer' && roleCtx.trainerId) {
     const trainer = trainerRows.find(t => t.id === roleCtx.trainerId) || null
     // Filter to own scope BEFORE calling the helper (union sekolahIds +
@@ -66,7 +67,7 @@ function computeReminders(roleCtx, selectedCabangId) {
       (Array.isArray(trainer?.sekolahIds) && trainer.sekolahIds.includes(s.id)) ||
       trainerHasAnyActiveAssignmentToSekolahClient(roleCtx.trainerId, s.id)
     )
-    return remindersForTrainer({ trainerId: roleCtx.trainerId, sekolah: own, trainer, absensi, nowLocal })
+    return remindersForTrainer({ trainerId: roleCtx.trainerId, sekolah: own, trainer, absensi, absensiPengajar, nowLocal })
   }
   if (roleCtx.role === 'admin_cabang' || roleCtx.role === 'superadmin') {
     const scopeId = roleCtx.role === 'admin_cabang' ? roleCtx.cabangId : (selectedCabangId || '')
@@ -85,7 +86,7 @@ function computeReminders(roleCtx, selectedCabangId) {
     // branch-linked trainers (either link kind) when a branch is selected.
     const schoolIds = new Set(entities.sekolah.map(s => s.id))
     const trainers = scopeId ? trainersTouchingSchools(trainerRows, schoolIds) : trainerRows
-    return aggregateForTrainers(trainers, entities.sekolah, entities.absensi, nowLocal)
+    return aggregateForTrainers(trainers, entities.sekolah, entities.absensi, entities.absensiPengajar, nowLocal)
   }
   return emptyReminders()
 }

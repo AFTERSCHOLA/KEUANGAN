@@ -24,9 +24,9 @@ function isAssignedToTrainer(sekolah, trainer, trainerId) {
 
 // Pure H-day/H-1 derivation for the notification bell (Task 2): which of
 // the trainer's schools are scheduled today vs tomorrow (local
-// wall-clock), plus the done flag from the absensi ledger. No fetch, no
-// store/server writes.
-export function remindersForTrainer({ trainerId, sekolah = [], trainer = null, absensi = [], nowLocal = new Date() } = {}) {
+// wall-clock), plus the done flag from the absensiPengajar lane with
+// legacy absensi OR-fallback. No fetch, no store/server writes.
+export function remindersForTrainer({ trainerId, sekolah = [], trainer = null, absensi = [], absensiPengajar = [], nowLocal = new Date() } = {}) {
   const now = nowLocal instanceof Date ? nowLocal : new Date(nowLocal)
   const todayISO = localDateString(now)
   const todayName = DAY_NAMES[now.getDay()]
@@ -36,6 +36,7 @@ export function remindersForTrainer({ trainerId, sekolah = [], trainer = null, a
 
   const schools = Array.isArray(sekolah) ? sekolah : []
   const ledger = Array.isArray(absensi) ? absensi : []
+  const ledgerPengajar = Array.isArray(absensiPengajar) ? absensiPengajar : []
   const assigned = schools.filter(s => isAssignedToTrainer(s, trainer, trainerId))
 
   const today = assigned
@@ -44,7 +45,7 @@ export function remindersForTrainer({ trainerId, sekolah = [], trainer = null, a
       sekolahId: s.id,
       nama: s.nama,
       waktu: formatJadwalList(s.jadwalList),
-      done: ledger.some(a => a && a.tanggal === todayISO && a.sekolahId === s.id && a.trainerId === trainerId),
+      done: ledgerPengajar.some(a => a && a.tanggal === todayISO && a.sekolahId === s.id && (a.trainerId === trainerId || a.dicatatOleh === trainerId || penugasanInvolvesTrainer(a, trainerId))) || ledger.some(a => a && a.tanggal === todayISO && a.sekolahId === s.id && a.trainerId === trainerId),
     }))
   const tomorrow = assigned
     .filter(s => scheduleIncludesDay(s, tomorrowName))

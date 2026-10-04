@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { readCached, usePeriod, subscribeStore, read, trainerHasAnyActiveAssignmentToSekolahClient } from '../../lib/store.js'
 import { financialData } from '../../lib/finance.js'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
+import { penugasanInvolvesTrainer } from '../../lib/penugasan.js'
 
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
@@ -69,13 +70,14 @@ export default function TrainerDashboard({ trainerId }) {
   const tomorrowName = DAY_NAMES[tomorrowDate.getDay()]
   const assignedSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
+    const ledgerPengajar = Array.isArray(absensiPengajar) ? absensiPengajar : []
     return sekolah
       .filter(s => (schoolIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, todayName))
       .map(s => ({
         ...s,
-        done: absensi.some(a => a.tanggal === today && a.sekolahId === s.id && a.trainerId === trainerId),
+        done: ledgerPengajar.some(a => a && a.tanggal === today && a.sekolahId === s.id && (a.trainerId === trainerId || a.dicatatOleh === trainerId || penugasanInvolvesTrainer(a, trainerId))) || absensi.some(a => a.tanggal === today && a.sekolahId === s.id && a.trainerId === trainerId),
       }))
-  }, [absensi, sekolah, today, todayName, trainer, trainerId])
+  }, [absensi, absensiPengajar, sekolah, today, todayName, trainer, trainerId])
   // Slice 4 — sekolah terjadwal besok (cermin Hari Ini, tanpa status
   // pill: belum ada yang bisa ditandai selesai untuk besok).
   const tomorrowSchools = useMemo(() => {
