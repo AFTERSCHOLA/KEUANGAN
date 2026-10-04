@@ -44,4 +44,4 @@
 
 - Slice 2: Q-S2-1 (4 metrik final), Q-S2-2 (toggle semua role?)
 - Slice 3: Q-S3-1 (satu tab + switcher vs tab terpisah), Q-S3-2 (scope cabang kalender?)
-- Slice 4: Q-S4-1 (in-app cukup vs WA push infra), Q-S4-2 (follow-up invoice ikut?)
+- Slice 4: Q-S4-1 DECIDED in-app saja; Q-S4-2 DECIDED trainer saja (follow-up invoice tetap deferred) — implemented 2026-10-04 (`94c4cc1`)
