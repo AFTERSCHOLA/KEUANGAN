@@ -1,5 +1,5 @@
 import { generateId, localDateString } from './constants.js'
-import { formatJadwalList } from './format.js'
+import { formatJadwalList, formatJadwalWaktu } from './format.js'
 
 // PG.A.1 (F-PG1; D-PG1, D-PG2, D-PG3) — pure assignment constructors.
 // No store/API access here: the manager UI composes these, then persists
@@ -345,6 +345,7 @@ export function buildDailyTimetable({ trainers = [], sekolah = [], tanggal = '' 
           asistenIds: Array.isArray(a.asistenIds) ? [...a.asistenIds] : null,
           hari,
           waktu: formatJadwalList([slot]),
+          waktuSingkat: formatJadwalWaktu([slot]),
         })
       })
     })

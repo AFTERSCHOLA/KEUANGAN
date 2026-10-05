@@ -215,8 +215,10 @@ export function matchedPaymentsForInvoice(invoice, { sppPayments = [], siswa = [
 /**
  * Derives total / dibayar / sisa / credit / status for one invoice from
  * the ledger, per D-SB9: status is always computed here, never stored.
- * `status: 'Lunas'` when sisa <= 0 (covers both exact and overpayment;
- * overpayment additionally reports a positive `credit`).
+ * `status: 'Lunas'` when sisa <= 0 AND actual funds were received
+ * (total > 0 and dibayar > 0); covers both exact and overpayment
+ * (overpayment additionally reports a positive `credit`). A Rp0
+ * payment with zero balance stays 'Belum Lunas' — no funds received.
  */
 export function invoiceSettlement(invoice, { sppPayments = [], siswa = [] } = {}) {
   const matched = matchedPaymentsForInvoice(invoice, { sppPayments, siswa })
@@ -230,7 +232,7 @@ export function invoiceSettlement(invoice, { sppPayments = [], siswa = [] } = {}
     dibayar,
     sisa,
     credit,
-    status: sisa <= 0 ? 'Lunas' : 'Belum Lunas',
+    status: sisa <= 0 && total > 0 && dibayar > 0 ? 'Lunas' : 'Belum Lunas',
   }
 }
 

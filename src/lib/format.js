@@ -41,3 +41,14 @@ export function formatJadwalList(jadwalList) {
     return `${entry.dayOfWeek} ${entry.time}–${entry.endTime || addOneHour(entry.time)}`
   }).join(', ')
 }
+
+// Calendar cells are already grouped by date/day, so repeating the day
+// prefix ("Senin 14:00–15:00") is redundant. Time-only sibling of
+// formatJadwalList above (same +60min fallback, same idiom).
+export function formatJadwalWaktu(jadwalList) {
+  if (!Array.isArray(jadwalList) || jadwalList.length === 0) return ''
+  return jadwalList.map(entry => {
+    if (!entry.time) return ''
+    return `${entry.time}–${entry.endTime || addOneHour(entry.time)}`
+  }).filter(Boolean).join(', ')
+}

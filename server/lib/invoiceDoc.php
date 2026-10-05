@@ -145,7 +145,7 @@ function invoiceDocSettlement(array $invoice, array $payments, array $siswaIds):
         'dibayar' => $dibayar,
         'sisa' => $sisa,
         'credit' => $credit,
-        'status' => $sisa <= 0 ? 'Lunas' : 'Belum Lunas',
+        'status' => ($sisa <= 0 && $total > 0 && $dibayar > 0) ? 'Lunas' : 'Belum Lunas',
     ];
 }
 

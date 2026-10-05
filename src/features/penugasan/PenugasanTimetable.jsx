@@ -396,7 +396,7 @@ export default function PenugasanTimetable() {
                   <span className="mt-1 space-y-1 block">
                     {shown.map((r, idx) => (
                       <span key={`${r.assignmentId || r.trainerId}-${r.sekolahId}-${idx}`} className="block truncate text-[11px] font-semibold text-slate-600 bg-slate-100 rounded px-1 py-0.5">
-                        {r.waktu} {r.sekolahNama}
+                        {r.waktuSingkat || r.waktu} {r.sekolahNama}
                       </span>
                     ))}
                     {dayRows.length > 3 && (

@@ -394,10 +394,10 @@ test.describe('ringkas', () => {
 
 test.describe('kalender', () => {
   // ============================================================
-  // Task 4 (kalender) — `Kalender` navbar shortcut opens Jadwal
-  // Penugasan in Kalender view. No new route: shortcut sets
-  // activeTab='jadwalPenugasan' + jadwalView='kalender'; remount via
-  // key so clicking while already on the tab still flips the view.
+  // Kalender lives inside Jadwal Penugasan as a view toggle
+  // (Harian/Mingguan/Kalender); the former sidebar `Kalender`
+  // shortcut was removed to streamline navigation. These tests pin
+  // the toggle path (no nav shortcut) for both roles.
   // Hermetic: no seeded rows — the kalender grid renders day cells
   // from visibleDates regardless of data. Wipe-guard idiom reused
   // from the describes above (fresh afterschola_v4 keys per run).
@@ -417,10 +417,6 @@ test.describe('kalender', () => {
     })
   }
 
-  function navKalender(page) {
-    return page.getByRole('navigation').getByRole('button', { name: 'Kalender', exact: true })
-  }
-
   function navJadwal(page) {
     return page.getByRole('navigation').getByRole('button', { name: 'Jadwal Penugasan', exact: true })
   }
@@ -437,44 +433,44 @@ test.describe('kalender', () => {
     await expect(page.getByTestId('kalender-hari').first()).toBeVisible()
   }
 
-  test('shortcut opens Kalender view, persists across reload, remounts from Harian', async ({ page, pageErrors }) => {
+  test('toggle opens Kalender view, persists across reload, switches from Harian', async ({ page, pageErrors }) => {
     test.setTimeout(180000)
     await resetStorage(page)
     await loginViaApi(page, 'superadmin')
     await page.goto(APP)
     await page.waitForLoadState('domcontentloaded')
 
-    // ---- from Overview, nav Kalender lands on Jadwal Penugasan in Kalender view.
-    await navKalender(page).click()
+    // ---- no separate sidebar entry; calendar is a view toggle.
+    await expect(page.getByRole('navigation').getByRole('button', { name: 'Kalender', exact: true })).toHaveCount(0)
+    await navJadwal(page).click()
+    await viewGroup(page).getByRole('button', { name: 'Kalender', exact: true }).click()
     await expectKalenderView(page)
-
-    // ---- active-highlight stays on Jadwal Penugasan (no dual-highlight).
-    await expect(navJadwal(page)).toHaveClass(/bg-yellow-400/)
-    await expect(navKalender(page)).not.toHaveClass(/bg-yellow-400/)
 
     // ---- reload keeps the Kalender view (jadwalView persisted).
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
     await expectKalenderView(page)
 
-    // ---- remount case: switch to Harian, click nav Kalender again flips back.
+    // ---- switch to Harian and back via the toggle.
     await viewGroup(page).getByRole('button', { name: 'Harian', exact: true }).click()
     await expect(viewGroup(page).getByRole('button', { name: 'Harian', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    await navKalender(page).click()
+    await viewGroup(page).getByRole('button', { name: 'Kalender', exact: true }).click()
     await expectKalenderView(page)
 
     expect(pageErrors).toHaveLength(0)
   })
 
-  test('trainer role sees Kalender nav and lands in Kalender view', async ({ page, pageErrors }) => {
+  test('trainer role has no Kalender nav but reaches Kalender via toggle', async ({ page, pageErrors }) => {
     test.setTimeout(180000)
     await resetStorage(page)
     await loginViaApi(page, 'trainer')
     await page.goto(APP)
     await page.waitForLoadState('domcontentloaded')
 
-    await expect(navKalender(page)).toBeVisible({ timeout: 15000 })
-    await navKalender(page).click()
+    await expect(page.getByRole('navigation').getByRole('button', { name: 'Kalender', exact: true })).toHaveCount(0)
+    await expect(navJadwal(page)).toBeVisible({ timeout: 15000 })
+    await navJadwal(page).click()
+    await viewGroup(page).getByRole('button', { name: 'Kalender', exact: true }).click()
     await expectKalenderView(page)
 
     expect(pageErrors).toHaveLength(0)

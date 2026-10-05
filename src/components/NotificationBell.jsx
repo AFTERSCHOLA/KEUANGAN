@@ -86,7 +86,10 @@ function computeReminders(roleCtx, selectedCabangId) {
     // branch-linked trainers (either link kind) when a branch is selected.
     const schoolIds = new Set(entities.sekolah.map(s => s.id))
     const trainers = scopeId ? trainersTouchingSchools(trainerRows, schoolIds) : trainerRows
-    return aggregateForTrainers(trainers, entities.sekolah, entities.absensi, entities.absensiPengajar, nowLocal)
+    const agg = aggregateForTrainers(trainers, entities.sekolah, entities.absensi, entities.absensiPengajar, nowLocal)
+    // H-1 reminders are trainer-only: admins keep today's monitoring,
+    // tomorrow stays empty so the bell count excludes Besok.
+    return { today: agg.today, tomorrow: [], counts: { todayUndone: agg.counts.todayUndone, tomorrow: 0, total: agg.counts.todayUndone } }
   }
   return emptyReminders()
 }

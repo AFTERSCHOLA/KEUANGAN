@@ -192,7 +192,7 @@ function invoiceSettlementPhp(array $invoice, array $payments, array $siswaIdsFo
         'total' => $total,
         'dibayar' => $dibayar,
         'sisa' => $sisa,
-        'status' => $sisa <= 0 ? 'Lunas' : 'Belum Lunas',
+        'status' => ($sisa <= 0 && $total > 0 && $dibayar > 0) ? 'Lunas' : 'Belum Lunas',
     ];
 }
 

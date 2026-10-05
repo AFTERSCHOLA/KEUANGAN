@@ -67,27 +67,9 @@ const TABS = [
    { id: 'aging', label: 'Umur Piutang', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   ]
 
-// Task 4 — `Kalender` navbar shortcut (no new route): sets
-// activeTab='jadwalPenugasan' + jadwalView='kalender'. Icon reuses the
-// Jadwal Penugasan path verbatim (taste #11, do not invent).
-const KALENDER_SHORTCUT = {
-  id: 'kalender',
-  label: 'Kalender',
-  icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-}
-
-// Task 4 — splice the shortcut after `jadwalPenugasan` in the RENDERED
-// tab arrays only. The shared TABS const is left untouched so the
-// role-redirect allowlist (line ~232) keeps its existing membership.
-function withKalenderShortcut(tabs) {
-  const out = []
-  for (const t of tabs) {
-    out.push(t)
-    if (t && t.id === 'jadwalPenugasan') out.push(KALENDER_SHORTCUT)
-  }
-  return out
-}
-
+// Kalender lives inside Jadwal Penugasan as a view toggle
+// (Harian/Mingguan/Kalender); no separate sidebar entry — the former
+// KALENDER_SHORTCUT splice was removed to streamline navigation.
 const CABANG_TAB = {
   id: 'cabang',
   label: 'Data Cabang',
@@ -198,9 +180,9 @@ useEffect(() => {
   }, [settings.title])
 
   const [activeTab, setActiveTabState] = useState(() => getUiState().activeTab || 'overview')
-  // Task 4 — remount nonce: PenugasanTimetable reads jadwalView only in
-  // its useState initializer, so clicking nav Kalender while already on
-  // the tab needs a remount (key) to flip the view.
+  // Bell deep-link remount nonce: PenugasanTimetable reads jadwalView /
+  // jadwalTanggal only in its useState initializer, so a dated bell entry
+  // while already on the tab needs a remount (key) to flip the view.
   const [kalenderNonce, setKalenderNonce] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => !!getUiState().sidebarCollapsed)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
@@ -246,18 +228,6 @@ useEffect(() => {
   }, [currentUser?.id])
 
   function setActiveTab(tabId, ctx) {
-    // Task 4 — Kalender shortcut: no new route; land on Jadwal
-    // Penugasan with the Kalender view. Active-highlight stays on
-    // Jadwal Penugasan (no dual-highlight state). Manual nav clears
-    // the transient bell anchor (undefined keys are dropped by
-    // JSON.stringify in setUiState, so the key is removed, not nulled).
-    if (tabId === 'kalender') {
-      setUiState({ activeTab: 'jadwalPenugasan', jadwalView: 'kalender', jadwalTanggal: undefined })
-      setActiveTabState('jadwalPenugasan')
-      setKalenderNonce(n => n + 1)
-      setMobileDrawerOpen(false)
-      return
-    }
     // P3 — Bell deep-link: dated entry lands on that iso/view via
     // uiState + remount (PenugasanTimetable reads jadwalTanggal in
     // its useState initializer). Highlight stays Jadwal Penugasan.
@@ -330,7 +300,7 @@ if (currentUser?.mustChangePassword) {
   return <MustChangePasswordPage />
 }
 
-  const visibleTabs = withKalenderShortcut(role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS)
+  const visibleTabs = role === 'trainer' ? TRAINER_TABS : role === 'superadmin' ? [...TABS, CABANG_TAB] : TABS
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 animate-fadeIn">
