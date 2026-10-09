@@ -118,14 +118,15 @@ export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
             </tbody>
           </table>
 
-          {/* final score & grade */}
+          {/* final score & grade: Total ÷ 4 = Nilai Akhir (top = total
+              dividend, static 4 divisor below, bold middle = quotient) */}
           <table id="akhir">
             <colgroup><col /><col /><col /><col /><col /><col /></colgroup>
             <tbody>
               <tr>
                 <td className="b" rowSpan="2">Nilai Akhir</td>
-                <td style={{ height: '30px' }}>{formatDesimal(raport.rataRata)}</td>
-                <td className="b" rowSpan="2"></td>
+                <td style={{ height: '30px' }}>{raport.total ?? '-'}</td>
+                <td className="b" rowSpan="2">{formatDesimal(raport.rataRata)}</td>
                 <td className="nb" rowSpan="2"></td>
                 <td className="b" rowSpan="2">Grade Nilai</td>
                 <td className="b" rowSpan="2">{raport.grade || '-'}</td>
