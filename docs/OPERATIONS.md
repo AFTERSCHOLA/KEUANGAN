@@ -211,6 +211,20 @@ If any check fails, stop: re-confirm the artifact version (`deploy/assets/` hash
 
 **Backups ledger.** `GET /api/backup-list.php` is the authoritative list (`id`, `checksum`, `created_by`, `created_at`, `verified_at`); a download sets `verified_at`. Treat a backup with no `verified_at` and no quarterly test-restore as unverified.
 
+## 7. Maintenance schedule
+
+Every entry below maps to an existing section or endpoint — no new tooling. The operator ticks each row in the release record; a missed row is carried to the next window, never silently dropped.
+
+| Cadence | Task | How (section/endpoint) | Done-if |
+|---------|------|------------------------|---------|
+| Daily (go-live month only) | Error-log glance | §6: host Errors interface / dev-server stderr | no new error lines, or each has an incident entry (§4) |
+| Weekly | Backup freshness | `GET /api/backup-list.php`: latest `created_at` < 7 days and `verified_at` set | fresh verified backup exists |
+| Monthly | Credential hygiene review | §2: list users via `POST /api/users.php` read path, confirm leavers disabled | zero active accounts for leavers |
+| Monthly | Disk/DB sanity | phpMyAdmin: `audit_log` + `backups` row growth plausible; `private/backups/` retained off-host (§3) | growth logged, off-host copy confirmed |
+| Quarterly | Test-restore drill | §3 Restore on a disposable DB (never prod); G-P1.2 drill is the reference run | BEFORE=AFTER counts identical, logged |
+| Quarterly | Dependency audit | `package.json` + `composer`-less PHP: `npm audit`, PHP version vs host floor (8.1) | audit clean or upgrade ticket filed |
+| Per release | Rollback kit | §5: previous artifact zipped + last verified backup off-host before upload | kit named in release record (D8.1) |
+
 ---
 
 ## Verification

@@ -1,20 +1,25 @@
 import { academicYearLabel } from '../../lib/constants.js'
 import { getSettings } from '../../lib/store.js'
 
-const LOGO_URL = '/invoice/logo.png'
-
 // Slice 1 Raport (Task 7) — cetakan read-only dari record, meniru
-// struktur InvoiceTemplate.jsx verbatim: toolbar no-print (Kembali /
-// Cetak Raport via window.print) + root printable-report (print.css).
-// Nilai cetak = record (total/rataRata/grade/catatan), TIDAK
-// dihitung-ulang di render (spec §4.3). Terbilang tidak ada — nilai
-// bukan uang.
+// docs/exemplar/TEMPLATE_RAPPORT_CODING.html verbatim: lembar A4
+// 794x1122 (Times serif, posisi absolut, dekorasi sudut kuning/navy +
+// watermark — art diekstrak sekali ke public/raport/, bukan base64 di
+// bundle; gaya di print.css blok .raport-sheet). Toolbar no-print
+// (Kembali / Cetak Raport via window.print) + root printable-report
+// (print.css) dipertahankan. Nilai cetak = record
+// (total/rataRata/grade/catatan), TIDAK dihitung-ulang di render
+// (spec §4.3). Terbilang tidak ada — nilai bukan uang.
 const ASPECT_ROWS = [
   ['helpingTeam', 'Helping Team'],
   ['computationalThinking', 'Computational Thinking'],
   ['problemSolving', 'Problem Solving'],
-  ['creativity', 'Creativity'],
+  ['creativity', 'Creativity/Improvisation'],
 ]
+
+const EXEMPLAR_ADDR_1 = 'Jl. Cisaranten Wetan 167A, Cisaranten Wetan, Kec.'
+const EXEMPLAR_ADDR_2 = 'Cinambo, Kota Bandung'
+const EXEMPLAR_PHONE = '0823-3808-9915'
 
 // Desimal Indonesia: 89.25 -> "89,25".
 function formatDesimal(nilai) {
@@ -28,23 +33,29 @@ function statusBadge(status) {
   return 'bg-slate-100 text-slate-500'
 }
 
+// Prop `sekolah` dipertahankan untuk kontrak parent (RaportList.jsx
+// mengopernya); area cetak exemplar hanya memuat Nama + Kelas.
 export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
   if (!raport) return null
   const settings = getSettings()
   const nilai = raport.nilai || {}
-  // Snapshot dikunci saat create (display-cache seperti sekolahNama);
-  // live siswa hanya fallback bila snapshot kosong.
-  const tingkat = raport.tingkatSnapshot || siswa?.tingkat || ''
-  const mapel = raport.mapelSnapshot || siswa?.mapel || ''
+  // Alamat kop: pengaturan bila diisi, exemplar bila kosong (S7.2).
+  const alamatCustom = (settings.alamatUsaha || '').trim()
+  const addr1 = alamatCustom || EXEMPLAR_ADDR_1
+  const addr2 = alamatCustom ? '' : EXEMPLAR_ADDR_2
+  const signer = settings.penandatangan || '(……………….)'
+  const nama = siswa?.nama || 'Siswa tidak ditemukan'
+  const kelas = siswa?.kelas || '-'
+  const tahunLabel = academicYearLabel(Number(raport.tahunAjaran))
   const tanggalLabel = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-2xl shadow-sm border no-print">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Raport — {siswa?.nama || 'Siswa tidak ditemukan'}</h2>
+          <h2 className="text-xl font-bold text-slate-800">Raport — {nama}</h2>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-slate-500">{raport.semester} · {academicYearLabel(Number(raport.tahunAjaran))}</p>
+            <p className="text-xs text-slate-500">{raport.semester} · {tahunLabel}</p>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge(raport.status)}`}>
               {raport.status}
             </span>
@@ -56,98 +67,86 @@ export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
         </div>
       </div>
 
-      <div className="printable-report bg-white rounded-2xl shadow-sm border p-8 max-w-3xl mx-auto">
-        <div className="flex items-start justify-between pb-5 border-b border-slate-200">
-          <div>
-            {settings.logoUrl ? (
-              <img src={settings.logoUrl} alt="Logo" className="h-14 object-contain" onError={e => { e.currentTarget.style.display = 'none' }} />
-            ) : (
-              <img src={LOGO_URL} alt="Logo" className="h-14 object-contain" onError={e => { e.currentTarget.style.display = 'none' }} />
-            )}
-            <p className="text-xs text-slate-400 mt-2">{settings.alamatUsaha || ''}</p>
-          </div>
-          <div className="text-right">
-            <h3 className="text-3xl font-extrabold text-blue-900 tracking-wide">PENILAIAN AKHIR SISWA</h3>
-            <p className="text-sm font-bold text-blue-700">Semester {raport.semester} · {academicYearLabel(Number(raport.tahunAjaran))}</p>
-          </div>
-        </div>
+      <div className="printable-report raport-sheet">
+        <div className="raport-page">
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 bg-slate-50 rounded-xl px-5 py-4 mt-6 text-sm">
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Nama</p>
-            <p className="font-bold text-slate-800 mt-0.5">{siswa?.nama || 'Siswa tidak ditemukan'}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Kelas</p>
-            <p className="font-bold text-slate-800 mt-0.5">{siswa?.kelas || '-'}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Tingkat</p>
-            <p className="font-bold text-slate-800 mt-0.5">{tingkat || '-'}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Mapel</p>
-            <p className="font-bold text-slate-800 mt-0.5">{mapel || '-'}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Sekolah</p>
-            <p className="font-bold text-slate-800 mt-0.5">{sekolah?.nama || 'Sekolah tidak ditemukan'}</p>
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Status</p>
-            <p className="mt-0.5">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge(raport.status)}`}>
-                {raport.status}
-              </span>
-            </p>
-          </div>
-        </div>
+          {/* dekorasi sudut (kiri-atas / kanan-bawah) */}
+          <svg className="abs" style={{ left: 0, top: 0 }} width="794" height="1122" viewBox="0 0 794 1122" aria-hidden="true">
+            <polygon fill="#F7D109" points="0,179 0,0 301,0" />
+            <polygon fill="#FFDE58" points="0,392 0,0 119,0" />
+            <polygon fill="#0D2E52" points="109,0 0,142 0,0" />
+            <polygon fill="#F7D109" points="819,975 819,1152 522,1152" />
+            <polygon fill="#FFDE58" points="819,846 819,1216 707,1216" />
+            <polygon fill="#0D2E52" points="711,1152 832,994 821,1010 821,1152" />
+          </svg>
 
-        <table className="w-full text-sm mt-8 mb-2">
-          <thead>
-            <tr className="border-b-2 border-slate-800 text-[11px] font-bold uppercase text-slate-700">
-              <th className="text-left py-2 pr-2 w-8">No</th>
-              <th className="text-left py-2">Aspek Penilaian</th>
-              <th className="text-right py-2">Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ASPECT_ROWS.map(([key, label], idx) => (
-              <tr key={key} className="border-b border-slate-200">
-                <td className="py-4 align-top">{idx + 1}</td>
-                <td className="py-4 pr-6 align-top">{label}</td>
-                <td className="py-4 text-right align-top font-bold">{nilai[key] ?? '-'}</td>
+          {/* watermark */}
+          <img className="abs" src="/raport/watermark.png" alt="" style={{ left: '186px', top: '376px', width: '437px', height: '404px' }} />
+
+          {/* header */}
+          <img className="abs" src="/raport/logo-after-schola.png" alt="After Schola" style={{ left: '638px', top: '-37px', width: '85px', height: '151px' }} />
+          <img className="abs" src="/raport/logo-small.png" alt="" style={{ left: '725px', top: '11px', width: '56px', height: '52px' }} />
+          <div className="abs brand">YELLOBOX.ID</div>
+          <div className="abs sans addr addr1">{addr1}</div>
+          {addr2 && <div className="abs sans addr addr2">{addr2}</div>}
+          {!alamatCustom && <img className="abs" src="/raport/icon-pin.png" alt="" style={{ left: '206.7px', top: '134px', width: '12.6px', height: '17.5px' }} />}
+          <img className="abs" src="/raport/icon-phone.png" alt="" style={{ left: '211px', top: '161px', width: '16.7px', height: '20.6px' }} />
+          <div className="abs sans phone t">{EXEMPLAR_PHONE}</div>
+          <div className="abs rule"></div>
+
+          {/* title & intro (spasi di sekitar <br/> menjaga getByText
+              'PENILAIAN AKHIR SISWA' S7.1/S7.2 tetap cocok; visual dua
+              baris exemplar tidak berubah) */}
+          <div className="abs title t">PENILAIAN AKHIR{' '}<br />SISWA</div>
+
+          <div className="abs intro t">Berdasarkan hasil penilaian kegiatan siswa selama mengikuti <b>Ekstrakurikuler CODING</b><br />Semester {raport.semester} Tahun Ajaran {tahunLabel}, kami menerangkan bahwa</div>
+
+          <div className="abs field-row t" style={{ top: '369px' }}><span className="lbl">Nama</span>:<span className="val">{nama}</span></div>
+          <div className="abs field-row t" style={{ top: '397px' }}><span className="lbl">Kelas</span>:<span className="val">{kelas}</span></div>
+
+          <div className="abs lead t">Memperoleh <b>Penilaian Akhir Semester (PAS)</b> dengan uraian sebagai berikut</div>
+
+          {/* score table */}
+          <table id="nilai">
+            <colgroup><col style={{ width: '46.6px' }} /><col style={{ width: '442.7px' }} /><col style={{ width: '104.7px' }} /></colgroup>
+            <tbody>
+              <tr><td className="c b">No.</td><td className="c b">Daftar Penilaian</td><td className="c b">Nilai</td></tr>
+              {ASPECT_ROWS.map(([key, label], idx) => (
+                <tr key={key}><td className="c">{idx + 1}.</td><td>{label}</td><td className="c">{nilai[key] ?? '-'}</td></tr>
+              ))}
+              <tr><td className="c b" colSpan="2">Total Nilai</td><td className="c">{raport.total ?? '-'}</td></tr>
+            </tbody>
+          </table>
+
+          {/* final score & grade */}
+          <table id="akhir">
+            <colgroup><col /><col /><col /><col /><col /><col /></colgroup>
+            <tbody>
+              <tr>
+                <td className="b" rowSpan="2">Nilai Akhir</td>
+                <td style={{ height: '30px' }}>{formatDesimal(raport.rataRata)}</td>
+                <td className="b" rowSpan="2"></td>
+                <td className="nb" rowSpan="2"></td>
+                <td className="b" rowSpan="2">Grade Nilai</td>
+                <td className="b" rowSpan="2">{raport.grade || '-'}</td>
               </tr>
-            ))}
-            <tr className="border-b-2 border-slate-800">
-              <td colSpan={2} className="py-4 font-extrabold text-slate-800 tracking-wide">TOTAL</td>
-              <td className="py-4 text-right font-extrabold text-blue-700">{raport.total ?? '-'}</td>
-            </tr>
-          </tbody>
-        </table>
+              <tr><td style={{ height: '30px' }}>4</td></tr>
+            </tbody>
+          </table>
 
-        <div className="flex justify-between items-center pt-4 pb-3">
-          <span className="font-extrabold text-slate-800 tracking-wide">Nilai Akhir</span>
-          <span className="text-xl font-extrabold text-blue-700">{formatDesimal(raport.rataRata)}</span>
-        </div>
-        <div className="flex justify-between items-center pb-3">
-          <span className="font-extrabold text-slate-800 tracking-wide">Grade</span>
-          <span className="text-xl font-extrabold text-blue-700">{raport.grade || '-'}</span>
-        </div>
+          {/* notes */}
+          <table id="catatan">
+            <colgroup><col style={{ width: '94.5px' }} /><col /></colgroup>
+            <tbody>
+              <tr><td>Catatan :</td><td>{raport.catatan || '-'}</td></tr>
+            </tbody>
+          </table>
 
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-5 text-xs text-slate-600 leading-relaxed">
-          <p className="font-bold text-slate-800 mb-1.5">Catatan:</p>
-          <p>{raport.catatan || '-'}</p>
-        </div>
+          {/* signature */}
+          <div className="abs sign-date t">Bandung, {tanggalLabel}</div>
+          <div className="abs sign-role t">Instruktur,</div>
+          <div className="abs sign-name t">{signer}</div>
 
-        <div className="grid grid-cols-2 gap-8 items-end mt-10">
-          <div />
-          <div className="text-center text-xs">
-            <p className="text-slate-500 mb-1">Bandung, {tanggalLabel}</p>
-            <p className="text-slate-500 mb-1">Instruktur,</p>
-            <div className="h-12" />
-            <p className="border-t border-slate-400 inline-block pt-1 px-2 font-bold text-slate-800">{settings.penandatangan || '(........................)'}</p>
-          </div>
         </div>
       </div>
     </div>

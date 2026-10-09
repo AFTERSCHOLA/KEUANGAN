@@ -50,3 +50,69 @@
     margin: 1.5cm;
   }
 }
+
+/* Raport exemplar (docs/exemplar/TEMPLATE_RAPPORT_CODING.html) — scoped.
+   Disalin verbatim dari template (A4 794x1122, Times serif, posisi
+   absolut); selector table/td/td.c/td.b/td.nb + #nilai/#akhir/#catatan
+   di-scope ke .raport-page agar tidak bocor ke invoice/slip/laporan
+   lain. Tanpa @page sendiri: margin cetak global di atas dipertahankan.
+   Art (watermark/logo/ikon) diekstrak sekali ke public/raport/. */
+.printable-report.raport-sheet {
+  background: #e6e7ea;
+  padding: 20px 0;
+  overflow-x: auto;
+}
+.raport-sheet .raport-page {
+  position: relative; width: 794px; height: 1122px; margin: 0 auto; background: #fff; overflow: hidden;
+  box-shadow: 0 2px 14px rgba(0,0,0,.25);
+  font-family: "Times New Roman", "Liberation Serif", Times, serif; font-size: 16px; color: #000;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.raport-page .abs { position: absolute; }
+.raport-page .sans { font-family: Arial, "Liberation Sans", Helvetica, sans-serif; font-weight: bold; }
+
+/* ---------- header ---------- */
+.raport-page .brand { left: 203px; top: 41px; width: 508px; text-align: center; white-space: nowrap;
+  font-family: "Arial Black", "Arial Black", Gadget, "Helvetica Neue", Arial, sans-serif; font-weight: 900;
+  font-size: 58.67px; line-height: 1; }
+.raport-page .addr { left: 244px; width: 464px; font-size: 14.67px; line-height: 18px; }
+.raport-page .addr1 { top: 117px; text-align: justify; text-align-last: justify; }
+.raport-page .addr2 { top: 135px; }
+.raport-page .phone { left: 245px; top: 164px; font-size: 13.33px; line-height: 16px; }
+.raport-page .rule { left: 193px; top: 199px; width: 530px; height: 1px; background: #002060; }
+
+/* ---------- body text ---------- */
+.raport-page .t { white-space: nowrap; }
+.raport-page .title { left: 0; width: 794px; top: 229px; text-align: center; font-weight: bold; font-size: 18.67px; line-height: 21.5px; }
+.raport-page .intro { left: 104px; top: 309px; line-height: 27.6px; font-size: 16px; }
+.raport-page .field-row { left: 104px; line-height: 18.4px; font-size: 16px; }
+.raport-page .field-row .lbl { display: inline-block; width: 94.7px; }
+.raport-page .field-row .val { display: inline-block; min-width: 200px; padding-left: 6px; }
+.raport-page .lead { left: 104px; top: 431px; line-height: 18.4px; }
+
+/* ---------- tables ---------- */
+.raport-page table { border-collapse: collapse; table-layout: fixed; position: absolute; font-size: 16px; }
+.raport-page td { border: 1px solid #000; padding: 4px 7.2px; line-height: 18.4px; vertical-align: middle; }
+.raport-page td.c { text-align: center; }
+.raport-page td.b { font-weight: bold; }
+.raport-page td.nb { border: 0; }
+.raport-page #nilai { left: 103px; top: 464px; width: 594px; }
+.raport-page #nilai td { height: 27.3px; }
+.raport-page #akhir { left: 103px; top: 655px; width: 594px; }
+.raport-page #akhir td { padding: 5.3px 7.2px; text-align: center; }
+.raport-page #catatan { left: 105.8px; top: 738px; width: 592px; }
+.raport-page #catatan td { border: 0; padding: 0 7.2px; line-height: 27.6px; vertical-align: top; }
+
+.raport-page .sign-date { right: 106.7px; top: 877px; line-height: 27.6px; text-align: right; }
+.raport-page .sign-role { left: 569px; top: 905px; line-height: 27.6px; }
+.raport-page .sign-name { left: 552px; top: 992px; width: 100px; text-align: center; font-size: 17.33px; line-height: 19.9px; white-space: nowrap; }
+
+@media print {
+  .printable-report.raport-sheet {
+    background: #fff;
+    padding: 0;
+  }
+  .raport-sheet .raport-page {
+    box-shadow: none;
+  }
+}

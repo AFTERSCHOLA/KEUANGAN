@@ -1669,6 +1669,80 @@ if ($viaGenerate) {
     check('HTTP-triggered generate audit metadata tagged via=generate', ($viaMetadata['via'] ?? null) === 'generate', json_encode($viaMetadata));
 }
 
+// ============================================================
+// EG2-FU — row-47 follow-up (gate-G-E2-report.md §Concerns 1-4).
+// Placed after all audit assertions and before restore.php (which
+// wipes fixtures); each leg cleans up its own rows via PDO so the
+// final cleanupFixtures() stays a no-op for these ids.
+// ============================================================
+echo "\n--- EG2-FU (row-47 follow-up) ---\n";
+
+// Leg 1 — referenced-invoice delete 422 (server/api/invoices.php:35-46,
+// SB.C.3). Mirrors the unreferenced-delete-200 leg's call pattern, with
+// one spp_payment attached carrying payload.invoiceId = the invoice.
+$fuInv = 'inv-eg2fu-' . uniqid();
+[$status] = req('POST', "$base/server/api/invoices.php", ['id' => $fuInv, 'cabangId' => $branchA, 'total' => 100000], $cookieSuper, $csrfSuper);
+check('EG2-FU superadmin creating follow-up invoice -> 201', $status === 201, "got $status");
+$fuPay = 'spp-eg2fu-' . uniqid();
+[$status] = req('POST', "$base/server/api/sppPayments.php", ['id' => $fuPay, 'cabangId' => $branchA, 'invoiceId' => $fuInv, 'nominal' => 50000], $cookieSuper, $csrfSuper);
+check('EG2-FU attaching spp_payment to follow-up invoice -> 201', $status === 201, "got $status");
+[$status, $fuDelBody] = req('POST', "$base/server/api/invoices.php", ['id' => $fuInv, 'action' => 'delete'], $cookieSuper, $csrfSuper);
+check('EG2-FU deleting referenced invoice -> 422', $status === 422, "got $status " . json_encode($fuDelBody));
+check('EG2-FU referenced-delete message names sudah memiliki pembayaran', str_contains(json_encode($fuDelBody), 'sudah memiliki pembayaran'), json_encode($fuDelBody));
+$pdo->prepare('DELETE FROM spp_payments WHERE id = :id')->execute([':id' => $fuPay]);
+$pdo->prepare('DELETE FROM invoices WHERE id = :id')->execute([':id' => $fuInv]);
+
+// Leg 2 — ledger update-in-place rejected (server/api/honorPayments.php:35:
+// only append/correct are valid actions; update stays 400).
+$fuUpd = ['id' => 'pay-eg2fu-' . uniqid(), 'action' => 'update', 'cabangId' => $branchA, 'trainerId' => 'trn-x', 'nominal' => 1000];
+[$status, $fuUpdBody] = req('POST', "$base/server/api/honorPayments.php", $fuUpd, $cookieSuper, $csrfSuper);
+check('EG2-FU honorPayments action=update rejected -> 400', $status === 400, "got $status " . json_encode($fuUpdBody));
+check('EG2-FU update-reject message names Operasi tidak didukung', str_contains(json_encode($fuUpdBody), 'Operasi tidak didukung'), json_encode($fuUpdBody));
+
+// Leg 3 — stale-version 409 (server/api/_master.php:122-152, exercised via
+// trainer.php; sekolah.php uses its own custom update path with no version
+// check). Mirrors the trainer happy-path version->2 leg, then replays the
+// same (now-stale) version number.
+$fuTrn = ['id' => 'trn-eg2fu-' . uniqid(), 'nama' => 'Trainer EG2FU'];
+[$status] = req('POST', "$base/server/api/trainer.php", $fuTrn, $cookieAdminA, $csrfAdminA);
+check('EG2-FU fixture trainer created -> 201', $status === 201, "got $status");
+[$status, $fuTrnBody] = req('POST', "$base/server/api/trainer.php", ['id' => $fuTrn['id'], 'action' => 'update', 'version' => 1, 'nama' => 'Trainer EG2FU (updated)'], $cookieSuper, $csrfSuper);
+check('EG2-FU superadmin updating trainer at current version -> 200', $status === 200, "got $status");
+check('EG2-FU version incremented to 2', ($fuTrnBody['version'] ?? null) === 2, json_encode($fuTrnBody));
+[$status, $fuStaleBody] = req('POST', "$base/server/api/trainer.php", ['id' => $fuTrn['id'], 'action' => 'update', 'version' => 1, 'nama' => 'Trainer EG2FU (stale)'], $cookieSuper, $csrfSuper);
+check('EG2-FU stale-version update rejected -> 409', $status === 409, "got $status " . json_encode($fuStaleBody));
+check('EG2-FU stale-version message names Konflik versi', str_contains(json_encode($fuStaleBody), 'Konflik versi'), json_encode($fuStaleBody));
+[$status] = req('POST', "$base/server/api/trainer.php", ['id' => $fuTrn['id'], 'action' => 'delete'], $cookieAdminA, $csrfAdminA);
+check('EG2-FU fixture trainer deleted (cleanup) -> 200', $status === 200, "got $status");
+
+// Leg 4 — correctionOf trainer-mismatch 422
+// (server/api/absensiPengajar.php:70-75). Mirrors the own-branch
+// correction-201 leg's payload, changing only the trainerId field; the
+// mismatched id references the existing trainer B so structural
+// validation passes and the mismatch guard (not the shape gate) fires.
+$fuOrig = 'absp-eg2fu-orig-' . uniqid();
+$pdo->prepare('INSERT INTO absensi_pengajar (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $fuOrig,
+    ':c' => $branchA,
+    ':p' => json_encode([
+        'id' => $fuOrig, 'trainerId' => $trnA['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Izin', 'cabangId' => $branchA,
+    ], JSON_UNESCAPED_UNICODE),
+]);
+$fuMismatch = [
+    'action' => 'correct',
+    'correctionOf' => $fuOrig,
+    'record' => [
+        'id' => 'absp-eg2fu-corr-' . uniqid(),
+        'trainerId' => $trnB['id'], 'sekolahId' => $b2SekolahValid,
+        'tanggal' => '2026-06-10', 'status' => 'Hadir', 'cabangId' => $branchA,
+    ],
+];
+[$status, $fuMmBody] = req('POST', "$base/server/api/absensiPengajar.php", $fuMismatch, $cookieAdminA, $csrfAdminA);
+check('EG2-FU correction with mismatched trainerId -> 422', $status === 422, "got $status " . json_encode($fuMmBody));
+check('EG2-FU mismatch message names trainerId tidak cocok', str_contains(json_encode($fuMmBody), 'trainerId tidak cocok'), json_encode($fuMmBody));
+$pdo->prepare('DELETE FROM absensi_pengajar WHERE id = :id')->execute([':id' => $fuOrig]);
+
 // --- restore.php: DESTRUCTIVE — must run LAST, after every other test --
 // This wipes cabang/sekolah/trainer/siswa/absensi/sppPayments/
 // honorPayments/invoices/settings entirely (see restoreFromSnapshot()).

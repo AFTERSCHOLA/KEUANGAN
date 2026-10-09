@@ -589,4 +589,12 @@ ordering constraint — fails when run after T2.B.1 in a single command
 isolation and A.2-first order; owner + evidence in
 `.superpowers/sdd/team-round2/task-E3-report.md`.
 
+## Gate EG — Excel Gap-Close closure (2026-10-07, subagent-driven)
+
+- G-E1 (row 46 penugasan): CLOSED gated-`Selesai`. Cover 201-with-link/403-without + double-booking 422 both layers: `entity.validation 15 passed` + `endpoint.protection 275 checks, 0 failed` + `vitest penugasan-slot 12 passed`. Evidence: `docs/EXCEL_GAP_CLOSE_MILESTONES.md` G-E1.1/G-E1.2 Verified lines.
+- G-E2 (row 47 ledger): PARTIAL — positive legs proven (correction 201, branch 403, unreferenced delete 200, admin deny), 4 legs parked as follow-up `endpoint.protection.php` legs (referenced-invoice 422, ledger update-reject, stale-version 409, correctionOf mismatch 422). Row 47 stays `On Progress`. Evidence + boundaries: `docs/EXCEL_GAP_CLOSE_MILESTONES.md` G-E2.1/G-E2.2.
+  - G-E2-FU (2026-10-07): parked legs closed with 14 `EG2-FU` checks, 289/0 + battery green. Row 47 now gated-`Selesai`. New parked Medium: version-less `sekolah.php` update (lost-update) follow-up.
+- G-P1 (row 50 operasional): CLOSED gated-`Selesai` within stated boundaries. Reconcile harness 18/18 (MATCH + 2 named DRIFTs); backup→restore BEFORE=AFTER on `afterschola_t3_test`; `npm test 49 files/322 passed`; `npm run build` green. Boundaries: photos-excluded, absensiPengajar-omitted, users/audit_log untouched. Evidence: `docs/EXCEL_GAP_CLOSE_MILESTONES.md` G-P1.1/G-P1.2.
+- Ruling: PLAN §9 `bin/reconcile.php` path corrected to `server/bin/reconcile.php` + `reconcile.check.php` harness (plan's fault, not implementer's).
+
 **End of Microtask Chains**
