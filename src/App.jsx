@@ -96,7 +96,7 @@ const ABSENSI_PENGAJAR_TAB = {
 
 // Trainer melihat 8 tab (M5.1.2 + Raport-era + Slice 3): Absensi Saya,
 // Ringkasan Saya, Data Absensi, Riwayat Absensi, Jadwal Penugasan
-// (sesi sendiri), Data Siswa read-only, Raport,
+// (sesi sendiri), Data Siswa scoped-create for trainers, Raport,
 // dan Rekap Saya sebagai landing view. Objek tab di-reuse dari TABS.
 const REKAP_TAB = {
   id: 'rekap',

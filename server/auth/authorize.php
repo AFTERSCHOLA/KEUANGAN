@@ -424,6 +424,7 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
                 $pdo = database();
                 $exists = $pdo->prepare('SELECT 1 FROM siswa WHERE id = :id LIMIT 1');
                 $exists->execute([':id' => $siswaId]);
+                // Deliberate: existing id fails as 403 (forbidden), not 409, so the lane can never become an overwrite path; the UI maps this to its forbidden branch.
                 if ($exists->fetchColumn() !== false) return false;
                 return trainerHasActiveAssignment($trainerId, $sekolahId, date('Y-m-d'), $pdo);
             } catch (Throwable) {

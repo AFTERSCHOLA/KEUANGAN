@@ -524,6 +524,9 @@ check('TS.1 falsifiable: restored assignment passes create 201 again', $status =
 
 $pdo->prepare('DELETE FROM users WHERE id = :id')->execute([':id' => $ts1UserId]);
 $pdo->prepare('DELETE FROM users WHERE username = :u')->execute([':u' => 'test_trainer_ts1']);
+$pdo->exec("DELETE FROM siswa WHERE id LIKE 'sw-ts1-%'");
+$pdo->exec("DELETE FROM trainer WHERE id LIKE 'trn-ts1-%'");
+$pdo->exec("DELETE FROM sekolah WHERE id LIKE 'skl-ts1-%'");
 @unlink($cookieTs1);
 
 // --- sekolah.php: cabangId forced from session (admin_cabang) or ------
