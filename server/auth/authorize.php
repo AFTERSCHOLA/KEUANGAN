@@ -396,6 +396,40 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
             if (($data['status'] ?? null) !== 'Draft') return false;
             return trainerScopedToRaport($data, $user);
         }
+        // Trainer scoped Siswa create (TS.1, D1/D4) — create-only,
+        // assignment-scoped, server-enforced (R1). Allowed iff the payload
+        // names a NEW siswa id for a create-shaped write whose sekolahId is
+        // covered by a live-DB aktif assignment at today (trainer or asisten
+        // position, penugasanInvolvesTrainer parity, periodeMulai/
+        // periodeSelesai + cover-link handling via trainerHasActiveAssignment
+        // above:76-142 — reused, not reimplemented). Both 'create' and
+        // 'write' are handled because masterWrite() authorizes every siswa
+        // write (create AND update) as 'write'; updates arrive here carrying
+        // either a pre-existing id or a non-create action marker, and both
+        // fail closed below, so this lane can never become an overwrite path
+        // (D3). Trainer update/delete/correct/verify on siswa keep falling
+        // through to `return false` (D3, F5 cascade risk). cabangId is never
+        // read here (R2: server/api/siswa.php:31-47 derives it from the
+        // school); a forged _sekolahTrainerIds is likewise ignored — only
+        // the live DB decides.
+        if ($resource === 'siswa' && ($action === 'create' || $action === 'write')) {
+            if (isset($data['action']) && $data['action'] !== 'create') return false;
+            $siswaId = $data['id'] ?? null;
+            if (!is_string($siswaId) || trim($siswaId) === '') return false;
+            $sekolahId = $data['sekolahId'] ?? null;
+            if (!is_string($sekolahId) || trim($sekolahId) === '') return false;
+            $trainerId = $user['trainerId'] ?? null;
+            if (!is_string($trainerId) || $trainerId === '') return false;
+            try {
+                $pdo = database();
+                $exists = $pdo->prepare('SELECT 1 FROM siswa WHERE id = :id LIMIT 1');
+                $exists->execute([':id' => $siswaId]);
+                if ($exists->fetchColumn() !== false) return false;
+                return trainerHasActiveAssignment($trainerId, $sekolahId, date('Y-m-d'), $pdo);
+            } catch (Throwable) {
+                return false;
+            }
+        }
         // Trainer sengaja TIDAK punya jalur 'correct' di sini — koreksi
         // absensiPengajar adalah scope Admin Cabang/Superadmin saja
         // (TA.B.4). Trainer yang mengirim action=correct jatuh ke `return

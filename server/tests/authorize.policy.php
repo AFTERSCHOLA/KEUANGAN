@@ -213,6 +213,65 @@ foreach (['sekolah', 'trainer', 'siswa'] as $resource) {
         policyCheck(!authorize($action, $resource, ['id' => 'x', 'trainerIds' => ['trn-1'], '_sekolahTrainerIds' => ['trn-1']], $trainer), "Trainer should NOT {$action} {$resource}");
     }
 }
+
+// ---------------------------------------------------------------------
+// TS.1 — trainer scoped siswa create (D1/D4 gate, R1/R2). Live-DB
+// fixtures: dynamic dates so the "at today" gate stays deterministic
+// whenever the battery runs. Cleanup at the end keeps re-runs
+// idempotent (AA.A.2/raport-seed style).
+// ---------------------------------------------------------------------
+$ts1Today = date('Y-m-d');
+$ts1Past = date('Y-m-d', strtotime('-60 days'));
+$ts1Future = date('Y-m-d', strtotime('+60 days'));
+$ts1Yesterday = date('Y-m-d', strtotime('-1 day'));
+$ts1Pdo = database();
+$ts1Pdo->exec("DELETE FROM siswa WHERE id IN ('sis-ts1-existing')");
+$ts1Pdo->exec("DELETE FROM trainer WHERE id IN ('trn-ts1-1','trn-ts1-origin')");
+$ts1Pdo->prepare("INSERT INTO trainer (id, cabang_id, payload) VALUES ('trn-ts1-origin','cab-ts1',:p)")
+    ->execute([':p' => json_encode(['id' => 'trn-ts1-origin', 'cabangId' => 'cab-ts1', 'penugasanPengajar' => [[
+        'id' => 'pgs-ts1-origin', 'sekolahId' => 'sch-ts1-cover', 'trainerId' => 'trn-ts1-origin',
+        'asistenId' => null, 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => null,
+    ]]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+$ts1Pdo->prepare("INSERT INTO trainer (id, cabang_id, payload) VALUES ('trn-ts1-1','cab-ts1',:p)")
+    ->execute([':p' => json_encode(['id' => 'trn-ts1-1', 'cabangId' => 'cab-ts1', 'penugasanPengajar' => [
+        ['id' => 'pgs-ts1-a', 'sekolahId' => 'sch-ts1-assign', 'trainerId' => 'trn-ts1-1', 'asistenId' => null, 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => $ts1Future],
+        ['id' => 'pgs-ts1-exp', 'sekolahId' => 'sch-ts1-exp', 'trainerId' => 'trn-ts1-1', 'asistenId' => null, 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => $ts1Yesterday],
+        ['id' => 'pgs-ts1-inact', 'sekolahId' => 'sch-ts1-inact', 'trainerId' => 'trn-ts1-1', 'asistenId' => null, 'aktif' => false, 'periodeMulai' => $ts1Past, 'periodeSelesai' => $ts1Future],
+        ['id' => 'pgs-ts1-asis', 'sekolahId' => 'sch-ts1-asis', 'trainerId' => 'trn-ts1-other', 'asistenId' => 'trn-ts1-1', 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => null],
+        ['id' => 'pgs-ts1-cover', 'sekolahId' => 'sch-ts1-cover', 'trainerId' => 'trn-ts1-1', 'asistenId' => null, 'coverOf' => 'pgs-ts1-origin', 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => null],
+    ]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+$ts1Pdo->prepare("INSERT INTO siswa (id, cabang_id, payload) VALUES ('sis-ts1-existing','cab-ts1',:p)")
+    ->execute([':p' => json_encode(['id' => 'sis-ts1-existing', 'sekolahId' => 'sch-ts1-assign', 'cabangId' => 'cab-ts1', 'status' => 'Aktif'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+$trainerTs1 = u('trainer', ['trainerId' => 'trn-ts1-1']);
+policyCheck(authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 trainer should create siswa at assigned school');
+policyCheck(authorize('write', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 trainer write-as-create (masterWrite endpoint path) should pass at assigned school');
+policyCheck(authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-asis'], $trainerTs1), 'TS.1 trainer-as-asisten should create siswa at assigned school');
+policyCheck(authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-cover'], $trainerTs1), 'TS.1 trainer with cover link should create siswa at covered school');
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-other'], $trainerTs1), 'TS.1 trainer should NOT create siswa at unassigned (incl. cross-branch) school');
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-exp'], $trainerTs1), 'TS.1 trainer should NOT create siswa on expired assignment');
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-inact'], $trainerTs1), 'TS.1 trainer should NOT create siswa on inactive assignment');
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-new'], $trainerTs1), 'TS.1 trainer create without sekolahId must fail closed');
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-other', '_sekolahTrainerIds' => ['trn-ts1-1']], $trainerTs1), 'TS.1 forged _sekolahTrainerIds must NOT grant cross-school create (live-DB decides)');
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-existing', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 create naming an existing siswa id must fail closed (update, not create)');
+policyCheck(!authorize('write', 'siswa', ['id' => 'sis-ts1-existing', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 write to an existing siswa id must fail closed (update stays denied)');
+policyCheck(!authorize('write', 'siswa', ['id' => 'sis-ts1-new', 'action' => 'update', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 write carrying action=update must fail closed');
+foreach (['update', 'delete', 'correct', 'verify'] as $ts1Action) {
+    policyCheck(!authorize($ts1Action, 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), "TS.1 trainer should NOT {$ts1Action} siswa, even at assigned school");
+}
+// Falsifiable check: flipping the assignment aktif flag turns the
+// matching create 403, restoring it turns 201-shape (true) again.
+$ts1Snap = $ts1Pdo->query("SELECT payload FROM trainer WHERE id = 'trn-ts1-1'")->fetchColumn();
+$ts1Payload = json_decode((string) $ts1Snap, true);
+foreach ($ts1Payload['penugasanPengajar'] as &$ts1Row) {
+    if (($ts1Row['id'] ?? null) === 'pgs-ts1-a') $ts1Row['aktif'] = false;
+}
+unset($ts1Row);
+$ts1Pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([':p' => json_encode($ts1Payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ':id' => 'trn-ts1-1']);
+policyCheck(!authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 falsifiable: deactivated assignment must turn create 403');
+$ts1Pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([':p' => (string) $ts1Snap, ':id' => 'trn-ts1-1']);
+policyCheck(authorize('create', 'siswa', ['id' => 'sis-ts1-new', 'sekolahId' => 'sch-ts1-assign'], $trainerTs1), 'TS.1 falsifiable: restored assignment must pass again');
+$ts1Pdo->exec("DELETE FROM siswa WHERE id IN ('sis-ts1-existing')");
+$ts1Pdo->exec("DELETE FROM trainer WHERE id IN ('trn-ts1-1','trn-ts1-origin')");
 // Trainer: sppPayments read-only, scoped through the student's school
 // assignment. The caller (read.php) MUST enrich the payment record with
 // _sekolahTrainerIds before authorize() is called. Missing ownership data

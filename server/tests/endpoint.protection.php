@@ -426,6 +426,106 @@ check('admin A deleting own-branch student -> 200', $status === 200, "got $statu
 [$status] = req('POST', "$base/server/api/siswa.php", $swDelete, $cookieAdminA, $csrfAdminA);
 check('deleting already-deleted student -> 422 (confirms hard delete happened)', $status === 422, "got $status");
 
+// ============================================================
+// TS.1 — trainer scoped siswa create (D1/D4 gate, R1/R2).
+// Trainer creates iff the payload sekolahId is covered by a live-DB
+// aktif assignment at today; update/delete stay denied (D3); cabangId
+// is never trusted (422, siswa.php:31-47 untouched). Dynamic dates so
+// the gate stays deterministic whenever the battery runs.
+// ============================================================
+echo "\n--- siswa.php (TS.1 trainer scoped create) ---\n";
+$ts1Trn = 'trn-ts1-' . uniqid();
+$ts1SchA = 'skl-ts1-a-' . uniqid();
+$ts1SchU = 'skl-ts1-u-' . uniqid();
+$ts1SchB = 'skl-ts1-b-' . uniqid();
+$ts1SchExp = 'skl-ts1-e-' . uniqid();
+$ts1SchInact = 'skl-ts1-i-' . uniqid();
+$ts1Past = date('Y-m-d', strtotime('-60 days'));
+$ts1Future = date('Y-m-d', strtotime('+60 days'));
+$ts1Yesterday = date('Y-m-d', strtotime('-1 day'));
+foreach ([[$ts1SchA, $branchA], [$ts1SchU, $branchA], [$ts1SchB, $branchB], [$ts1SchExp, $branchA], [$ts1SchInact, $branchA]] as [$ts1SchId, $ts1SchBranch]) {
+    $pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+        ':id' => $ts1SchId, ':c' => $ts1SchBranch,
+        ':p' => json_encode(['id' => $ts1SchId, 'cabangId' => $ts1SchBranch], JSON_UNESCAPED_UNICODE),
+    ]);
+}
+$ts1Payload = [
+    'id' => $ts1Trn, 'cabangId' => $branchA,
+    'penugasanPengajar' => [
+        ['id' => 'pgs-ts1-a-' . uniqid(), 'sekolahId' => $ts1SchA, 'trainerId' => $ts1Trn, 'asistenId' => null, 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => $ts1Future],
+        ['id' => 'pgs-ts1-e-' . uniqid(), 'sekolahId' => $ts1SchExp, 'trainerId' => $ts1Trn, 'asistenId' => null, 'aktif' => true, 'periodeMulai' => $ts1Past, 'periodeSelesai' => $ts1Yesterday],
+        ['id' => 'pgs-ts1-i-' . uniqid(), 'sekolahId' => $ts1SchInact, 'trainerId' => $ts1Trn, 'asistenId' => null, 'aktif' => false, 'periodeMulai' => $ts1Past, 'periodeSelesai' => $ts1Future],
+    ],
+];
+$pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
+    ':id' => $ts1Trn, ':c' => $branchA, ':p' => json_encode($ts1Payload, JSON_UNESCAPED_UNICODE),
+]);
+$ts1UserId = 'usr-ts1-' . uniqid();
+$pdo->prepare('DELETE FROM users WHERE username = :u')->execute([':u' => 'test_trainer_ts1']);
+$pdo->prepare('INSERT INTO users (id, username, display_name, password_hash, role, cabang_id, trainer_id, active, must_change_password) VALUES (:id, :u, :d, :p, :r, :c, :t, 1, 0)')->execute([
+    ':id' => $ts1UserId, ':u' => 'test_trainer_ts1', ':d' => 'Trainer TS1',
+    ':p' => password_hash('test_trainer_ts1', PASSWORD_DEFAULT),
+    ':r' => 'trainer', ':c' => $branchA, ':t' => $ts1Trn,
+]);
+$cookieTs1 = tempnam(sys_get_temp_dir(), 'm33_ts1_');
+[$status] = req('POST', "$base/server/api/auth/login.php", ['username' => 'test_trainer_ts1', 'password' => 'test_trainer_ts1'], null, null, $cookieTs1);
+check('login as test_trainer_ts1', $status === 200, "got $status");
+$csrfTs1 = csrfFor($base, $cookieTs1, 'trainer_ts1');
+
+$ts1Sw = ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchA, 'nama' => 'Siswa TS1 A'];
+[$status, $ts1Body] = req('POST', "$base/server/api/siswa.php", $ts1Sw, $cookieTs1, $csrfTs1);
+check('trainer creating student at assigned school -> 201', $status === 201, "got $status");
+check("response cabangId matches school's branch (server-derived)", ($ts1Body['cabangId'] ?? null) === $branchA, json_encode($ts1Body));
+
+$ts1Row = auditRow($pdo, 'siswa_created', $ts1Sw['id']);
+check('trainer-created siswa_created audit row exists', $ts1Row !== false);
+check('trainer-created siswa_created actor_role is trainer', $ts1Row && $ts1Row['actor_role'] === 'trainer', json_encode($ts1Row));
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchU, 'nama' => 'Siswa TS1 U'], $cookieTs1, $csrfTs1);
+check('trainer creating student at unassigned same-branch school -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchB, 'nama' => 'Siswa TS1 B'], $cookieTs1, $csrfTs1);
+check('trainer creating student at cross-branch school -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchExp, 'nama' => 'Siswa TS1 E'], $cookieTs1, $csrfTs1);
+check('trainer creating student on expired assignment -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchInact, 'nama' => 'Siswa TS1 I'], $cookieTs1, $csrfTs1);
+check('trainer creating student on inactive assignment -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchA, 'cabangId' => $branchA, 'nama' => 'Siswa TS1 C'], $cookieTs1, $csrfTs1);
+check('trainer sending cabangId in body -> 422', $status === 422, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => $ts1Sw['id'], 'action' => 'update', 'version' => 1, 'sekolahId' => $ts1SchA, 'nama' => 'Siswa TS1 A (updated)'], $cookieTs1, $csrfTs1);
+check('trainer updating student -> 403', $status === 403, "got $status");
+
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => $ts1Sw['id'], 'action' => 'delete'], $cookieTs1, $csrfTs1);
+check('trainer deleting student -> 403', $status === 403, "got $status");
+$ts1StillThere = $pdo->prepare('SELECT 1 FROM siswa WHERE id = :id');
+$ts1StillThere->execute([':id' => $ts1Sw['id']]);
+check('trainer-denied delete left the student row in place', $ts1StillThere->fetchColumn() !== false);
+
+// Falsifiable check: flipping the assignment aktif flag turns the
+// matching create 403; restoring it makes create 201 again.
+$ts1SnapStmt = $pdo->prepare('SELECT payload FROM trainer WHERE id = :id');
+$ts1SnapStmt->execute([':id' => $ts1Trn]);
+$ts1Snap = (string) $ts1SnapStmt->fetchColumn();
+$ts1Off = json_decode($ts1Snap, true);
+foreach ($ts1Off['penugasanPengajar'] as &$ts1Assignment) {
+    if (($ts1Assignment['sekolahId'] ?? null) === $ts1SchA) $ts1Assignment['aktif'] = false;
+}
+unset($ts1Assignment);
+$pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([':p' => json_encode($ts1Off, JSON_UNESCAPED_UNICODE), ':id' => $ts1Trn]);
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchA, 'nama' => 'Siswa TS1 Off'], $cookieTs1, $csrfTs1);
+check('TS.1 falsifiable: deactivated assignment turns create 403', $status === 403, "got $status");
+$pdo->prepare('UPDATE trainer SET payload = :p WHERE id = :id')->execute([':p' => $ts1Snap, ':id' => $ts1Trn]);
+[$status] = req('POST', "$base/server/api/siswa.php", ['id' => 'sw-ts1-' . uniqid(), 'sekolahId' => $ts1SchA, 'nama' => 'Siswa TS1 On'], $cookieTs1, $csrfTs1);
+check('TS.1 falsifiable: restored assignment passes create 201 again', $status === 201, "got $status");
+
+$pdo->prepare('DELETE FROM users WHERE id = :id')->execute([':id' => $ts1UserId]);
+$pdo->prepare('DELETE FROM users WHERE username = :u')->execute([':u' => 'test_trainer_ts1']);
+@unlink($cookieTs1);
+
 // --- sekolah.php: cabangId forced from session (admin_cabang) or ------
 // explicit+validated (superadmin) -- never trusted as-is from admin_cabang
 echo "\n--- sekolah.php (create) ---\n";
