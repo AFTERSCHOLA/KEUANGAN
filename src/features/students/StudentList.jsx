@@ -16,7 +16,7 @@ import PeriodFilter from '../../components/PeriodFilter.jsx'
 const TINGKAT_OPTIONS = ['', 'Beginner', 'Intermediate']
 const MAPEL_SUGGESTIONS = ['Scratch Jr', 'Scratch 3', 'Roblox Studio', 'Python/VsCode', 'IoT']
 
-export default function StudentList({ readOnly = false }) {
+export default function StudentList({ readOnly = false, trainerScoped = false }) {
   const [siswa, setSiswa] = useState(() => readCached('siswa'))
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(null)
@@ -61,11 +61,27 @@ export default function StudentList({ readOnly = false }) {
     ? siswa.filter(s => isBillable(s) && isTunggakan(s, elapsed, sppPayments, sppTarifOf(s)))
     : siswa
 
+  // TS.2 (D2) — trainer-scoped create: same button + same form, only the
+  // school list is assignment-scoped. readCached('sekolah') above already
+  // IS that union for trainers (store.js isWithinScope 'sekolah': legacy
+  // sekolahIds + server snapshot + aktif penugasanPengajar incl. asisten
+  // positions), so the sekolah prop passed to SiswaForm below needs no
+  // extra filtering and the form itself stays untouched. R1: the server
+  // remains the guard, so a forged client still gets 403.
+  const canAdd = !readOnly || trainerScoped
+  // TS.2 (D2) — zero allowed schools: disabled button + hint, no submit path.
+  const hasAllowedSekolah = sekolah.length > 0
+
   function refresh() {
     setSiswa(readCached('siswa'))
   }
 
   function openAdd() {
+    // TS.2 (D2) — trainerScoped defaults to the first *allowed* school
+    // (sekolah[0] of the scoped list). Admin/superadmin path unchanged.
+    // Guard: trainer with no assigned school has no submit path even if
+    // openAdd is reached programmatically (the button is also disabled).
+    if (trainerScoped && !hasAllowedSekolah) return
     const defaultSekolah = sekolah.length > 0 ? sekolah[0] : null
     const branch = defaultSekolah
       ? readCached('cabang').find(c => c.id === defaultSekolah.cabangId)
@@ -159,13 +175,29 @@ export default function StudentList({ readOnly = false }) {
           subtitle="Profil, Kehadiran, Status SPP Bulanan"
           rightSlot={<PeriodFilter period={period} />}
           actions={
-            !readOnly && (
-              <button
-                onClick={openAdd}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95"
-              >
-                Tambah Siswa Baru
-              </button>
+            // TS.2 (D2) — trainerScoped sees the same button; with zero
+            // assigned schools it renders disabled with the hint below.
+            canAdd && (
+              trainerScoped && !hasAllowedSekolah ? (
+                <span className="flex items-center gap-2">
+                  <button
+                    disabled
+                    className="bg-blue-600 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl opacity-50 cursor-not-allowed"
+                  >
+                    Tambah Siswa Baru
+                  </button>
+                  <span className="text-xs font-semibold text-slate-400">
+                    Belum ada sekolah penugasan
+                  </span>
+                </span>
+              ) : (
+                <button
+                  onClick={openAdd}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95"
+                >
+                  Tambah Siswa Baru
+                </button>
+              )
             )
           }
         />
@@ -176,7 +208,9 @@ export default function StudentList({ readOnly = false }) {
           </p>
         </div>
 
-        {!readOnly && (
+        {/* TS.2 (D2) — modal mounts for trainerScoped too; D3: Aksi
+            column below stays !readOnly-only, actions stay hidden. */}
+        {canAdd && (
           <>
             <Modal
               open={modalOpen}
@@ -217,17 +251,32 @@ export default function StudentList({ readOnly = false }) {
         title="Manajemen Siswa"
         subtitle="Profil, Kehadiran, Status SPP Bulanan"
         rightSlot={<PeriodFilter period={period} />}
-        actions={
-          !readOnly && (
-            <button
-              onClick={openAdd}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95"
-            >
-              Tambah Siswa Baru
-            </button>
-          )
-        }
-      />
+          actions={
+            // TS.2 (D2) — same gate as the empty state above.
+            canAdd && (
+              trainerScoped && !hasAllowedSekolah ? (
+                <span className="flex items-center gap-2">
+                  <button
+                    disabled
+                    className="bg-blue-600 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl opacity-50 cursor-not-allowed"
+                  >
+                    Tambah Siswa Baru
+                  </button>
+                  <span className="text-xs font-semibold text-slate-400">
+                    Belum ada sekolah penugasan
+                  </span>
+                </span>
+              ) : (
+                <button
+                  onClick={openAdd}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95"
+                >
+                  Tambah Siswa Baru
+                </button>
+              )
+            )
+          }
+        />
 
       <div className="flex items-center gap-2 flex-wrap">
         <button
@@ -537,7 +586,8 @@ export default function StudentList({ readOnly = false }) {
         </div>
       </div>
 
-      {!readOnly && (
+      {/* TS.2 (D2) — same gate as the empty state above. */}
+      {canAdd && (
         <>
           <Modal
             open={modalOpen}

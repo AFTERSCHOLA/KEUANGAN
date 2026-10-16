@@ -374,7 +374,7 @@ if (currentUser?.mustChangePassword) {
           {role === 'trainer' && activeTab === 'ringkasanPengajar' && <TrainerAttendanceSummary trainerId={trainerId} />}
           {activeTab === 'overview' && <OverviewCards />}
           {activeTab === 'sekolah' && <SchoolList />}
-          {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly /> : <StudentList />)}
+          {activeTab === 'siswa' && (role === 'trainer' ? <StudentList readOnly trainerScoped /> : <StudentList />)}
           {activeTab === 'raport' && <RaportList />}
           {activeTab === 'trainer' && <TrainerList />}
           {activeTab === 'penugasan' && <PenugasanManager />}
