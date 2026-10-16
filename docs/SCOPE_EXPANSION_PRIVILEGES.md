@@ -28,7 +28,7 @@ Superadmin (Pusat)
 |------|-------|-------------|
 | **Superadmin** | All branches | Full read/write everywhere; cross-branch aggregation |
 | **Admin Cabang** | Single assigned branch | Full read/write own branch; read-only nothing else |
-| **Trainer** | Own sessions + own students | Write own attendance; read-only everything else |
+| **Trainer** | Own sessions + own students | Write own attendance + create Siswa in assigned schools; read-only everything else |
 
 ---
 
@@ -56,7 +56,7 @@ Superadmin (Pusat)
 |-------|------------|--------------|---------|-------------|
 | **Data Sekolah** | ✅ Write pusat only; 🔍 Read all | 🔍 Read own | 🔍 Read assigned | Write requires `cabangId = 'pusat'`; read filtered by token.cabangId |
 | **Data Trainer** | 🔍 Read everywhere | ✅ Full own branch | 🔍 Read own | Write requires admin_cabang role + own cabangId; superadmin is overseer only (USER_PROVISIONING.md D1) |
-| **Data Siswa** | ✅ Full (audit trail) | ✅ Full own branch | 🔍 Read-only view | Write filtered by `cabangId`; trainer gets view-only component |
+| **Data Siswa** | ✅ Full (audit trail) | ✅ Full own branch | 🟡 Constrained create in assigned schools (no update/delete); read rest | Write filtered by `cabangId`; trainer writes additionally gated by live assignment (TRAINER_SISWA_CREATE_PLAN.md D4) |
 | **Absensi entry** | 🔍 Read + ✅ Verify | ✅ Write own branch | ✅ Write own sessions | Write requires matching `trainerId = token.trainerId` OR cabang role; verify requires elevated role |
 | **Absensi verification** | ✅ Verify all (exception queue: flags + random sample) | ✅ Verify own (before pusat lock; same exception queue, branch-scoped) | ✅ Self-certify own weekly records (`konfirmasiTrainer` stamp) | Verify flag writable only by `role IN ('superadmin', 'admin')` or higher; certification stamp writable only by `trainerId = token.trainerId` |
 
