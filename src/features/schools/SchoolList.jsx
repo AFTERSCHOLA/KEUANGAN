@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 import { newSekolah, defaultCabang, newJadwalEntry } from '../../lib/constants.js'
+import { countSiswaBySekolahId } from '../../lib/tunggakan.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -89,6 +90,9 @@ export default function SchoolList() {
 
   const role = getRoleContext().role
   const visibleSekolah = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah
+  // Perf slice: one siswa read + one count pass per render. Was
+  // readCached('siswa').filter() per card (N JSON.parse + N scans).
+  const siswaCounts = useMemo(() => countSiswaBySekolahId(readCached('siswa')), [sekolah])
 
   function refresh() {
   setSekolah(readCached('sekolah'))
@@ -387,7 +391,7 @@ try {
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-bold uppercase">Jumlah Siswa</p>
-                    <p className="text-sm font-semibold text-slate-700">{readCached('siswa').filter(s => s.sekolahId === sch.id).length} Siswa</p>
+                    <p className="text-sm font-semibold text-slate-700">{siswaCounts.get(sch.id) ?? 0} Siswa</p>
                   </div>
                 </div>
 
@@ -461,13 +465,19 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
   // existing form state only, never stored; pupil count mirrors the
   // finance.js billing filter (status !== 'Trial). New schools have no
   // pupils yet so the formula still renders with a 0 count.
-  const siswaCount = (() => {
+  // Perf slice: memoize on form.id so typing in other fields doesn't
+  // re-parse the whole siswa collection each keystroke.
+  const siswaCount = useMemo(() => {
     try {
-      return readCached('siswa').filter(s => s.sekolahId === form.id && s.status !== 'Trial').length
+      let n = 0
+      for (const s of readCached('siswa')) {
+        if (s && s.sekolahId === form.id && s.status !== 'Trial') n++
+      }
+      return n
     } catch {
       return 0
     }
-  })()
+  }, [form.id])
   const previewText = !form.metodePembayaran
     ? `Estimasi tagihan: ${formatRupiah((Number(form.spp) || 0) * siswaCount)} (${siswaCount} siswa × ${formatRupiah(Number(form.spp) || 0)})`
     : form.metodePembayaran.basis === 'trainer'
@@ -917,6 +927,8 @@ function SchoolThumbnail({ sch }) {
     <img
       src={src}
       alt={sch.nama}
+      loading="lazy"
+      decoding="async"
       className="w-full h-full object-cover object-center"
       onError={(e) => { e.target.src = fallback }}
     />
@@ -925,6 +937,11 @@ function SchoolThumbnail({ sch }) {
 
 function ReassignPicker({ open, sekolah, excludeId, onClose, onPick }) {
   const targets = sekolah.filter(s => s.id !== excludeId)
+  // Perf slice: single count pass when picker opens (was readCached per row).
+  const pickerCounts = useMemo(() => {
+    if (!open) return new Map()
+    return countSiswaBySekolahId(readCached('siswa'))
+  }, [open, sekolah])
   return (
     <Modal open={open} onClose={onClose} title="Pindahkan Siswa">
       {targets.length === 0 ? (
@@ -939,7 +956,7 @@ function ReassignPicker({ open, sekolah, excludeId, onClose, onPick }) {
               className="w-full text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-xl px-4 py-3 transition"
             >
               <span className="text-sm font-bold text-slate-800">{t.nama}</span>
-              <span className="block text-xs text-slate-400">{readCached('siswa').filter(s => s.sekolahId === t.id).length} siswa</span>
+              <span className="block text-xs text-slate-400">{pickerCounts.get(t.id) ?? 0} siswa</span>
             </button>
           ))}
         </div>

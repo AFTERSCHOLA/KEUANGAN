@@ -43,6 +43,36 @@ export function isTunggakan(siswa, elapsed, sppPayments = [], sppTarif = 0) {
   return elapsed.some(({ periode }) => !sppPaidForPeriode(siswa, periode, sppPayments, sppTarif))
 }
 
+// Perf slice (Data Siswa / Data Sekolah lag): precomputed O(1) lookups so
+// per-row render never runs Array.filter scans. Pure only — no store/DOM,
+// same boundary as the helpers above.
+export function buildSppTotalIndex(sppPayments = []) {
+  const idx = new Map()
+  for (const p of (Array.isArray(sppPayments) ? sppPayments : [])) {
+    if (!p || typeof p !== 'object') continue
+    if (typeof p.siswaId !== 'string' || p.siswaId === '') continue
+    if (typeof p.periode !== 'string' || p.periode === '') continue
+    const key = `${p.siswaId}|${p.periode}`
+    idx.set(key, (idx.get(key) || 0) + Number(p.nominal || 0))
+  }
+  return idx
+}
+
+export function sppTotalFromIndex(index, siswaId, periode) {
+  if (!(index instanceof Map)) return 0
+  return index.get(`${siswaId}|${periode}`) || 0
+}
+
+export function countSiswaBySekolahId(siswaList = []) {
+  const counts = new Map()
+  for (const s of (Array.isArray(siswaList) ? siswaList : [])) {
+    const id = s && s.sekolahId
+    if (typeof id !== 'string' || id === '') continue
+    counts.set(id, (counts.get(id) || 0) + 1)
+  }
+  return counts
+}
+
 /**
  * Filter siswa list down to those with at least one unpaid elapsed month.
  * Each returned item is annotated with `unpaidMonths` (display names) for

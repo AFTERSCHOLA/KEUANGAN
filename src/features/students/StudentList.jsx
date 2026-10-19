@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote, readRaw, writeRaw } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa, defaultCabang, localDateString } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
-import { elapsedPeriods, isTunggakan, sppPaidForPeriode, buildTagihanWaLink } from '../../lib/tunggakan.js'
+import { elapsedPeriods, buildSppTotalIndex, sppTotalFromIndex, buildTagihanWaLink } from '../../lib/tunggakan.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SppPaymentModal from '../payments/SppPaymentModal.jsx'
@@ -37,28 +37,56 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
   const viewedPeriode = period.periodeKey()
-  const stats = attendanceStats(absensi, period.periodeKey())
+  const stats = useMemo(() => attendanceStats(absensi, period.periodeKey()), [absensi, period])
+  // Perf slice: single-pass indexes per render so per-row work is O(1)
+  // Map.get instead of Array.filter scans (was O(siswa × payments)).
+  const sekolahSppById = useMemo(() => {
+    const m = new Map()
+    for (const sch of (Array.isArray(sekolah) ? sekolah : [])) {
+      if (sch && typeof sch.id === 'string') m.set(sch.id, Number(sch.spp) || 0)
+    }
+    return m
+  }, [sekolah])
+  const sppIndex = useMemo(() => buildSppTotalIndex(sppPayments), [sppPayments])
+  const historyBySiswaId = useMemo(() => {
+    const m = new Map()
+    for (const p of (Array.isArray(sppPayments) ? sppPayments : [])) {
+      if (!p || p.periode !== viewedPeriode || typeof p.siswaId !== 'string') continue
+      if (!m.has(p.siswaId)) m.set(p.siswaId, [])
+      m.get(p.siswaId).push(p)
+    }
+    return m
+  }, [sppPayments, viewedPeriode])
 
   function sppTarifOf(s) {
-    return sekolah.find(sch => sch.id === s.sekolahId)?.spp || 0
+    return sekolahSppById.get(s.sekolahId) || 0
+  }
+
+  function sppPaidIndexed(s, periode) {
+    return sppTotalFromIndex(sppIndex, s.id, periode) >= Number(sppTarifOf(s) || 0)
   }
 
   function unpaidMonthsOf(s) {
+    const tarif = sppTarifOf(s)
     return elapsed
-      .filter(({ periode }) => !sppPaidForPeriode(s, periode, sppPayments, sppTarifOf(s)))
+      .filter(({ periode }) => sppTotalFromIndex(sppIndex, s.id, periode) < Number(tarif || 0))
       .map(e => e.monthName)
   }
 
   function sppTotalOf(s, periode) {
-    return sppPayments
-      .filter(p => p.siswaId === s.id && p.periode === periode)
-      .reduce((sum, p) => sum + Number(p.nominal || 0), 0)
+    return sppTotalFromIndex(sppIndex, s.id, periode)
+  }
+
+  function isTunggakanIndexed(s) {
+    if (s.status === 'Trial') return false
+    const tarif = Number(sppTarifOf(s) || 0)
+    return elapsed.some(({ periode }) => sppTotalFromIndex(sppIndex, s.id, periode) < tarif)
   }
 
   const isBillable = s => s.status !== 'Trial' // M5.4.3 — Trial siswa tidak masuk hitungan tunggakan sama sekali
 
   const visibleSiswa = onlyTunggakan
-    ? siswa.filter(s => isBillable(s) && isTunggakan(s, elapsed, sppPayments, sppTarifOf(s)))
+    ? siswa.filter(s => isBillable(s) && isTunggakanIndexed(s))
     : siswa
 
   // TS.2 (D2) — trainer-scoped create: same button + same form, only the
@@ -338,10 +366,9 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
 
               {visibleSiswa.map((s, idx) => {
                 // T2.B.2 — per-payment source rows for the viewed periode
-                // (display-only; pill math below untouched).
-                const history = sppPayments.filter(
-                  p => p.siswaId === s.id && p.periode === viewedPeriode
-                )
+                // (display-only; pill math below untouched). O(1) lookup
+                // via precomputed index (was Array.filter per row).
+                const history = historyBySiswaId.get(s.id) || []
                 const isExpanded = expandedSiswaId === s.id
 
                 return (
@@ -413,12 +440,7 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
                       <span className="bg-yellow-100 text-yellow-700 text-xs px-2.5 py-1 rounded-full font-bold">
                         Trial — Belum Ditagih
                       </span>
-                    ) : sppPaidForPeriode(
-                        s,
-                        period.periodeKey(),
-                        sppPayments,
-                        sppTarifOf(s)
-                      ) ? (
+                    ) : sppPaidIndexed(s, period.periodeKey()) ? (
                       <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-bold">
                         Lunas
                       </span>
@@ -475,13 +497,7 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
                             button isn't applicable (e.g. not tunggakan). */}
                         {(() => {
                           const canBill =
-                            isBillable(s) &&
-                            isTunggakan(
-                              s,
-                              elapsed,
-                              sppPayments,
-                              sppTarifOf(s)
-                            )
+                            isBillable(s) && isTunggakanIndexed(s)
 
                           return (
                             <a
@@ -489,9 +505,7 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
                                 canBill
                                   ? buildTagihanWaLink(
                                       s,
-                                      sekolah.find(
-                                        x => x.id === s.sekolahId
-                                      )?.spp || 0,
+                                      sppTarifOf(s),
                                       unpaidMonthsOf(s)
                                     )
                                   : undefined
