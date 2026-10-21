@@ -177,7 +177,7 @@ git commit -m "docs: lock NEW jadwal canonical map" -m "aliases per F6/F11; sele
 - Consumes: `CANON_MAP` from Task 2
 - Produces: `SLOT_STATE` — read-back `jadwalList` per school consumed by Task 4 validation
 
-- [ ] **Step 1: Write the failing read-back check (temp script)**
+- [x] **Step 1: Write the failing read-back check (temp script)**
 
 ```js
 // for each affected school id, GET /api/sekolah.php, assert jadwalList contains
@@ -185,12 +185,12 @@ git commit -m "docs: lock NEW jadwal canonical map" -m "aliases per F6/F11; sele
 // SDIT-Animah Jumat split, SD-Sains Rabu (asisten does not affect slot -> PASS, proves slot-vs-personnel split)
 ```
 
-- [ ] **Step 2: Run to verify it fails where slots are actually new**
+- [x] **Step 2: Run to verify it fails where slots are actually new**
 
 Run: `python C:\Users\barak\AppData\Local\Temp\opencode\assert-slots.tmp.py`
 Expected: FAIL with missing-slot list (proves work remains; unchanged-time schools already PASS)
 
-- [ ] **Step 3: Implement slot writes — smallest slice, one school at a time, full-payload update preserving `spp`/`metode`**
+- [x] **Step 3: Implement slot writes — smallest slice, one school at a time, full-payload update preserving `spp`/`metode`**
 
 Affected slots (only rows where day/time changed or block moved; pure asisten swaps write ZERO slot changes):
 - `skl-BDG-sdn-sabang`: ADD `{Jumat, 10:35, null}` (Q1-pending end); KEEP Kamis `09:00-10:30` + `12:15-13:35` unchanged
@@ -200,12 +200,12 @@ Affected slots (only rows where day/time changed or block moved; pure asisten sw
 
 Each write: GET current record → merge `jadwalList` → POST full payload → GET read-back confirms `spp`/`metode` byte-identical (G4a rule).
 
-- [ ] **Step 4: Run read-back to verify `SLOT_STATE`**
+- [x] **Step 4: Run read-back to verify `SLOT_STATE`**
 
 Run: `python C:\Users\barak\AppData\Local\Temp\opencode\assert-slots.tmp.py`
 Expected: PASS — slot count per school matches plan; `spp`/`metode` intact on samples (Istiqamah 250000/siswa-62500-bulan; Salman trainer-165000)
 
-- [ ] **Step 5: Remove temp script, verify build**
+- [x] **Step 5: Remove temp script, verify build**
 
 Run: `Remove-Item C:\Users\barak\AppData\Local\Temp\opencode\assert-slots.tmp.py; npm run build 2>&1 | Select-Object -Last 3`
 Expected: PASS — built with only pre-existing `store.js` dynamic-import warning
