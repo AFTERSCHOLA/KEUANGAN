@@ -268,7 +268,7 @@ Expected: PASS — timetable/slot suites green; build with only pre-existing war
 - Consumes: `ASSIGN_STATE` from Task 4
 - Produces: `Verified:` lines for the close-out report
 
-- [ ] **Step 1: Write the failing targeted spec (disposable, self-booting, zero pageerrors)**
+- [x] **Step 1: Write the failing targeted spec (disposable, self-booting, zero pageerrors)**
 
 ```js
 // test('NEW jadwal — Jumat timetable shows Ditha/Iqbaludin/Luthfi + SDIT split', async ({ page }) => {
@@ -279,21 +279,21 @@ Expected: PASS — timetable/slot suites green; build with only pre-existing war
 // });
 ```
 
-- [ ] **Step 2: Run to verify it fails before Task 3–4 or passes after**
+- [x] **Step 2: Run to verify it fails before Task 3–4 or passes after**
 
 Run: `npx playwright test tests/new-jadwal-verify.tmp.spec.js 2>&1 | Select-Object -Last 8`
 Expected before migration: FAIL (rows absent); after Tasks 3–4: PASS with zero `pageerror` (allowlisted favicon 404 only)
 
-- [ ] **Step 3: If any step above FAILED to adapt (parse/validation/403): supplement per EXEMPLAR_MIGRATION fallback**
+- [x] **Step 3: If any step above FAILED to adapt (parse/validation/403): supplement per EXEMPLAR_MIGRATION fallback**
 
 Treat the NEW Excel cell as ground truth; do NOT reshape the sheet to fit the app. Instead: record `F-NEW#` finding in this plan file (inconsistency class per F10/F11/F13 precedent), triage as already-planned / partially-specified / unplanned, and open the minimal microtask (nullable `endTime`, second-asisten union, or cover-assignment path) — app change only via that microtask, never inline.
 
-- [ ] **Step 4: Remove temp spec + temp data, final gates**
+- [x] **Step 4: Remove temp spec + temp data, final gates**
 
 Run: `Remove-Item tests/new-jadwal-verify.tmp.spec.js; npm run build 2>&1 | Select-Object -Last 3; git status --porcelain=v1`
 Expected: PASS — build green; status shows only intended plan/doc files; no `console.log` in `src/` (`grep -r console.log src/ | Select-Object -First 5` empty)
 
-- [ ] **Step 5: Report in evidence format**
+- [x] **Step 5: Report in evidence format**
 
 ```text
 Verified: <command> -> <result> (per task)
@@ -303,7 +303,7 @@ Remaining: Q1 10.35 end / Q2 Rahmat-Baru scope / Q3 Luthfi-Adli alias sign-off
 
 ## Self-Review
 
-- Spec coverage: every NEW row (24) mapped — 15 kept, 4 asisten swaps, 5 placeholder resolutions — each owned by Task 3 (slots) or Task 4 (personnel); time-normalization owned by Task 2; failure path owned by Task 5-Step 3.
+- Spec coverage: every NEW row (24) mapped — 16 kept, 4 asisten swaps, 5 placeholder resolutions — each owned by Task 3 (slots) or Task 4 (personnel); time-normalization owned by Task 2; failure path owned by Task 5-Step 3.
 - Step scan: each step writes exactly one reasonable thing (one script, one run, one write batch, one removal, one commit).
 - Type consistency: `jadwalList {dayOfWeek,time,endTime}`, `newPenugasanRow` keys, `validateRowDates` triple vocabulary, `buildDailyTimetable` read-join — same names/signatures in every task.
 - Review Focus: all five input classes above carry a Task 2 decision + Task 4/5 test pin.
