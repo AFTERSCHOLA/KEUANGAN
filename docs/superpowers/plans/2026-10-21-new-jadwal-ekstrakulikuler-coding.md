@@ -109,7 +109,7 @@ git commit -m "docs: plan NEW jadwal ekstrakulikuler migration" -m "24 NEW rows 
 - Consumes: `NEW_DIFF_TABLE` from Task 1
 - Produces: `CANON_MAP` — exact (excel string → db id / HH:MM) pairs consumed by Tasks 3–4
 
-- [ ] **Step 1: Write the failing check — list every NEW string with no exact DB match**
+- [x] **Step 1: Write the failing check — list every NEW string with no exact DB match**
 
 ```js
 // temp node -e: load sekolah (20 D8 ids) + trainer (18 G3 ids) names,
@@ -117,12 +117,12 @@ git commit -m "docs: plan NEW jadwal ekstrakulikuler migration" -m "24 NEW rows 
 // expect UNRESOLVED = [Luthfi Adli, Rahmat-Baru-row, 'selesai', '14. 00']
 ```
 
-- [ ] **Step 2: Run to verify it fails (unresolved non-empty)**
+- [x] **Step 2: Run to verify it fails (unresolved non-empty)**
 
 Run: `npm test -- src/lib/__tests__/penugasan-slot.test.js 2>&1 | Select-Object -Last 5`
 Expected: existing suite PASS (pins TIME_RE `^([01]\d|2[0-3]):[0-5]\d$` — `selesai`/dotted times rejected), while the temp unresolved-list is non-empty (proves mapping work remains)
 
-- [ ] **Step 3: Implement `CANON_MAP` decisions (concrete picks, ask owner where flagged)**
+- [x] **Step 3: Implement `CANON_MAP` decisions (concrete picks, ask owner where flagged)**
 
 | Excel string | Canonical pick | Owner |
 |---|---|---|
@@ -130,19 +130,37 @@ Expected: existing suite PASS (pins TIME_RE `^([01]\d|2[0-3]):[0-5]\d$` — `sel
 | `SD Al-Irham` | `skl-BDG-sd-alirhaam` (F6 highest-risk alias) | locked per D8 until F6 sign-off says otherwise |
 | `SD & SMP Sains` shared | single `skl-BDG-sd-sains-albiruni`, 2 slots | locked D8 |
 | `M Rafly F` | existing Rafly id (F11 typo canonicalization) | locked |
-| `Luthfi Adli` | alias of `Luthfi Adliansyah Firdaus` id, empty WA where absent (F11) | needs owner confirm (Q3) |
+| `Luthfi Adli` | alias of `Luthfi Adliansyah Firdaus` id `trn-BDG-1790340362-8664e38`, empty WA where absent (F11) | locked 2026-10-21 (Q3) |
 | `Ahmad Rafli` | existing `Ahmad Rafli` id (ex `A Rafli R`) | locked |
 | `Ira Dian / Zahra Fadilla / Alifah Maharan / Afrizal` | existing G3 roster ids, `wa:''` where absent (F8/F11) | locked |
-| `Rahmat Pratama` Kelas Baru (empty school cell) | same `skl-BDG-sdit-annimah`, same `13.30-15.00` slot, split-level block per G4d rule (L13/L46 pattern) | needs owner confirm (Q2) |
+| `Rahmat Pratama` Kelas Baru (empty school cell) | same `skl-BDG-sdit-annimah`, same `13.30-15.00` slot, split-level block per G4d rule (L13/L46 pattern) | locked 2026-10-21 (Q2) |
 | `14.15` dots / `14. 00` space | normalize to `14:15` / `14:00` before validation | locked |
-| `10.35 - selesai` | slot `{dayOfWeek:Jumat, time:10:35, endTime:null}` (open-ended; UI `+60min` fallback, no invented end) — OR pinned end if owner answers Q1 | needs owner confirm (Q1) |
+| `10.35 - selesai` | slot `{dayOfWeek:Jumat, time:10:35, endTime:null}` (open-ended; UI `+60min` fallback, no invented end) | locked 2026-10-21 (Q1) |
 
-- [ ] **Step 4: Re-run the resolving check to verify zero UNRESOLVED**
+`CANON_MAP` (exact pairs consumed by Tasks 3–4; ids verified against `trainer` table 2026-10-21, schools per D8):
+
+```text
+SCHOOLS: SMAIT Al-Irsyad->skl-BDG-sma-alirsyad; SD Al-Irham->skl-BDG-sd-alirhaam;
+  SD/SMP Sains Al-Biruni->skl-BDG-sd-sains-albiruni (one record, 2 slots);
+  SDIT Anni'mah->skl-BDG-sdit-annimah; SMPIT Ann'imah->skl-BDG-smpit-annimah;
+  all other NEW names->same canonical D8 id (exact match)
+TRAINERS: M Rafly F->trn-BDG-1790340362-2fbd9c6 (M Rafly Fatchurrohman);
+  M Davin Putra->trn-BDG-1790340362-bd3f678; Luthfi Adliansyah->trn-BDG-1790340362-8664e38;
+  Luthfi Adli->trn-BDG-1790340362-8664e38 (Q3); Vazira Putri->trn-BDG-1790340362-beed8c1;
+  Ahmad Rafli->trn-BDG-ahmad-rafli; Ira Dian->trn-BDG-ira; Zahra Fadilla->trn-BDG-zahra;
+  Alifah Maharan->trn-BDG-alifah; Afrizal->trn-BDG-afrizal;
+  Rahmat Pratama->trn-BDG-1790340362-a308572
+TIMES: strip spaces, dots->colons, then TIME_RE; `selesai`->endTime null (Q1);
+  Rahmat-Baru row inherits {Jumat,13:30,15:00} (Q2)
+F-NEW: none — every NEW string resolves via DB-exact, D8/F6 alias, F11 short, or Q1–Q3 ruling.
+```
+
+- [x] **Step 4: Re-run the resolving check to verify zero UNRESOLVED**
 
 Run: `node -e "resolve(CANON_MAP, NEW_DIFF_TABLE)"` (temp one-liner, removed after)
 Expected: `UNRESOLVED 0`
 
-- [ ] **Step 5: Commit decision table**
+- [x] **Step 5: Commit decision table**
 
 ```bash
 git add docs/superpowers/plans/2026-10-21-new-jadwal-ekstrakulikuler-coding.md
