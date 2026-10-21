@@ -53,11 +53,12 @@
 - [x] **Step 2: Run it and verify output matches this pinned table**
 
 Run: `python C:\Users\barak\AppData\Local\Temp\opencode\parse-new-jadwal.tmp.py`
-Expected: PASS when output equals (24 NEW rows; 22 OLD rows):
+Expected: PASS when output equals (24 NEW rows; 23 OLD rows):
 
 ```text
-KEPT 15x identical (SENIN 3x SD-Tridaya/SMPIT-Al-Irsyad/SMAIT-Al-Irsyad,
- KAMIS 6x SDN-Sabang-x2/Al-Irham-x2/Sains-SD/SMP, SELASA 3x, JUMAT-carry 3x Tauhid/Istiqamah-SMP/Salman same trainer+time)
+KEPT 16x identical (SENIN 2x SMPIT-Al-Irsyad/SMAIT-Al-Irsyad,
+ KAMIS 5x SDN-Sabang-12.15/Al-Irham-x2/Sains-SD/SMP, SELASA 3x SMP-Tridaya/SMPN-18/Darul-Hikam-2,
+ RABU 3x SDM7-Ditha/SMPIT-Ann-imah/Bintang-Madani, JUMAT-carry 3x Tauhid/Istiqamah-SMP/Salman same trainer+time)
 CHANGED 4x asisten-only:
  SD-Tridaya Senin Vazira Putri -> Alifah Maharan (time unchanged 14.15-15.15)
  SDN-Sabang Kamis 09.00 Vazira/- -> Ira Dian + Zahra Fadilla
@@ -73,8 +74,18 @@ ZERO unparsed cells after repair (dots->colons, stray-space fix)
 
 - [x] **Step 3: Record G0-style freeze evidence in the migration log (no src changes)**
 
-Run: `git branch --show-current; git log --oneline -3; git status --porcelain=v1; node scripts/run-db-reset.cjs --help 2>&1 | Select-Object -First 3`
+Run: `git branch --show-current; git log --oneline -3; git status --porcelain=v1`
 Expected: PASS when branch/log/status captured; tree clean or only this plan file untracked
+Do NOT use `node scripts/run-db-reset.cjs --help` for evidence — the wrapper ignores args and reseeds the test DB.
+
+Freeze Evidence (G0, Task 1 run):
+```text
+branch: test-stage
+log: d71fd1b feat: optimize siswa and spp payment handling with memoization and indexing
+     f52f01d fix: final-review hygiene M1/M2/M4
+     b7e3177 docs: trainer siswa privilege amendment + plan docs (TS.3)
+status: ?? docs/superpowers/plans/2026-10-21-new-jadwal-ekstrakulikuler-coding.md (only file; src/ + server/ untouched)
+```
 
 - [x] **Step 4: Delete the temp script if it will not be reused by Task 2**
 
@@ -85,7 +96,7 @@ Expected: PASS when file gone (recreate per-task if needed; never commit temp sc
 
 ```bash
 git add docs/superpowers/plans/2026-10-21-new-jadwal-ekstrakulikuler-coding.md
-git commit -m "docs: plan NEW jadwal ekstrakulikuler migration" -m "24 NEW rows vs 22 OLD; 4 asisten swaps + 5 placeholder resolutions"
+git commit -m "docs: plan NEW jadwal ekstrakulikuler migration" -m "24 NEW rows vs 23 OLD; 4 asisten swaps + 5 placeholder resolutions"
 ```
 
 ### Task 2: Canonicalize names + times (decision table, no writes)
