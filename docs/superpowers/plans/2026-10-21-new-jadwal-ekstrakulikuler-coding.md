@@ -303,7 +303,7 @@ Remaining: Q1 10.35 end / Q2 Rahmat-Baru scope / Q3 Luthfi-Adli alias sign-off
 
 ## Self-Review
 
-- Spec coverage: every NEW row (24) mapped — 16 kept, 4 asisten swaps, 5 placeholder resolutions — each owned by Task 3 (slots) or Task 4 (personnel); time-normalization owned by Task 2; failure path owned by Task 5-Step 3.
+- Spec coverage: every NEW row (24) mapped — 16 kept + 4 changed + 3 resolved rows + 1 split-new = 24 NEW rows (5 line-items, Rahmat Kelas Baru inherited-slot row is the +1 vs OLD 23; SMP-Istiqamah/Salman carry inside kept 16) — each owned by Task 3 (slots) or Task 4 (personnel); time-normalization owned by Task 2; failure path owned by Task 5-Step 3.
 - Step scan: each step writes exactly one reasonable thing (one script, one run, one write batch, one removal, one commit).
 - Type consistency: `jadwalList {dayOfWeek,time,endTime}`, `newPenugasanRow` keys, `validateRowDates` triple vocabulary, `buildDailyTimetable` read-join — same names/signatures in every task.
 - Review Focus: all five input classes above carry a Task 2 decision + Task 4/5 test pin.
