@@ -220,7 +220,7 @@ Expected: PASS — built with only pre-existing `store.js` dynamic-import warnin
 - Consumes: `CANON_MAP` (Task 2) + `SLOT_STATE` (Task 3)
 - Produces: `ASSIGN_STATE` — 25 + Δ rows verified, timetable rows for picked dates
 
-- [ ] **Step 1: Write the failing check — vocabulary must match `SLOT_STATE` triples**
+- [x] **Step 1: Write the failing check — vocabulary must match `SLOT_STATE` triples**
 
 ```js
 // build proposed rows with newPenugasanRow({sekolahId, trainerId, asistenId, hari, jamMulai, jamSelesai})
@@ -228,12 +228,12 @@ Expected: PASS — built with only pre-existing `store.js` dynamic-import warnin
 // expect FAIL on: Rahmat-Baru scoped triple if slot missing, Luthfi-Adli alias if unresolved
 ```
 
-- [ ] **Step 2: Run to verify it fails before writes**
+- [x] **Step 2: Run to verify it fails before writes**
 
 Run: `npm test -- src/lib/__tests__/penugasan.test.js 2>&1 | Select-Object -Last 5`
 Expected: existing suite PASS (validator itself green); temp proposed-rows check FAILs on the new rows (proves gate would reject bad triples)
 
-- [ ] **Step 3: Implement assignment writes (full-array replace, idempotent re-run converges)**
+- [x] **Step 3: Implement assignment writes (full-array replace, idempotent re-run converges)**
 
 Phase 1 — host updates as `admin.bandung` (superadmin create is 403 per G3; no role broadening):
 - Widia host: SD-Tridaya Senin `14:15-15:15` asisten `Vazira→Alifah`; Sains Rabu `14:00-15:00` asisten `null→Alifah`; Istiqamah-SMP Jumat unchanged (carry)
@@ -248,12 +248,12 @@ Phase 2 — inverse merge into `sekolah.trainerIds` display links as superadmin 
 
 Double-booking guard: `findOverlappingPair` must return null before every save; server 422 is authoritative.
 
-- [ ] **Step 4: Run verification — re-run converges + timetable spot-checks**
+- [x] **Step 4: Run verification — re-run converges + timetable spot-checks**
 
 Run: `python C:\Users\barak\AppData\Local\Temp\opencode\assert-assign.tmp.py`
 Expected: PASS — re-run writes 0 new (idempotent); `buildDailyTimetable({tanggal: next-Jumat})` contains SDN-Sabang/Ditha, SDIT/Iqbaludin+Rahmat, SD-Istiqamah/Luthfi rows with correct `Waktu`; Friday SDN-Sabang shared slot shows both hosts (alternation recorded, not resolved — G4b Friday precedent)
 
-- [ ] **Step 5: Remove temp script, run narrowest automated checks + build**
+- [x] **Step 5: Remove temp script, run narrowest automated checks + build**
 
 Run: `Remove-Item C:\Users\barak\AppData\Local\Temp\opencode\assert-assign.tmp.py; npm test -- src/lib/__tests__/penugasan-timetable.test.js src/lib/__tests__/penugasan-slot.test.js 2>&1 | Select-Object -Last 5; npm run build 2>&1 | Select-Object -Last 3`
 Expected: PASS — timetable/slot suites green; build with only pre-existing warning
