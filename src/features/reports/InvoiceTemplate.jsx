@@ -178,17 +178,28 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
         )}
 
         <div className="grid grid-cols-2 gap-8 items-end">
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-5 text-xs text-slate-600 leading-relaxed">
-            <p className="font-bold text-slate-800 mb-1.5">Catatan Pembayaran:</p>
-            {settings.rekeningBank ? (
-              <>
-                <p>Pembayaran dapat ditransfer ke rekening berikut:</p>
-                <p>Bank {settings.rekeningBank} No. Rekening: {settings.rekeningNomor} a.n. {settings.rekeningAtasNama}</p>
-                <p>Mohon mencantumkan nomor invoice pada berita transfer. Terima kasih atas kepercayaan Bapak/Ibu.</p>
-              </>
-            ) : (
-              <p className="text-slate-400">Belum diatur — isi info rekening di Pengaturan.</p>
-            )}
+          <div>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-5 text-xs text-slate-600 leading-relaxed">
+              <p className="font-bold text-slate-800 mb-1.5">Catatan Pembayaran:</p>
+              {settings.rekeningBank ? (
+                <>
+                  <p>Pembayaran dapat ditransfer ke rekening berikut:</p>
+                  <p>Bank {settings.rekeningBank} No. Rekening: {settings.rekeningNomor} a.n. {settings.rekeningAtasNama}</p>
+                  <p>Mohon mencantumkan nomor invoice pada berita transfer. Terima kasih atas kepercayaan Bapak/Ibu.</p>
+                </>
+              ) : (
+                <p className="text-slate-400">Belum diatur — isi info rekening di Pengaturan.</p>
+              )}
+            </div>
+            {/* M-F3 — Official Logo + brand at the bottom-left of the invoice. */}
+            <div className="flex items-center gap-2 mt-3">
+              {settings.logoUrl ? (
+                <img src={settings.logoUrl} alt="Logo Afterschola" className="h-8 object-contain" onError={e => { e.currentTarget.style.display = 'none' }} />
+              ) : (
+                <img src={LOGO_URL} alt="Logo Afterschola" className="h-8 object-contain" />
+              )}
+              <span className="text-xs font-extrabold text-slate-700 tracking-wide">Afterschola</span>
+            </div>
           </div>
           <div className="text-center text-xs">
             <p className="text-slate-500 mb-1">Hormat Kami,</p>

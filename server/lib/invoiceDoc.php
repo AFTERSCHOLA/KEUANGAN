@@ -176,8 +176,11 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
     $carryLines = (isset($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) ? $invoice['carryOverLines'] : [];
 
     $logoImg = '';
+    $logoFooterImg = '';
     if (!empty($assets['logoDataUrl'])) {
         $logoImg = '<img src="' . $h($assets['logoDataUrl']) . '" alt="Logo" style="height:56px;object-fit:contain" />';
+        // M-F3 — Official Logo + brand at the bottom-left of the invoice.
+        $logoFooterImg = '<img src="' . $h($assets['logoDataUrl']) . '" alt="Logo Afterschola" style="height:32px;object-fit:contain" />';
     }
     $sigImg = '';
     if (!empty($assets['signatureDataUrl'])) {
@@ -276,8 +279,11 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '<span style="font-weight:600;color:#334155">Terbilang: </span><em>&ldquo;' . $h($terbilang) . '&rdquo;</em></div>'
         . $appendix
         . '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:32px">'
-        . '<div style="flex:1;background:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:20px;font-size:12px;line-height:1.7;color:#475569">'
+        . '<div style="flex:1"><div style="background:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:20px;font-size:12px;line-height:1.7;color:#475569">'
         . '<p style="margin:0 0 6px;font-weight:700;color:#1e293b">Catatan Pembayaran:</p>' . $bankBlock . '</div>'
+        . '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">'
+        . $logoFooterImg
+        . '<span style="font-size:12px;font-weight:800;color:#334155;letter-spacing:.04em">Afterschola</span></div></div>'
         . '<div style="text-align:center;font-size:12px;min-width:180px"><p style="margin:0 0 4px;color:#64748b">Hormat Kami,</p>'
         . $sigImg
         . '<p style="display:inline-block;border-top:1px solid #94a3b8;margin:8px 0 0;padding:4px 8px 0;font-weight:700;color:#1e293b">' . $h($settings['penandatangan'] ?? '-') . '</p></div>'
