@@ -18,6 +18,10 @@ requirePasswordPolicy($newPassword);
 
 $update = database()->prepare('UPDATE users SET password_hash = :password_hash, must_change_password = 0, failed_login_count = 0, locked_until = NULL WHERE id = :id');
 $update->execute([':password_hash' => password_hash($newPassword, PASSWORD_DEFAULT), ':id' => $user['id']]);
+// M-F1 — a password change proves ownership: drop any throttle lock for
+// this username on this IP so the new password works on the next login
+// instead of 401-ing behind a stale lock.
+clearLoginFailures(loginAttemptKey((string) ($user['username'] ?? '')));
 $user['mustChangePassword'] = false;
 $identity = loginSession($user);
 auditEvent('password_changed', $identity, 'user', (string) $user['id']);

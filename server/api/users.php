@@ -377,7 +377,7 @@ function resetUserPassword(array $data, array $user): never {
     if ($userId === '') jsonResponse(['error' => 'id wajib diisi'], 422);
 
     $pdo = database();
-    $stmt = $pdo->prepare('SELECT id, role, cabang_id FROM users WHERE id = :id AND active = 1 LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, username, role, cabang_id FROM users WHERE id = :id AND active = 1 LIMIT 1');
     $stmt->execute([':id' => $userId]);
     $existing = $stmt->fetch();
     if ($existing === false) jsonResponse(['error' => 'User tidak ditemukan atau nonaktif'], 422);
@@ -392,6 +392,9 @@ function resetUserPassword(array $data, array $user): never {
     $pdo->prepare(
         'UPDATE users SET password_hash = :h, must_change_password = 1, failed_login_count = 0, locked_until = NULL WHERE id = :id'
     )->execute([':h' => password_hash($newPassword, PASSWORD_DEFAULT), ':id' => $userId]);
+    // M-F1 — same ownership proof as change-password: clear the throttle
+    // for the reset username so the temp password works immediately.
+    clearLoginFailures(loginAttemptKey((string) ($existing['username'] ?? '')));
 
     auditEvent('user_password_reset', $user, 'user', $userId, ['cabangId' => $existing['cabang_id']]);
 
