@@ -7,13 +7,16 @@
 
 import { formatJadwalList } from './format.js'
 
+// M-F8 — Excel Indonesia expects `;` separators: with `,` the sheet
+// collapses into one comma-joined column. BOM + quoting kept; quoting
+// now also triggers on `;`.
 function downloadCSV(headers, rows, filename, periode) {
   const csvContent = "\uFEFF" + [
-    headers.join(","),
+    headers.join(";"),
     ...rows.map(row => row.map(val => {
       let text = String(val === undefined || val === null ? "" : val).replace(/"/g, '""')
-      return text.includes(',') || text.includes('\n') || text.includes('"') ? `"${text}"` : text
-    }).join(","))
+      return text.includes(';') || text.includes('\n') || text.includes('"') ? `"${text}"` : text
+    }).join(";"))
   ].join("\n")
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })

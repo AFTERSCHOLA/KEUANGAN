@@ -81,6 +81,10 @@ export default function TrainerList() {
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
   // M-F2 — in-flight reset target (button disabled while pending).
   const [resettingId, setResettingId] = useState(null)
+  // M-F7 — per-card Jadwal collapse (mirrors the StudentList
+  // `Riwayat (N)` chevron idiom). Long multi-school schedules collapse
+  // behind `Lihat jadwal (N)` instead of a wall of text.
+  const [expandedJadwalId, setExpandedJadwalId] = useState(null)
 
   // T2.D.1 (F-T2-10; D-T2-6) — per-new-link slot picks, kept OUTSIDE
   // `form` so they never land in trainer.payload (Part 2 R8). Shape mirrors
@@ -453,10 +457,27 @@ if (serverTrainer && initialPassword) {
                   <span className="text-slate-400">WhatsApp</span>
                   <a href={`https://wa.me/${t.wa}`} target="_blank" className="font-bold text-blue-600 hover:underline">{t.wa}</a>
                 </div>
-                <div className="flex justify-between pt-1.5 border-t border-dashed">
-                  <span className="text-slate-400">Jadwal Mengajar</span>
-                  {/* T2.C.1 (D-T2-4) — scope note appended copy-only; D.1 logic untouched. */}
-                  <span className="font-semibold text-slate-700 text-right">{derivedJadwalText(t.sekolahIds, readCached('sekolah'))}{cakupanNoteForTrainer(t) ? ` ${cakupanNoteForTrainer(t)}` : ''}</span>
+                <div className="flex justify-between pt-1.5 border-t border-dashed gap-2">
+                  <span className="text-slate-400 shrink-0">Jadwal Mengajar</span>
+                  {/* M-F7 — collapsed by default; expands to the same derived
+                      text + scope note (T2.C.1 copy untouched). */}
+                  {(() => {
+                    const full = `${derivedJadwalText(t.sekolahIds, readCached('sekolah'))}${cakupanNoteForTrainer(t) ? ` ${cakupanNoteForTrainer(t)}` : ''}`
+                    const count = (t.sekolahIds || []).length
+                    if (count === 0) {
+                      return <span className="font-semibold text-slate-700 text-right">{full}</span>
+                    }
+                    const open = expandedJadwalId === t.id
+                    return (
+                      <span className="font-semibold text-slate-700 text-right">
+                        <button onClick={() => setExpandedJadwalId(open ? null : t.id)} className="text-blue-600 hover:text-blue-700 font-bold inline-flex items-center gap-1">
+                          {open ? 'Sembunyikan jadwal' : `Lihat jadwal (${count})`}
+                          <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        {open && <span className="block mt-1">{full}</span>}
+                      </span>
+                    )
+                  })()}
                 </div>
                 <div className="flex justify-between font-bold text-slate-700 pt-1 border-t">
                   <span>Honor per Kedatangan</span>
