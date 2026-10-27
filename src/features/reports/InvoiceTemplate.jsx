@@ -128,7 +128,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
             {tableRows.map(row => (
               <tr key={row.no} className="border-b border-slate-200">
                 <td className="py-4 align-top">{row.no}</td>
-                <td className="py-4 pr-6 align-top">{row.uraian}</td>
+                <td className="py-4 pr-6 align-top whitespace-pre-line">{row.uraian}</td>
                 <td className="py-4 text-center align-top">{row.qty}</td>
                 <td className="py-4 text-right align-top whitespace-nowrap">{formatRupiah(row.harga)}</td>
                 <td className="py-4 text-right align-top font-bold whitespace-nowrap">{formatRupiah(row.total)}</td>
@@ -161,7 +161,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
         </div>
 
         {!isDraft && (
-          <div className="grid grid-cols-3 gap-3 mb-10 text-xs">
+          <div className="grid grid-cols-3 gap-3 mb-10 text-xs avoid-break">
             <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5">
               <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wide">Total Tagihan</p>
               <p className="font-bold text-slate-800 mt-0.5">{formatRupiah(settlement.total)}</p>
@@ -177,7 +177,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-8 items-end">
+        <div className="grid grid-cols-2 gap-8 items-end avoid-break">
           <div>
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-5 text-xs text-slate-600 leading-relaxed">
               <p className="font-bold text-slate-800 mb-1.5">Catatan Pembayaran:</p>

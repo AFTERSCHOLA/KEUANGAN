@@ -32,6 +32,27 @@
     display: none !important;
   }
 
+  /* M-F6 — long invoice/report tables: header repeats on continuation
+     pages, rows never split mid-row, .avoid-break blocks (settlement,
+     signature footer) keep together. Scoped off .raport-sheet, whose
+     fixed 794x1122 layout owns its own pagination. */
+  .printable-report:not(.raport-sheet) table {
+    page-break-inside: auto;
+  }
+
+  .printable-report:not(.raport-sheet) thead {
+    display: table-header-group;
+  }
+
+  .printable-report:not(.raport-sheet) tr {
+    page-break-inside: avoid;
+  }
+
+  .printable-report:not(.raport-sheet) .avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
   /* Cards/tables lose shadow + rounded corners on paper — those read
      as visual noise once color/shadow rendering is stripped. */
   .printable-report .shadow-sm,
@@ -47,6 +68,7 @@
   }
 
   @page {
+    size: A4;
     margin: 1.5cm;
   }
 }
