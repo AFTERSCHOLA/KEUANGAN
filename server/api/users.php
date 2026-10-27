@@ -374,13 +374,25 @@ function resetUserPassword(array $data, array $user): never {
     $actorCabangId = $user['cabangId'] ?? null;
 
     $userId = isset($data['id']) && is_string($data['id']) ? trim($data['id']) : '';
-    if ($userId === '') jsonResponse(['error' => 'id wajib diisi'], 422);
+    // M-F2 — the Data Trainer card knows the trainer record id, not the
+    // login row id (the client never reads the users table). Accept the
+    // trainer link as a fallback lookup; the branch/role gate below runs
+    // unchanged on whichever row resolves.
+    $trainerId = isset($data['trainerId']) && is_string($data['trainerId']) ? trim($data['trainerId']) : '';
+    if ($userId === '' && $trainerId === '') jsonResponse(['error' => 'id wajib diisi'], 422);
 
     $pdo = database();
-    $stmt = $pdo->prepare('SELECT id, username, role, cabang_id FROM users WHERE id = :id AND active = 1 LIMIT 1');
-    $stmt->execute([':id' => $userId]);
+    if ($userId !== '') {
+        $stmt = $pdo->prepare('SELECT id, username, role, cabang_id FROM users WHERE id = :id AND active = 1 LIMIT 1');
+        $stmt->execute([':id' => $userId]);
+    } else {
+        $stmt = $pdo->prepare('SELECT id, username, role, cabang_id FROM users WHERE trainer_id = :tid AND active = 1 LIMIT 1');
+        $stmt->execute([':tid' => $trainerId]);
+    }
     $existing = $stmt->fetch();
     if ($existing === false) jsonResponse(['error' => 'User tidak ditemukan atau nonaktif'], 422);
+    // Resolve the login row id from whichever lookup matched.
+    $userId = (string) $existing['id'];
 
     if ($role === 'admin_cabang' && ($existing['cabang_id'] !== $actorCabangId || $existing['role'] !== 'trainer')) {
         jsonResponse(['error' => 'Akses tidak diizinkan'], 403);
@@ -401,6 +413,7 @@ function resetUserPassword(array $data, array $user): never {
     jsonResponse([
         'ok' => true,
         'id' => $userId,
+        'username' => (string) ($existing['username'] ?? ''),
         'initialPassword' => $newPassword,
     ]);
 }

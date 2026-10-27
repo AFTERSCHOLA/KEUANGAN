@@ -6,6 +6,7 @@ import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import { readCached, getRoleContext, writeRemote, deleteRemote, pullRemote } from '../../lib/store.js'
+import { apiRequest } from '../../lib/api.js'
 
 // TEAM_FEEDBACK D3 (G4.1) — single shared derivation (no second
 // implementation): read-only text from the assigned schools' jadwalList
@@ -78,6 +79,8 @@ export default function TrainerList() {
   const [username, setUsername] = useState('')
   const [initialPasswordDialog, setInitialPasswordDialog] = useState(null) // { username, password } | null
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
+  // M-F2 — in-flight reset target (button disabled while pending).
+  const [resettingId, setResettingId] = useState(null)
 
   // T2.D.1 (F-T2-10; D-T2-6) — per-new-link slot picks, kept OUTSIDE
   // `form` so they never land in trainer.payload (Part 2 R8). Shape mirrors
@@ -101,6 +104,34 @@ export default function TrainerList() {
 
   function refresh() {
     setTrainers(readCached('trainer'))
+  }
+
+  // M-F2 — Admin Cabang / superadmin resets a trainer's login password.
+  // The card knows the trainer record id, not the login row id, so the
+  // request resolves via trainerId server-side (users.php reset). Success
+  // reuses the one-time initialPasswordDialog idiom (D2).
+  async function resetPassword(t) {
+    if (resettingId) return
+    setResettingId(t.id)
+    try {
+      const result = await apiRequest('/api/users.php', {
+        method: 'POST',
+        body: { action: 'reset_password', trainerId: t.id },
+      })
+      if (result?.initialPassword) {
+        setInitialPasswordDialog({
+          username: result.username || '',
+          password: result.initialPassword,
+          trainerName: t.nama,
+          isReset: true,
+        })
+        setPasswordAcknowledged(false)
+      }
+    } catch (error) {
+      showError(error?.message || 'Gagal mereset kata sandi trainer.')
+    } finally {
+      setResettingId(null)
+    }
   }
 
   function showError(message) {
@@ -398,6 +429,14 @@ if (serverTrainer && initialPassword) {
         </svg>
       </button>
     )}
+    {/* M-F2 — reset login password (server resolves via trainerId). */}
+    {canEditTrainers && (
+      <button onClick={() => resetPassword(t)} disabled={resettingId === t.id} className="text-slate-400 hover:text-amber-600 p-1 disabled:opacity-50" title="Reset Kata Sandi" aria-label="Reset Kata Sandi">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M15 7a5 5 0 019.9-1M15 7V4m0 3h-3m-2 5a5 5 0 01-9.9 1M10 16v3m0-3h3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+    )}
     {canCreateOrDeleteTrainers && (
       <button onClick={() => remove(t.id)} className="text-slate-400 hover:text-rose-600 p-1">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -455,12 +494,16 @@ if (serverTrainer && initialPassword) {
       <Modal
         open={initialPasswordDialog !== null && !passwordAcknowledged}
         onClose={() => {}}
-        title="Akun Trainer Berhasil Dibuat"
+        title={initialPasswordDialog?.isReset ? 'Kata Sandi Trainer Direset' : 'Akun Trainer Berhasil Dibuat'}
       >
         {initialPasswordDialog && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Akun login untuk <strong>{initialPasswordDialog.trainerName}</strong> sudah dibuat.
+              {initialPasswordDialog.isReset ? (
+                <>Kata sandi untuk <strong>{initialPasswordDialog.trainerName}</strong> sudah direset. </>
+              ) : (
+                <>Akun login untuk <strong>{initialPasswordDialog.trainerName}</strong> sudah dibuat. </>
+              )}
               Berikan informasi berikut ke trainer — password hanya ditampilkan sekali dan trainer akan diminta menggantinya saat login pertama.
             </p>
             <div className="space-y-2">
