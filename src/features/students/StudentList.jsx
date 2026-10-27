@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote, readRaw, writeRaw } from '../../lib/store.js'
+import { useMemo, useState, useEffect, Fragment } from 'react'
+import { readCached, write, upsert, usePeriod, writeRemote, deleteRemote, readRaw, writeRaw, pullRemote, subscribeStore } from '../../lib/store.js'
 import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../../lib/format.js'
 import { newSiswa, defaultCabang, localDateString } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
@@ -21,6 +21,9 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(null)
   const [onlyTunggakan, setOnlyTunggakan] = useState(false)
+  // M-F4 — client-side search + grouping (display-only; pill math untouched).
+  const [query, setQuery] = useState('')
+  const [groupBy, setGroupBy] = useState('none')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
   const [pendingRemoveId, setPendingRemoveId] = useState(null)
@@ -30,6 +33,17 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
   // chevron toggle). Display-only: rows come from sppPayments for the
   // viewed periode, pill math untouched.
   const [expandedSiswaId, setExpandedSiswaId] = useState(null)
+
+  // M-F4 — the list mounts on readCached() which may predate
+  // hydrateServerData() (or any cross-tab write). Mirror the SchoolList
+  // pullRemote + subscribeStore idiom so late-arriving rows render
+  // without a full reload; refresh() re-reads every cached entity.
+  useEffect(() => {
+    let cancelled = false
+    pullRemote('siswa').then(() => { if (!cancelled) refresh() }).catch(() => {})
+    const unsubscribe = subscribeStore(() => { if (!cancelled) refresh() })
+    return () => { cancelled = true; unsubscribe() }
+  }, [])
 
   const sekolah = readCached('sekolah')
   const absensi = readCached('absensi')
@@ -88,6 +102,42 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
   const visibleSiswa = onlyTunggakan
     ? siswa.filter(s => isBillable(s) && isTunggakanIndexed(s))
     : siswa
+
+  // M-F4 — search across the rendered identity columns, then bucket into
+  // labelled sections. Numbering stays global across sections.
+  const searchedSiswa = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return visibleSiswa
+    return visibleSiswa.filter(s =>
+      [s.nama, s.kelas, s.sekolahNama, s.wa].some(v => (v || '').toLowerCase().includes(q))
+    )
+  }, [visibleSiswa, query])
+
+  const sections = useMemo(() => {
+    let out
+    if (groupBy === 'none') {
+      out = [{ key: 'all', label: null, rows: searchedSiswa }]
+    } else {
+      const buckets = new Map()
+      for (const s of searchedSiswa) {
+        const key = groupBy === 'sekolah' ? (s.sekolahNama || 'Tanpa Sekolah')
+          : groupBy === 'status' ? (s.status || 'Tanpa Status')
+          : ((s.tingkat && s.tingkat.trim()) || 'Tanpa Tingkat')
+        if (!buckets.has(key)) buckets.set(key, [])
+        buckets.get(key).push(s)
+      }
+      out = [...buckets.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0], 'id'))
+        .map(([label, rows]) => ({ key: label, label, rows }))
+    }
+    // Global numbering across sections (the # column stays continuous).
+    let rowNo = 0
+    for (const sec of out) sec.rows = sec.rows.map(s => ({ s, no: ++rowNo }))
+    return out
+  }, [searchedSiswa, groupBy])
+
+  // Shared by the empty row and the group header rows below.
+  const colCount = (readOnly ? 7 : 8) + (onlyTunggakan ? 1 : 0)
 
   // TS.2 (D2) — trainer-scoped create: same button + same form, only the
   // school list is assignment-scoped. readCached('sekolah') above already
@@ -307,6 +357,26 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
         />
 
       <div className="flex items-center gap-2 flex-wrap">
+        {/* M-F4 — search + grouping controls (display-only). */}
+        <input
+          type="search"
+          aria-label="Cari siswa"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Cari nama, kelas, sekolah, WA..."
+          className="text-sm rounded-full border border-slate-200 bg-white px-3.5 py-1.5 outline-none focus:ring-2 focus:ring-blue-600 min-w-52"
+        />
+        <select
+          aria-label="Kelompokkan siswa"
+          value={groupBy}
+          onChange={e => setGroupBy(e.target.value)}
+          className="text-xs font-bold rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-slate-500 outline-none focus:ring-2 focus:ring-blue-600"
+        >
+          <option value="none">Tanpa pengelompokan</option>
+          <option value="sekolah">Sekolah Mitra</option>
+          <option value="status">Status</option>
+          <option value="tingkat">Tingkat</option>
+        </select>
         <button
           onClick={() => setOnlyTunggakan(v => !v)}
           className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition ${
@@ -345,26 +415,27 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
             </thead>
 
             <tbody className="divide-y text-sm">
-              {visibleSiswa.length === 0 && (
+              {searchedSiswa.length === 0 && (
                 <tr>
                   <td
-                    colSpan={
-                      onlyTunggakan
-                        ? readOnly
-                          ? 8
-                          : 9
-                        : readOnly
-                          ? 7
-                          : 8
-                    }
+                    colSpan={colCount}
                     className="py-12 text-center text-slate-400"
                   >
-                    Tidak ada siswa yang menunggak.
+                    {query.trim() !== '' ? 'Tidak ada siswa yang cocok.' : 'Tidak ada siswa yang menunggak.'}
                   </td>
                 </tr>
               )}
 
-              {visibleSiswa.map((s, idx) => {
+              {sections.map(sec => (
+                <Fragment key={sec.key}>
+                  {sec.label !== null && sec.rows.length > 0 && (
+                    <tr className="bg-slate-50/70">
+                      <td colSpan={colCount} className="py-2 px-6 text-xs font-extrabold text-slate-500">
+                        {sec.label} ({sec.rows.length} siswa)
+                      </td>
+                    </tr>
+                  )}
+                  {sec.rows.map(({ s, no }) => {
                 // T2.B.2 — per-payment source rows for the viewed periode
                 // (display-only; pill math below untouched). O(1) lookup
                 // via precomputed index (was Array.filter per row).
@@ -374,7 +445,7 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
                 return (
                 <tr key={s.id} className="hover:bg-slate-50/50">
                   <td className="py-4 px-3 text-right font-semibold text-slate-400">
-                    {idx + 1}
+                    {no}
                   </td>
 
                   <td className="py-4 px-6 flex items-center gap-3">
@@ -594,7 +665,9 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
                   )}
                 </tr>
                 )
-              })}
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
