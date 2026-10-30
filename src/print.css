@@ -53,6 +53,13 @@
     break-inside: avoid;
   }
 
+  /* M-FIX print-fit-scale — source anchor for the beforeprint
+     zoom-to-fit hub (src/lib/printFit.js), which shrinks the
+     printable node to one A4 page via inline el.style.zoom. */
+  .print-fit-scale {
+    transform-origin: top center;
+  }
+
   /* Cards/tables lose shadow + rounded corners on paper — those read
      as visual noise once color/shadow rendering is stripped. */
   .printable-report .shadow-sm,

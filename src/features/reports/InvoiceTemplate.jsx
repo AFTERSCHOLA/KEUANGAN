@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { formatRupiah } from '../../lib/format.js'
 import { terbilang } from '../../lib/terbilang.js'
 import { readCached, getSettings } from '../../lib/store.js'
 import { invoiceSettlement, invoiceTotal, invoicePeriods, openInvoiceDoc } from '../../lib/invoices.js'
+import { fitPrintableToSinglePage, restorePrintFit } from '../../lib/printFit.js'
 
 const LOGO_URL = '/invoice/logo.png'
 const SIGNATURE_URL = '/invoice/signature.png'
@@ -10,6 +11,31 @@ const SIGNATURE_URL = '/invoice/signature.png'
 export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
   const [docError, setDocError] = useState(null)
   const [docBusy, setDocBusy] = useState(false)
+
+  // Task 3 — force single-page A4 scale: shrink-to-fit the printable
+  // node on beforeprint, restore on afterprint (same
+  // add/removeEventListener idiom as TEMPLATE_RAPORT_CODING.html).
+  useEffect(() => {
+    const onBeforePrint = () => {
+      const node = document.querySelector('.printable-report')
+      if (node) fitPrintableToSinglePage(node)
+    }
+    window.addEventListener('beforeprint', onBeforePrint)
+    window.addEventListener('afterprint', restorePrintFit)
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint)
+      window.removeEventListener('afterprint', restorePrintFit)
+    }
+  }, [])
+
+  // Fit-first so the zoom is applied even when window.print is
+  // intercepted (tests) instead of running the native print pipeline.
+  function handlePrint() {
+    const node = document.querySelector('.printable-report')
+    if (node) fitPrintableToSinglePage(node)
+    window.print()
+  }
+
   if (!invoice || !sekolah) return null
   const settings = getSettings()
 
@@ -80,7 +106,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
         <div className="flex gap-2">
           <button onClick={onBack} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm px-4 py-2 rounded-xl transition">Kembali</button>
           <button onClick={handleDoc} disabled={docBusy} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">{docBusy ? 'Membuka...' : 'Dokumen Resmi'}</button>
-          <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">Cetak Invoice</button>
+          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">Cetak Invoice</button>
         </div>
       </div>
       {docError && <p className="text-xs text-rose-600 font-semibold bg-white px-4 py-2 rounded-2xl shadow-sm border no-print">{docError}</p>}

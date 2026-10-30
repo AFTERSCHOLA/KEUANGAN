@@ -62,9 +62,23 @@ test('M-F6: long invoice print view calls print with unbroken rows', async ({ pa
   await page.getByRole('button', { name: 'Cetak Invoice' }).click()
   expect(await page.evaluate(() => window.__printed)).toBe(true)
 
+  // Task 3 — force single-page scale: 40-line invoice must shrink to fit.
+  const zoom = await page.evaluate(() => window.__lastPrintZoom)
+  expect(zoom).toBeLessThan(1)
+  expect(zoom).toBeGreaterThanOrEqual(0.55)
+
+  // Single-page height assert: hub math min(1, 1010/scrollHeight)
+  // (A4 printable 267mm ≈ 1010px at 96dpi), floor 0.55, applied inline.
+  const probe = await page.evaluate(() => {
+    const el = document.querySelector('.printable-report')
+    return { scrollHeight: el ? el.scrollHeight : 0, inlineZoom: el ? el.style.zoom : '' }
+  })
+  expect(parseFloat(probe.inlineZoom)).toBeCloseTo(zoom, 5)
+  expect(zoom).toBeCloseTo(Math.max(0.55, Math.min(1, 1010 / probe.scrollHeight)), 2)
+
   // Print-break CSS pins (screen can't apply @media print; pin the source).
   const css = fs.readFileSync(path.resolve('src/print.css'), 'utf8')
-  for (const pin of ['table-header-group', 'page-break-inside: avoid', '.avoid-break', ':not(.raport-sheet)', 'size: A4']) {
+  for (const pin of ['table-header-group', 'page-break-inside: avoid', '.avoid-break', ':not(.raport-sheet)', 'size: A4', 'print-fit-scale']) {
     expect(css).toContain(pin)
   }
 

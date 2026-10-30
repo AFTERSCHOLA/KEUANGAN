@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { academicYearLabel } from '../../lib/constants.js'
 import { getSettings } from '../../lib/store.js'
+import { fitPrintableToSinglePage, restorePrintFit } from '../../lib/printFit.js'
 
 // Slice 1 Raport (Task 7) — cetakan read-only dari record, meniru
 // docs/exemplar/TEMPLATE_RAPPORT_CODING.html verbatim: lembar A4
@@ -36,6 +38,33 @@ function statusBadge(status) {
 // Prop `sekolah` dipertahankan untuk kontrak parent (RaportList.jsx
 // mengopernya); area cetak exemplar hanya memuat Nama + Kelas.
 export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
+  // Task 3 — force single-page A4 scale: shrink-to-fit the fixed
+  // 794x1122 sheet on beforeprint, restore on afterprint (same
+  // add/removeEventListener idiom as TEMPLATE_RAPORT_CODING.html).
+  // No-op when the sheet already fits (hub never upscales).
+  useEffect(() => {
+    const onBeforePrint = () => {
+      const node = document.querySelector('.printable-report.raport-sheet .raport-page')
+        || document.querySelector('.printable-report')
+      if (node) fitPrintableToSinglePage(node)
+    }
+    window.addEventListener('beforeprint', onBeforePrint)
+    window.addEventListener('afterprint', restorePrintFit)
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint)
+      window.removeEventListener('afterprint', restorePrintFit)
+    }
+  }, [])
+
+  // Fit-first so the zoom is applied even when window.print is
+  // intercepted (tests) instead of running the native print pipeline.
+  function handlePrint() {
+    const node = document.querySelector('.printable-report.raport-sheet .raport-page')
+      || document.querySelector('.printable-report')
+    if (node) fitPrintableToSinglePage(node)
+    window.print()
+  }
+
   if (!raport) return null
   const settings = getSettings()
   const nilai = raport.nilai || {}
@@ -63,7 +92,7 @@ export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
         </div>
         <div className="flex gap-2">
           <button onClick={onBack} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm px-4 py-2 rounded-xl transition">Kembali</button>
-          <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">Cetak Raport</button>
+          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm px-4 py-2 rounded-xl transition shadow-sm">Cetak Raport</button>
         </div>
       </div>
 
