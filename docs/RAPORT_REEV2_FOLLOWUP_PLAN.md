@@ -59,9 +59,11 @@ still spills to 2 pages (teammate PDF p.2 = lone yellow corner triangle).
   animations/transforms on print ancestors (`animation:none;
   transform:none`), so the printable node is the sole laid-out content at
   page origin. Hub math returns to exact two-axis budgets
-  `zoom = max(0.55, min(1, min(1010/h, 680/w)))` (the 110px allowance is
-  REMOVED); a small epsilon only if probe-free PDF proof demands it,
-  recorded with numbers. Invoice path keeps its current zoom behavior.
+  `zoom = max(0.55, min(1, min((1010-10)/h, 680/w)))` (the 110px allowance is
+  REMOVED; PRINT_EPS_PX=10 because 267mm printable = 1009.1px, so an exact-1010
+  height-bound fit spills ~1px onto page 2); a small epsilon only if probe-free
+  PDF proof demands it, recorded with numbers. Invoice path keeps its current
+  zoom behavior.
   Marker + `restorePrintFit()` unchanged. M-F6 rules untouched.
 - **D-R4:** Proof = Playwright `page.pdf()` (A4, printBackground) page
   count via `/Type /Page` scan, asserted == 1 for (a) standard raport,

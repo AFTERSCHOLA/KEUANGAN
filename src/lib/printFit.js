@@ -14,11 +14,11 @@
 // isolation: display:none chrome + animation neutralizer), so the
 // printable node sits at page origin and these exact budgets hold.
 // Measured effect (TEMP PDF loop): the 794px raport sheet is
-// width-bound (680/794 ≈ 0.856 < 1010/1122 ≈ 0.900); the 40-line
-// invoice (~1495px tall, 765px wide) stays height-bound (1010/1495 ≈
-// 0.676 < 680/765 ≈ 0.889), i.e. effectively unchanged from its Task-3
-// height-only zoom — smaller sheets stay readable, longer ones stop at
-// the 0.55 floor by design.
+// width-bound (680/794 ≈ 0.856 < 1000/1122 ≈ 0.891); the 40-line
+// invoice (~1495px tall, 765px wide) stays height-bound (1000/1495 ≈
+// 0.669 < 680/765 ≈ 0.889): pre-epsilon 1494×0.6765≈1010.7 spilled,
+// post-epsilon 1494×0.6694≈1000.0 fits — smaller sheets stay readable,
+// longer ones stop at the 0.55 floor by design.
 
 const PAGE_PX = 1010
 const PAGE_W_PX = 680
