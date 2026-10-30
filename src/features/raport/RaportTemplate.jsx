@@ -85,8 +85,7 @@ export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
 
           {/* header */}
           <img className="abs" src="/raport/logo-after-schola.png" alt="After Schola" style={{ left: '638px', top: '-37px', width: '85px', height: '151px' }} />
-          <img className="abs" src="/raport/logo-small.png" alt="" style={{ left: '725px', top: '11px', width: '56px', height: '52px' }} />
-          <div className="abs brand">YELLOBOX.ID</div>
+          <div className="abs brand">AfterSchola</div>
           <div className="abs sans addr addr1">{addr1}</div>
           {addr2 && <div className="abs sans addr addr2">{addr2}</div>}
           {!alamatCustom && <img className="abs" src="/raport/icon-pin.png" alt="" style={{ left: '206.7px', top: '134px', width: '12.6px', height: '17.5px' }} />}
