@@ -93,6 +93,7 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
             ) : (
               <img src={LOGO_URL} alt="Logo" className="h-14 object-contain" />
             )}
+            <p className="text-sm font-extrabold text-slate-800 tracking-wide mt-1">AfterSchola</p>
             <p className="text-xs text-slate-400 mt-2">{settings.alamatUsaha || ''}</p>
           </div>
           <div className="text-right">
@@ -190,15 +191,6 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
               ) : (
                 <p className="text-slate-400">Belum diatur — isi info rekening di Pengaturan.</p>
               )}
-            </div>
-            {/* M-F3 — Official Logo + brand at the bottom-left of the invoice. */}
-            <div className="flex items-center gap-2 mt-3">
-              {settings.logoUrl ? (
-                <img src={settings.logoUrl} alt="Logo Afterschola" className="h-8 object-contain" onError={e => { e.currentTarget.style.display = 'none' }} />
-              ) : (
-                <img src={LOGO_URL} alt="Logo Afterschola" className="h-8 object-contain" />
-              )}
-              <span className="text-xs font-extrabold text-slate-700 tracking-wide">Afterschola</span>
             </div>
           </div>
           <div className="text-center text-xs">

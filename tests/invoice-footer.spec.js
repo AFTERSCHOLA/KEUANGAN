@@ -1,10 +1,9 @@
 import { test, expect, loginAndPrime, createSekolahSuperadmin } from './fixtures.js'
 
 // ============================================================
-// M-F3 — Invoice footer carries the Official Logo + "Afterschola".
-// Seeds a real invoice (sekolah + 1 Aktif siswa + generate), opens the
-// print view from Data Sekolah, and asserts the footer brand in both
-// the client print template and the server Dokumen Resmi HTML.
+// Invoice brand top-left — client preview + server Dokumen Resmi
+// parity: top block = logo + `AfterSchola` text + alamat; bottom
+// block = bank note + signature only (no logo/brand).
 // ============================================================
 
 const APP = 'http://localhost:5173'
@@ -13,7 +12,7 @@ async function openTab(page, label) {
   await page.getByRole('navigation').getByRole('button', { name: label, exact: true }).click()
 }
 
-test('M-F3: invoice footer shows Official Logo and Afterschola', async ({ page, pageErrors }) => {
+test('invoice brand AfterSchola renders top-left, not in footer', async ({ page, pageErrors }) => {
   const suffix = String(Date.now()).slice(-6)
   const namaSekolah = `Sim Sekolah Footer ${suffix}`
   const now = new Date()
@@ -49,24 +48,36 @@ test('M-F3: invoice footer shows Official Logo and Afterschola', async ({ page, 
   // Client print template via Data Sekolah -> Kelola Invoice -> Cetak.
   await page.goto(APP)
   await page.waitForLoadState('domcontentloaded')
+  // window.print interception: stub before any print call.
+  await page.evaluate(() => { window.__printed = false; window.print = () => { window.__printed = true } })
   await openTab(page, 'Data Sekolah')
   const card = page.locator('div.bg-white', { has: page.getByText(namaSekolah) }).first()
   await card.getByTitle('Kelola Invoice').click()
   await page.getByRole('button', { name: 'Cetak' }).first().click()
   const report = page.locator('.printable-report')
   await expect(report).toBeVisible()
-  // RED before fix: no footer brand exists in the print template.
-  await expect(report.getByText('Afterschola')).toBeVisible()
-  await expect(report.getByAltText('Logo Afterschola')).toBeVisible()
 
-  // Server Dokumen Resmi carries the same footer brand.
+  // Top brand, no bottom brand (client preview).
+  await expect(report.getByText('AfterSchola')).toBeVisible()
+  await expect(report.getByText('AfterSchola')).toHaveCount(1)
+  const topLogo = report.locator('img[alt="Logo"]')
+  await expect(topLogo).toBeVisible()
+  // footer must not carry a second logo/brand
+  await expect(report.getByAltText('Logo Afterschola')).toHaveCount(0)
+
+  // Offline tolerance: hide logo via onError still leaves AfterSchola text visible.
+  await topLogo.evaluateAll((els) => els.forEach((e) => { e.style.display = 'none' }))
+  await expect(report.getByText('AfterSchola')).toBeVisible()
+
+  // Server parity: same invoice id renders top brand once, no footer brand.
   const docRes = await page.request.post('/api/invoices-doc.php', {
     headers: { 'X-CSRF-Token': csrf },
     data: { id: invoiceId },
   })
   expect(docRes.ok()).toBeTruthy()
   const docHtml = await docRes.text()
-  expect(docHtml).toContain('Afterschola')
+  expect(docHtml.match(/AfterSchola/g) || []).toHaveLength(1)
+  expect(docHtml).not.toContain('Logo Afterschola')
 
   // Cleanup (best-effort, reverse dependency order).
   const csrf2 = csrf

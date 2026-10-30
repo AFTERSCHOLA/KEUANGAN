@@ -176,11 +176,8 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
     $carryLines = (isset($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) ? $invoice['carryOverLines'] : [];
 
     $logoImg = '';
-    $logoFooterImg = '';
     if (!empty($assets['logoDataUrl'])) {
         $logoImg = '<img src="' . $h($assets['logoDataUrl']) . '" alt="Logo" style="height:56px;object-fit:contain" />';
-        // M-F3 — Official Logo + brand at the bottom-left of the invoice.
-        $logoFooterImg = '<img src="' . $h($assets['logoDataUrl']) . '" alt="Logo Afterschola" style="height:32px;object-fit:contain" />';
     }
     $sigImg = '';
     if (!empty($assets['signatureDataUrl'])) {
@@ -250,7 +247,7 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '</style></head><body><div class="sheet">'
         . '<div class="no-print" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:12px;color:#64748b;margin-bottom:16px">Dokumen invoice resmi — gunakan <strong>Cetak / Simpan sebagai PDF</strong> di browser untuk menyimpan.</div>'
         . '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:1px solid #e2e8f0">'
-        . '<div>' . $logoImg . '<p style="font-size:12px;color:#94a3b8;margin:8px 0 0">' . $h($settings['alamatUsaha'] ?? '') . '</p></div>'
+        . '<div>' . $logoImg . '<p style="margin:4px 0 0;font-size:14px;font-weight:800;color:#1e293b">AfterSchola</p><p style="font-size:12px;color:#94a3b8;margin:8px 0 0">' . $h($settings['alamatUsaha'] ?? '') . '</p></div>'
         . '<div style="text-align:right"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:.04em;color:#1e3a8a">INVOICE' . $draftChip . '</h1>'
         . '<p style="margin:4px 0 0;font-size:14px;font-weight:700;color:#1d4ed8">' . $h($nomor ?? '(Draft)') . '</p>'
         . '<p style="margin:4px 0 0;font-size:12px;color:#94a3b8">Tanggal: ' . $h($tanggalLabel) . '</p></div>'
@@ -280,10 +277,7 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . $appendix
         . '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:32px">'
         . '<div style="flex:1"><div style="background:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:20px;font-size:12px;line-height:1.7;color:#475569">'
-        . '<p style="margin:0 0 6px;font-weight:700;color:#1e293b">Catatan Pembayaran:</p>' . $bankBlock . '</div>'
-        . '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">'
-        . $logoFooterImg
-        . '<span style="font-size:12px;font-weight:800;color:#334155;letter-spacing:.04em">Afterschola</span></div></div>'
+        . '<p style="margin:0 0 6px;font-weight:700;color:#1e293b">Catatan Pembayaran:</p>' . $bankBlock . '</div></div>'
         . '<div style="text-align:center;font-size:12px;min-width:180px"><p style="margin:0 0 4px;color:#64748b">Hormat Kami,</p>'
         . $sigImg
         . '<p style="display:inline-block;border-top:1px solid #94a3b8;margin:8px 0 0;padding:4px 8px 0;font-weight:700;color:#1e293b">' . $h($settings['penandatangan'] ?? '-') . '</p></div>'
