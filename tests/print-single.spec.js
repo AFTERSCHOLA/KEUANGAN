@@ -67,16 +67,16 @@ test('M-F6: long invoice print view calls print with unbroken rows', async ({ pa
   expect(zoom).toBeLessThan(1)
   expect(zoom).toBeGreaterThanOrEqual(0.55)
 
-  // Single-page height assert: hub math min(1, min((1010-110)/scrollHeight,
-  // 680/scrollWidth)) (A4 printable 267mm ≈ 1010px at 96dpi minus 110px
-  // measured print-origin allowance for in-flow hidden app chrome; width
-  // budget 180mm ≈ 680px), floor 0.55, applied inline.
+  // Single-page fit assert: hub math min(1, min((1010-10)/scrollHeight,
+  // 680/scrollWidth)) (A4 printable 267mm ≈ 1010px at 96dpi; width budget
+  // 180mm ≈ 680px; 10px epsilon because 267mm = 1009.1px — an exact-1010
+  // height-bound fit spills ~1px onto page 2), floor 0.55, applied inline.
   const probe = await page.evaluate(() => {
     const el = document.querySelector('.printable-report')
     return { scrollWidth: el ? el.scrollWidth : 0, scrollHeight: el ? el.scrollHeight : 0, inlineZoom: el ? el.style.zoom : '' }
   })
   expect(parseFloat(probe.inlineZoom)).toBeCloseTo(zoom, 5)
-  expect(zoom).toBeCloseTo(Math.max(0.55, Math.min(1, Math.min((1010 - 110) / probe.scrollHeight, 680 / probe.scrollWidth))), 2)
+  expect(zoom).toBeCloseTo(Math.max(0.55, Math.min(1, Math.min((1010 - 10) / probe.scrollHeight, 680 / probe.scrollWidth))), 2)
 
   // Print-break CSS pins (screen can't apply @media print; pin the source).
   const css = fs.readFileSync(path.resolve('src/print.css'), 'utf8')
@@ -93,11 +93,11 @@ test('M-F6: long invoice print view calls print with unbroken rows', async ({ pa
 })
 
 // ============================================================
-// R2.2 — standard raport print view applies the two-axis fit.
+// R2.2-round1 — standard raport print view applies the two-axis fit.
 // Persisted pin (no PDF emission — fast): open the raport print view,
 // click the app's own Cetak Raport button (fit-first wiring), assert
 // __lastPrintZoom lands in (0.55, 1] and matches
-// min((1010-110)/scrollHeight, 680/scrollWidth) via evaluate.
+// min((1010-10)/scrollHeight, 680/scrollWidth) via evaluate.
 // ============================================================
 test('R2.2: standard raport print view applies two-axis fit zoom', async ({ page, pageErrors }) => {
   const suffix = String(Date.now()).slice(-6)
@@ -148,7 +148,7 @@ test('R2.2: standard raport print view applies two-axis fit zoom', async ({ page
     return { scrollWidth: el ? el.scrollWidth : 0, scrollHeight: el ? el.scrollHeight : 0, inlineZoom: el ? el.style.zoom : '' }
   })
   expect(parseFloat(probe.inlineZoom)).toBeCloseTo(zoom, 5)
-  expect(zoom).toBeCloseTo(Math.max(0.55, Math.min(1, Math.min((1010 - 110) / probe.scrollHeight, 680 / probe.scrollWidth))), 2)
+  expect(zoom).toBeCloseTo(Math.max(0.55, Math.min(1, Math.min((1010 - 10) / probe.scrollHeight, 680 / probe.scrollWidth))), 2)
 
   // Cleanup in reverse order of creation (E2E hygiene).
   await page.request.post('/api/raport.php', { headers: { 'X-CSRF-Token': csrf }, data: { action: 'delete', id: raportId } })

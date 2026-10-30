@@ -32,6 +32,27 @@
     display: none !important;
   }
 
+  /* R2.2 print isolation (amended D-R3) — fix at source, not in budgets.
+     visibility:hidden above keeps app chrome in-flow: it still lays out,
+     offsetting the printable node and shrinking its width, while retained
+     fadeIn transforms make every .animate-fadeIn ancestor a containing
+     block for the absolute .printable-report below. Remove chrome from
+     layout entirely (aside = sidebar container incl. its nav; header =
+     app toolbar; both exist only as app chrome) and neutralize retained
+     animations/transforms, so the printable node is the sole laid-out
+     content resolving against the page box at page origin. */
+  aside,
+  header,
+  nav {
+    display: none !important;
+  }
+
+  .animate-fadeIn,
+  .animate-scaleIn {
+    animation: none !important;
+    transform: none !important;
+  }
+
   /* M-F6 — long invoice/report tables: header repeats on continuation
      pages, rows never split mid-row, .avoid-break blocks (settlement,
      signature footer) keep together. Scoped off .raport-sheet, whose

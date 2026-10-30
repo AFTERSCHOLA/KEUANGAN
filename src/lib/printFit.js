@@ -10,18 +10,26 @@
 // zoom = min(1, min(pageH / el.scrollHeight, pageW / el.scrollWidth)),
 // floored at 0.55 so very long docs stay readable instead of
 // microprint. Never upscales: content that already fits keeps zoom 1.
-// Width caps the fixed 794px raport sheet (794 > 680); the top allowance
-// makes height govern for both fixtures, invoice unaffected by
-// construction (its width ratio ≥ height ratio).
+// App chrome is removed from print layout in src/print.css (R2.2
+// isolation: display:none chrome + animation neutralizer), so the
+// printable node sits at page origin and these exact budgets hold.
+// Measured effect (TEMP PDF loop): the 794px raport sheet is
+// width-bound (680/794 ≈ 0.856 < 1010/1122 ≈ 0.900); the 40-line
+// invoice (~1495px tall, 765px wide) stays height-bound (1010/1495 ≈
+// 0.676 < 680/765 ≈ 0.889), i.e. effectively unchanged from its Task-3
+// height-only zoom — smaller sheets stay readable, longer ones stop at
+// the 0.55 floor by design.
 
 const PAGE_PX = 1010
 const PAGE_W_PX = 680
-// R2.2 measured print-origin allowance (TEMP PDF loop evidence): ~89px of
-// hidden app chrome stays in-flow above the printable node in print media
-// (absolute node pins to its transformed wrapper, not the page), so the
-// usable height budget is (1010 − 110). Width needs no allowance: with the
-// height margin applied, both fixtures use well under 680px (637/460).
-const PRINT_TOP_PX = 110
+// R2.2-round1 epsilon (probe-free PDF proof, numbers recorded): the CSS
+// printable height is 267mm = 1009.1px but PAGE_PX rounds it to 1010, so a
+// height-bound fit lands at exactly 1010.0 — a deterministic ~1px spill of
+// real content keeps a second page (40-line invoice: 1494 × 1010/1494 =
+// 1010.7 → 2 pages; raport unaffected, width-bound at 0.856). PRINT_EPS_PX
+// = 10 pulls fitted bottoms to ≤1000px (9px clear); invoice zoom
+// 0.6765 → 0.6694 disclosed, floor 0.55 intact.
+const PRINT_EPS_PX = 10
 const ZOOM_FLOOR = 0.55
 
 let lastFittedEl = null
@@ -31,7 +39,7 @@ export function fitPrintableToSinglePage(el) {
   if (!el || typeof el !== 'object' || !el.style || typeof el.scrollHeight !== 'number') return 1
   if (!Number.isFinite(el.scrollHeight) || el.scrollHeight <= 0) return 1
   if (!Number.isFinite(el.scrollWidth) || el.scrollWidth <= 0) return 1
-  const zoom = Math.max(ZOOM_FLOOR, Math.min(1, Math.min((PAGE_PX - PRINT_TOP_PX) / el.scrollHeight, PAGE_W_PX / el.scrollWidth)))
+  const zoom = Math.max(ZOOM_FLOOR, Math.min(1, Math.min((PAGE_PX - PRINT_EPS_PX) / el.scrollHeight, PAGE_W_PX / el.scrollWidth)))
   try {
     el.style.zoom = String(zoom)
   } catch {
