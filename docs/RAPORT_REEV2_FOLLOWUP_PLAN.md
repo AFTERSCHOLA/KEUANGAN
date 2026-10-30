@@ -46,10 +46,23 @@ still spills to 2 pages (teammate PDF p.2 = lone yellow corner triangle).
   369/397, lead, #nilai/#akhir/#catatan, sign-date/role/name) in
   `RaportTemplate.jsx` (inline tops) + `src/print.css` (class tops).
   Title/header untouched.
-- **D-R3:** `fitPrintableToSinglePage(el)` fits both axes:
-  `zoom = max(0.55, min(1, min(1010/h, 680/w)))` using
-  `el.scrollHeight/scrollWidth`; marker + restore unchanged. Invoice path
-  (width ≈ printable) is unaffected by construction.
+- **D-R3 (amended round-1 — controller ruling 2026-10-30, supersedes exact
+  and allowance variants):** root cause is print isolation, not budget size.
+  Verified mechanism: `@keyframes fadeIn` ends at `transform: translateY(0)`
+  with fill `both` (`src/index.css:40-48`), so every `.animate-fadeIn`
+  ancestor retains a transform and becomes the containing block for the
+  absolute `.printable-report`; meanwhile `visibility:hidden` app chrome
+  (in-flow flex sidebar `w-64`, toolbar ≈89px) still lays out, offsetting
+  that block and shrinking its width — the fitted sheet overflows and the
+  browser keeps a second page. Fix at source in `src/print.css` ONLY:
+  `display:none` the app chrome in print media + neutralize retained
+  animations/transforms on print ancestors (`animation:none;
+  transform:none`), so the printable node is the sole laid-out content at
+  page origin. Hub math returns to exact two-axis budgets
+  `zoom = max(0.55, min(1, min(1010/h, 680/w)))` (the 110px allowance is
+  REMOVED); a small epsilon only if probe-free PDF proof demands it,
+  recorded with numbers. Invoice path keeps its current zoom behavior.
+  Marker + `restorePrintFit()` unchanged. M-F6 rules untouched.
 - **D-R4:** Proof = Playwright `page.pdf()` (A4, printBackground) page
   count via `/Type /Page` scan, asserted == 1 for (a) standard raport,
   (b) long-catatan raport, (c) 40-line invoice regression. Iterate until
@@ -85,14 +98,14 @@ MICROTASK: Port _2 watermark and spacing
 ### R2.2 Fit both axes + prove one page
 
 ```text
-MICROTASK: Prove one-page print
-  EDIT:    src/lib/printFit.js (D-R3 two-axis math only) + tests/print-single.spec.js (extend: raport PDF page-count pins) — plus a TEMP iterator spec (deleted after green) that emits page.pdf() and counts pages
-  FINDS:   F-R3, F-R4
-  RULES:   one hypothesis per edit (taste #6); floor 0.55 + never-upscale preserved; M-F6 rules untouched; fresh dev build for every PDF check (no stale-bundle evidence, testing #12)
+MICROTASK: Prove one-page print (round-1 re-scope per amended D-R3)
+  EDIT:    src/print.css (print isolation rules ONLY: display:none app chrome + animation/transform neutralizer) + src/lib/printFit.js (remove PRINT_TOP_PX allowance, exact two-axis budgets; honest comments) + tests/print-single.spec.js (pins match exact math) — plus a TEMP iterator spec (deleted after green) that emits page.pdf() and counts pages
+  FINDS:   F-R3, F-R4 + user sidebar evidence 2026-10-30
+  RULES:   one hypothesis per edit (taste #6); isolation first, epsilon only on probe-free PDF evidence with numbers; floor 0.55 + never-upscale + marker/restore preserved; M-F6 rules untouched; fresh dev build for every PDF check (no stale-bundle evidence, testing #12); TEMP loop clicks the real Cetak button UNSTUBBED then page.pdf(preferCSSPageSize:true) — closest script replica of the teammate flow
   DEPENDS: R2.1
-  OUTCOME: standard raport, long-catatan raport, and 40-line invoice each produce exactly 1 PDF page
-  VERIFY:  TEMP spec GREEN three times in a row (standard/long-catatan/40-line invoice all report 1 page), then print-single.spec.js extended pins PASS with pageErrors 0; temp spec deleted
-  DONE-IF: verify passes; only the two files changed
+  OUTCOME: standard raport, long-catatan raport, and 40-line invoice each produce exactly 1 PDF page with the sheet centered (no edge push)
+  VERIFY:  TEMP spec GREEN three times in a row (all three fixtures 1 page) + a measure-only run showing sidebar/toolbar display:none and report origin at page origin in print media, then print-single.spec.js extended pins PASS with pageErrors 0; temp spec deleted
+  DONE-IF: verify passes; only the three files changed
 ```
 
 ## 4. Gate exit
