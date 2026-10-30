@@ -113,11 +113,11 @@
 /* ---------- body text ---------- */
 .raport-page .t { white-space: nowrap; }
 .raport-page .title { left: 0; width: 794px; top: 229px; text-align: center; font-weight: bold; font-size: 18.67px; line-height: 21.5px; }
-.raport-page .intro { left: 104px; top: 309px; line-height: 27.6px; font-size: 16px; }
+.raport-page .intro { left: 104px; top: 285px; line-height: 27.6px; font-size: 16px; }
 .raport-page .field-row { left: 104px; line-height: 18.4px; font-size: 16px; }
 .raport-page .field-row .lbl { display: inline-block; width: 94.7px; }
 .raport-page .field-row .val { display: inline-block; min-width: 200px; padding-left: 6px; }
-.raport-page .lead { left: 104px; top: 431px; line-height: 18.4px; }
+.raport-page .lead { left: 104px; top: 407px; line-height: 18.4px; }
 
 /* ---------- tables ---------- */
 .raport-page table { border-collapse: collapse; table-layout: fixed; position: absolute; font-size: 16px; }
@@ -125,16 +125,16 @@
 .raport-page td.c { text-align: center; }
 .raport-page td.b { font-weight: bold; }
 .raport-page td.nb { border: 0; }
-.raport-page #nilai { left: 103px; top: 464px; width: 594px; }
+.raport-page #nilai { left: 103px; top: 440px; width: 594px; }
 .raport-page #nilai td { height: 27.3px; }
-.raport-page #akhir { left: 103px; top: 655px; width: 594px; }
+.raport-page #akhir { left: 103px; top: 631px; width: 594px; }
 .raport-page #akhir td { padding: 5.3px 7.2px; text-align: center; }
-.raport-page #catatan { left: 105.8px; top: 738px; width: 592px; }
+.raport-page #catatan { left: 105.8px; top: 714px; width: 592px; }
 .raport-page #catatan td { border: 0; padding: 0 7.2px; line-height: 27.6px; vertical-align: top; }
 
-.raport-page .sign-date { right: 106.7px; top: 877px; line-height: 27.6px; text-align: right; }
-.raport-page .sign-role { left: 569px; top: 905px; line-height: 27.6px; }
-.raport-page .sign-name { left: 552px; top: 992px; width: 100px; text-align: center; font-size: 17.33px; line-height: 19.9px; white-space: nowrap; }
+.raport-page .sign-date { right: 106.7px; top: 853px; line-height: 27.6px; text-align: right; }
+.raport-page .sign-role { left: 569px; top: 881px; line-height: 27.6px; }
+.raport-page .sign-name { left: 552px; top: 968px; width: 100px; text-align: center; font-size: 17.33px; line-height: 19.9px; white-space: nowrap; }
 
 @media print {
   .printable-report.raport-sheet {

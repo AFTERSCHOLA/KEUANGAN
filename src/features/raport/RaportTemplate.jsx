@@ -129,8 +129,8 @@ export default function RaportTemplate({ raport, siswa, sekolah, onBack }) {
 
           <div className="abs intro t">Berdasarkan hasil penilaian kegiatan siswa selama mengikuti <b>Ekstrakurikuler CODING</b><br />Semester {raport.semester} Tahun Ajaran {tahunLabel}, kami menerangkan bahwa</div>
 
-          <div className="abs field-row t" style={{ top: '369px' }}><span className="lbl">Nama</span>:<span className="val">{nama}</span></div>
-          <div className="abs field-row t" style={{ top: '397px' }}><span className="lbl">Kelas</span>:<span className="val">{kelas}</span></div>
+          <div className="abs field-row t" style={{ top: '345px' }}><span className="lbl">Nama</span>:<span className="val">{nama}</span></div>
+          <div className="abs field-row t" style={{ top: '373px' }}><span className="lbl">Kelas</span>:<span className="val">{kelas}</span></div>
 
           <div className="abs lead t">Memperoleh <b>Penilaian Akhir Semester (PAS)</b> dengan uraian sebagai berikut</div>
 
