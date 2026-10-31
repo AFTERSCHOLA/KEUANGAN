@@ -81,6 +81,9 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
       // matrix title-tooltip.
       catatan: r.catatan || null,
       status: r.status,
+      // Fix round 1 — person identity rides along (never rendered):
+      // two distinct trainers sharing a display name must not collapse.
+      trainerId: r.trainerId,
     }
     // Task-2 dupe chase (Paris Jundi exemplar): the live-DB probe shows
     // two STORED records with identical fields but distinct ids
@@ -89,7 +92,11 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
     // only byte-identical display lines per cell (first wins). Distinct
     // details (Hadir+EXPO vs Izin) keep both lines — the fingerprint is
     // the rendered text itself.
-    const lineKey = `${r.sekolahId}|${r.tanggal}|${formatMatrixCell(entry)}`
+    // Fix round 1 — key is scoped by trainerId (NOT record id: twins
+    // carry distinct ids, so id-in-key would defeat the verdict): true
+    // double-recordings (same person) still collapse, same-name distinct
+    // persons do not.
+    const lineKey = `${r.sekolahId}|${r.trainerId}|${r.tanggal}|${formatMatrixCell(entry)}`
     if (seenDisplayLines.has(lineKey)) return
     seenDisplayLines.add(lineKey)
     const key = `${r.sekolahId}|${r.tanggal}`

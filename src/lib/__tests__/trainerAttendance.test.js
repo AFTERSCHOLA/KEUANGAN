@@ -91,6 +91,35 @@ describe('buildTrainerMatrix (TA.C.2)', () => {
     expect(tridaya.cells['2026-09-10']).toHaveLength(1)
     expect(tridaya.cells['2026-09-10'][0].status).toBe('Izin')
   })
+
+  it('same-name distinct trainers keep both lines (dedupe scoped by trainerId, not display text)', () => {
+    const twins = [
+      { id: 'trn-k1', nama: 'Kembar', tipePengajar: 'instruktur' },
+      { id: 'trn-k2', nama: 'Kembar', tipePengajar: 'instruktur' },
+    ]
+    const schools = [{ id: 'skl-1', nama: 'Sekolah Satu' }]
+    const sameName = [
+      { id: 's1', trainerId: 'trn-k1', sekolahId: 'skl-1', tanggal: '2026-09-03', periode: '2026-09', status: 'Hadir', keterangan: null },
+      { id: 's2', trainerId: 'trn-k2', sekolahId: 'skl-1', tanggal: '2026-09-03', periode: '2026-09', status: 'Hadir', keterangan: null },
+    ]
+    const { rows } = buildTrainerMatrix({ absensiPengajar: sameName, sekolah: schools, trainer: twins, periode: '2026-09' })
+    expect(rows).toHaveLength(1)
+    const cell = rows[0].cells['2026-09-03']
+    expect(cell).toHaveLength(2)
+    expect(cell.map(e => e.trainerId).sort()).toEqual(['trn-k1', 'trn-k2'])
+  })
+
+  it('same-person double-recording still collapses to one line', () => {
+    const one = [{ id: 'trn-k1', nama: 'Kembar', tipePengajar: 'instruktur' }]
+    const schools = [{ id: 'skl-1', nama: 'Sekolah Satu' }]
+    const day = '2026-09-03'
+    const base = { trainerId: 'trn-k1', sekolahId: 'skl-1', tanggal: day, periode: '2026-09', status: 'Hadir', keterangan: null, catatan: '' }
+    const { rows } = buildTrainerMatrix({
+      absensiPengajar: [{ ...base, id: 'd1' }, { ...base, id: 'd2' }],
+      sekolah: schools, trainer: one, periode: '2026-09',
+    })
+    expect(rows[0].cells[day]).toHaveLength(1)
+  })
 })
 
 // CS.B.2 (F-CS4/F-CS5; D-CS3/D-CS5) — role-on-row + external-recorder.
