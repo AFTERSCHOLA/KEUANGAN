@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState, useCallback } from 'react'
 import { readCached, usePeriod, subscribeStore, read } from '../../lib/store.js'
 import { buildTrainerMatrix, formatMatrixCell } from '../../lib/trainerAttendance.js'
 import { exportRekapPengajarCSV } from '../../lib/csv.js'
+import { requestExportDoc } from '../../lib/exportDoc.js'
 import PrintButton from '../../components/PrintButton.jsx'
 
 // TA.C.2 (F-TA4, F-TA5; D-TA15; R-TA5, R-TA9, R-TA10) — rekap matriks
@@ -71,6 +72,23 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
     exportRekapPengajarCSV(displayRows, periode)
   }
 
+  // EX.1 — server-owned document (same visible scope: periode + optional
+  // school filter travel as filters, rows never leave the server).
+  // Existing Cetak/CSV buttons untouched; failures land in the local
+  // error line below (R-IP2: parent owns the explanation).
+  const [docError, setDocError] = useState('')
+  async function handleExportDoc() {
+    setDocError('')
+    try {
+      await requestExportDoc('rekap-pengajar', {
+        periode,
+        ...(filterSekolahId ? { sekolahId: filterSekolahId } : {}),
+      })
+    } catch (e) {
+      setDocError(e?.message || 'Gagal membuka dokumen')
+    }
+  }
+
   function cellText(entry) {
     // AP.C.2 — single owner in lib/trainerAttendance.js (unit-pinned).
     return formatMatrixCell(entry)
@@ -87,6 +105,12 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
         </div>
         <div className="flex items-end gap-2 no-print">
           <button
+            onClick={handleExportDoc}
+            className="rounded-xl bg-sky-700 text-white text-sm font-semibold px-4 py-2.5 hover:bg-sky-800 transition-colors"
+          >
+            Unduh Dokumen
+          </button>
+          <button
             onClick={handleExportCSV}
             className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
           >
@@ -95,6 +119,11 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
           <PrintButton />
         </div>
       </div>
+      {docError !== '' && (
+        <p role="alert" className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2">
+          {docError}
+        </p>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border">
         <div className="overflow-x-auto">
