@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useState, useCallback } from 'react'
 import { readCached, usePeriod, subscribeStore, read } from '../../lib/store.js'
 import { buildTrainerMatrix, formatMatrixCell } from '../../lib/trainerAttendance.js'
-import { exportRekapPengajarCSV } from '../../lib/csv.js'
+import { exportRekapMatrixCSV, exportRekapPengajarCSV } from '../../lib/csv.js'
 import { requestExportDoc } from '../../lib/exportDoc.js'
 import PrintButton from '../../components/PrintButton.jsx'
 
@@ -72,6 +72,13 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
     exportRekapPengajarCSV(displayRows, periode)
   }
 
+  // Task-2 — matrix-shape CSV from the same matrix memo the table renders
+  // (scope-filtered rows: never more rows than visible). Flat export above
+  // stays untouched.
+  function handleExportMatrixCSV() {
+    exportRekapMatrixCSV({ periode: matrix.periode, dates: matrix.dates, rows }, periode)
+  }
+
   // EX.1 — server-owned document (same visible scope: periode + optional
   // school filter travel as filters, rows never leave the server).
   // Existing Cetak/CSV buttons untouched; failures land in the local
@@ -115,6 +122,12 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
             className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
           >
             Unduh CSV
+          </button>
+          <button
+            onClick={handleExportMatrixCSV}
+            className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 transition-colors"
+          >
+            Unduh CSV Matriks
           </button>
           <PrintButton />
         </div>

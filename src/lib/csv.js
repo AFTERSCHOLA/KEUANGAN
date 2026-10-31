@@ -6,18 +6,22 @@
 // ============================================
 
 import { formatJadwalList } from './format.js'
+import { formatMatrixCell } from './trainerAttendance.js'
 
 // M-F8 — Excel Indonesia expects `;` separators: with `,` the sheet
 // collapses into one comma-joined column. BOM + quoting kept; quoting
 // now also triggers on `;`.
+// Task-2 open-correctly — every export carries the `sep=;` opener line
+// (after BOM, honored + hidden by Excel) so double-click opens split
+// columns with no wizard, plus CRLF endings (spec builder-check #5).
 function downloadCSV(headers, rows, filename, periode) {
-  const csvContent = "\uFEFF" + [
+  const csvContent = "\uFEFF" + "sep=;\r\n" + [
     headers.join(";"),
     ...rows.map(row => row.map(val => {
       let text = String(val === undefined || val === null ? "" : val).replace(/"/g, '""')
       return text.includes(';') || text.includes('\n') || text.includes('"') ? `"${text}"` : text
     }).join(";"))
-  ].join("\n")
+  ].join("\r\n")
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -154,4 +158,30 @@ export function exportRekapPengajarCSV(displayRows, periode) {
     r.sekolah, r.tanggal, r.nama, r.peran, r.status, r.keterangan, r.catatan, r.teks,
   ])
   downloadCSV(headers, rows, 'Rekap_Pengajar', periode)
+}
+
+// Task-2 — matrix-shape CSV variant (docs/exemplar/ABSENSI
+// TRAINER-new.xlsx columns: NO + NAMA SEKOLAH + one column per calendar
+// day, two-row weekday/date header flattened to `<Hari> <n>` per column
+// — same Monday-first table as server/lib/exportMatrix.php). Consumes the
+// cached buildTrainerMatrix memo (same object the table renders — scope
+// filtered upstream, so never more rows than visible); each cell joins
+// its per-entry formatMatrixCell texts with `\n` (the xlsx newline-in-cell
+// idiom), byte-equal to the visible cells. Filename:
+// Rekap_Matriks_<periode>.csv. CRLF + sep opener via downloadCSV.
+const MATRIX_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
+
+export function exportRekapMatrixCSV(matrix, periode) {
+  const dates = matrix?.dates || []
+  const header = ['NO', 'NAMA SEKOLAH', ...dates.map(d => {
+    const [y, m, day] = String(d).split('-').map(Number)
+    const hari = MATRIX_HARI[(new Date(y, m - 1, day).getDay() + 6) % 7] || ''
+    return `${hari} ${day}`
+  })]
+  const rows = (matrix?.rows || []).map((r, i) => [
+    String(i + 1),
+    r.nama,
+    ...dates.map(d => (r.cells[d] || []).map(entry => formatMatrixCell(entry)).join('\n')),
+  ])
+  downloadCSV(header, rows, 'Rekap_Matriks', periode)
 }

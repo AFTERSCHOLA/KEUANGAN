@@ -77,6 +77,7 @@ test('AP.C.3 rekap export carries full details + print fires', async ({ page, pa
   console.log('## AP.C.3 download:', download.suggestedFilename())
   expect(download.suggestedFilename()).toContain('Rekap_Pengajar_')
   const content = fs.readFileSync(await download.path(), 'utf8')
+  expect(content.replace(/^\uFEFF/, '').split('\r\n')[0]).toBe('sep=;') // Task-2 opener line
   expect(content).toContain('Sekolah,Tanggal,Nama,Peran,Status,Keterangan,Catatan,Teks')
   expect(content).toContain(`Asyifa RPX ${suffix}`)
   expect(content).toContain('— EXPO, Catatan ralat RPX')

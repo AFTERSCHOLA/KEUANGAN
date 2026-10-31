@@ -65,6 +65,7 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
  )
 
   const cellsBySchoolDay = new Map()
+  const seenDisplayLines = new Set()
   ;current.forEach(r => {
     const t = trainersById.get(r.trainerId)
     // CS.B.2 (D-CS3) — session role rides on the row: an explicit peran
@@ -81,6 +82,16 @@ export function buildTrainerMatrix({ absensiPengajar = [], sekolah = [], trainer
       catatan: r.catatan || null,
       status: r.status,
     }
+    // Task-2 dupe chase (Paris Jundi exemplar): the live-DB probe shows
+    // two STORED records with identical fields but distinct ids
+    // (double-recording — same-id-twice is impossible under the PK plus
+    // the verbatim `[...remote]` read). Data stays untouched; collapse
+    // only byte-identical display lines per cell (first wins). Distinct
+    // details (Hadir+EXPO vs Izin) keep both lines — the fingerprint is
+    // the rendered text itself.
+    const lineKey = `${r.sekolahId}|${r.tanggal}|${formatMatrixCell(entry)}`
+    if (seenDisplayLines.has(lineKey)) return
+    seenDisplayLines.add(lineKey)
     const key = `${r.sekolahId}|${r.tanggal}`
     if (!cellsBySchoolDay.has(key)) cellsBySchoolDay.set(key, [])
     cellsBySchoolDay.get(key).push(entry)

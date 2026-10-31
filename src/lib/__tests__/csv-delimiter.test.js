@@ -3,6 +3,8 @@ import { exportSiswaCSV, exportSekolahCSV } from '../csv.js'
 
 // M-F8 — Excel ID expects `;` separators (`,` collapses to one column).
 // Pins: BOM + `;` delimiter + quoting of values containing `;`.
+// Task-2 — every export carries the `sep=;` opener line + CRLF endings
+// (open-correctly on double-click); header/data row indices shift by one.
 describe('CSV semicolon delimiter (Excel ID)', () => {
   async function csvText(fn) {
     const origCreate = URL.createObjectURL
@@ -31,7 +33,9 @@ describe('CSV semicolon delimiter (Excel ID)', () => {
     const text = await csvText(() => exportSiswaCSV([], '2026-08'))
     // Blob.text() in the test env may drop the BOM; pin the delimiter,
     // which is the behavior change under test.
-    const header = text.replace(/^\uFEFF/, '').split('\n')[0]
+    const lines = text.replace(/^\uFEFF/, '').split('\r\n')
+    expect(lines[0]).toBe('sep=;')
+    const header = lines[1]
     expect(header).toContain(';')
     expect(header.split(';')).toHaveLength(5)
   })
@@ -42,7 +46,9 @@ describe('CSV semicolon delimiter (Excel ID)', () => {
       [],
       '2026-08',
     ))
-    const row = text.replace(/^\uFEFF/, '').split('\n')[1]
+    const lines = text.replace(/^\uFEFF/, '').split('\r\n')
+    expect(lines[0]).toBe('sep=;')
+    const row = lines[2]
     expect(row).toContain('"SD A;B"')
     // 5 columns: quoted pair counts as one cell.
     expect(row).toBe('"SD A;B";Jl. A;Senin;100000;Belum Ditugaskan')
