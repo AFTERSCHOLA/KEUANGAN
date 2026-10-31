@@ -15,6 +15,8 @@ import { test, expect, loginViaApi, primeCsrf, createSekolahSuperadmin, logout }
 // Seeding goes through the real server (superadmin /api/sync.php,
 // Sim-marked): one past-month record (day 15) + one current-month
 // record — the trainer-attendance-recap.spec.js:52-66 recipe.
+// Fix round 1 adds navigated-month export proof: both CSV filenames +
+// the export-doc request body must carry the displayed past YYYY-MM.
 // Run: npx playwright test tests/rekap-calendar.spec.js --project=default --workers=1
 // Requires PHP :8000 + test DB live (same prerequisite as export-doc.spec.js).
 // ============================================================
@@ -101,6 +103,34 @@ test('rekap month-grid: past-month navigation + day drill + empty month', async 
   await expect(page.getByRole('columnheader', { name: '15', exact: true }).first()).toBeVisible()
   const schRow = page.locator('tr', { hasText: namaSekolah })
   await expect(schRow.getByText(`${namaTrainer} (I)`, { exact: false })).toBeVisible()
+
+  // Fix round 1 — navigated-month export scope (controller ruling: the
+  // bulan-for-export-args switch stays; this is the missing proof).
+  // Both CSV downloads must carry the DISPLAYED past YYYY-MM in their
+  // filenames, not the global current month (EX.1 same-visible-scope).
+  const [flatDownload] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Unduh CSV', exact: true }).click({ timeout: 15000 }),
+  ])
+  expect(flatDownload.suggestedFilename()).toBe(`Rekap_Pengajar_${prevPeriode}.csv`)
+  console.log('## T3CAL flat CSV:', flatDownload.suggestedFilename())
+  const [matrixDownload] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Unduh CSV Matriks', exact: true }).click({ timeout: 15000 }),
+  ])
+  expect(matrixDownload.suggestedFilename()).toBe(`Rekap_Matriks_${prevPeriode}.csv`)
+  console.log('## T3CAL matrix CSV:', matrixDownload.suggestedFilename())
+  // Doc-scope signal: intercept the export-doc request body — periode
+  // must be the displayed past month (cheapest reliable signal; the
+  // real server doc still renders in the opened tab).
+  const [docRequest] = await Promise.all([
+    page.waitForRequest(req => req.url().includes('/api/export-doc.php') && req.method() === 'POST', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Unduh Dokumen', exact: true }).click({ timeout: 15000 }),
+  ])
+  expect(docRequest.postDataJSON()?.periode).toBe(prevPeriode)
+  console.log('## T3CAL doc periode:', docRequest.postDataJSON()?.periode)
+  // Navigated proof must differ from global: guards a vacuous pass.
+  expect(prevPeriode).not.toBe(currentPeriode)
 
   // Day cell carries the per-day record count (not names — names live in
   // the table cells); clicking drills into an in-place date-filter chip.
