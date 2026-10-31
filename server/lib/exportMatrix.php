@@ -110,7 +110,14 @@ function buildExportMatrix(array $absensiPengajar, array $sekolah, array $traine
     ));
     $current = exportMatrixCurrent($scoped);
 
+    // Server/client display-line parity (mirror of the
+    // buildTrainerMatrix seenDisplayLines guard): data stays untouched,
+    // only byte-identical display lines collapse per cell (first wins).
+    // The key is scoped by trainerId (NOT record id): true
+    // double-recordings (same person) still collapse, same-name distinct
+    // persons do not.
     $cellsBySchoolDay = [];
+    $seenDisplayLines = [];
     foreach ($current as $r) {
         $t = $trainersById[(string) ($r['trainerId'] ?? '')] ?? null;
         $peran = $r['peran'] ?? null;
@@ -131,7 +138,16 @@ function buildExportMatrix(array $absensiPengajar, array $sekolah, array $traine
             'status' => $r['status'] ?? null,
             'keterangan' => $keterangan,
             'catatan' => $catatan,
+            // Person identity rides along (never rendered): two distinct
+            // trainers sharing a display name must not collapse.
+            'trainerId' => (string) ($r['trainerId'] ?? ''),
         ];
+        $lineKey = ((string) ($r['sekolahId'] ?? '')) . '|'
+            . ((string) ($r['trainerId'] ?? '')) . '|'
+            . ((string) ($r['tanggal'] ?? '')) . '|'
+            . exportMatrixCellText($entry);
+        if (isset($seenDisplayLines[$lineKey])) continue;
+        $seenDisplayLines[$lineKey] = true;
         $key = ((string) ($r['sekolahId'] ?? '')) . '|' . ((string) ($r['tanggal'] ?? ''));
         $cellsBySchoolDay[$key][] = $entry;
     }

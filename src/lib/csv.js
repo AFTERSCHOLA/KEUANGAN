@@ -19,7 +19,7 @@ function downloadCSV(headers, rows, filename, periode) {
     headers.join(";"),
     ...rows.map(row => row.map(val => {
       let text = String(val === undefined || val === null ? "" : val).replace(/"/g, '""')
-      return text.includes(';') || text.includes('\n') || text.includes('"') ? `"${text}"` : text
+      return text.includes(';') || text.includes('\n') || text.includes('\r') || text.includes('"') ? `"${text}"` : text
     }).join(";"))
   ].join("\r\n")
 
@@ -171,7 +171,8 @@ export function exportRekapPengajarCSV(displayRows, periode) {
 // Rekap_Matriks_<periode>.csv. CRLF + sep opener via downloadCSV.
 const MATRIX_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
 
-export function exportRekapMatrixCSV(matrix, periode) {
+export function exportRekapMatrixCSV(matrix) {
+  const periode = matrix?.periode
   const dates = matrix?.dates || []
   const header = ['NO', 'NAMA SEKOLAH', ...dates.map(d => {
     const [y, m, day] = String(d).split('-').map(Number)

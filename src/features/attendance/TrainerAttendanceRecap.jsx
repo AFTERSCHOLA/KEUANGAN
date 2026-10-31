@@ -125,7 +125,7 @@ export default function TrainerAttendanceRecap({ filterSekolahId = '' }) {
   // (scope-filtered rows: never more rows than visible). Flat export above
   // stays untouched.
   function handleExportMatrixCSV() {
-    exportRekapMatrixCSV({ periode: matrix.periode, dates: matrix.dates, rows }, bulan)
+    exportRekapMatrixCSV(matrix)
   }
 
   // EX.1 — server-owned document (same visible scope: periode + optional

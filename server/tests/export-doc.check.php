@@ -109,6 +109,25 @@ docCheck('peran wins, tipePengajar is fallback only', ($cell0404[1]['label'] ?? 
 $cell0406 = $m['rows'][0]['cells']['2026-08-06'] ?? null;
 docCheck('correctionOf latest-wins (superseded hidden)', is_array($cell0406) && count($cell0406) === 1 && ($cell0406[0]['status'] ?? null) === 'Hadir', json_encode($cell0406, JSON_UNESCAPED_UNICODE));
 
+// Identical-display-line parity with the client (seenDisplayLines key
+// sekolahId|trainerId|tanggal|cellText): twin same-person records
+// collapse to 1 line, same-name distinct trainers keep 2.
+$twinAbsensi = [
+    ['id' => 'dup-1', 'trainerId' => 'trn-w', 'sekolahId' => 'skl-a', 'tanggal' => '2026-08-10', 'periode' => '2026-08', 'status' => 'Hadir', 'keterangan' => null, 'catatan' => null, 'cabangId' => 'cbg-x'],
+    ['id' => 'dup-2', 'trainerId' => 'trn-w', 'sekolahId' => 'skl-a', 'tanggal' => '2026-08-10', 'periode' => '2026-08', 'status' => 'Hadir', 'keterangan' => null, 'catatan' => null, 'cabangId' => 'cbg-x'],
+    ['id' => 'dup-3', 'trainerId' => 'trn-k', 'sekolahId' => 'skl-a', 'tanggal' => '2026-08-10', 'periode' => '2026-08', 'status' => 'Hadir', 'keterangan' => null, 'catatan' => null, 'cabangId' => 'cbg-x'],
+];
+$twinTrainer = [
+    ['id' => 'trn-w', 'nama' => 'Kembar', 'tipePengajar' => 'instruktur'],
+    ['id' => 'trn-k', 'nama' => 'Kembar', 'tipePengajar' => 'instruktur'],
+];
+$twinM = buildExportMatrix($twinAbsensi, $sekolahRaw, $twinTrainer, '2026-08');
+$twinCell = $twinM['rows'][0]['cells']['2026-08-10'] ?? null;
+docCheck('twin same-person records collapse to 1 line', is_array($twinCell) && count($twinCell) === 2, json_encode($twinCell, JSON_UNESCAPED_UNICODE));
+$twinIds = is_array($twinCell) ? array_column($twinCell, 'trainerId') : [];
+sort($twinIds);
+docCheck('entry carries trainerId; same-name distinct trainers both kept', $twinIds === ['trn-k', 'trn-w'], json_encode($twinIds));
+
 docCheck('cell text bare Hadir', exportMatrixCellText(['nama' => 'Widia', 'label' => 'I', 'status' => 'Hadir', 'keterangan' => null, 'catatan' => null]) === 'Widia (I)');
 docCheck('cell text joins keterangan', exportMatrixCellText(['nama' => 'Widia', 'label' => 'I', 'status' => 'Izin', 'keterangan' => null, 'catatan' => null]) === 'Widia (I) — Izin');
 docCheck('cell text joins keterangan + extra', exportMatrixCellText(['nama' => 'Widia', 'label' => 'I', 'status' => 'Izin', 'keterangan' => 'Acara keluarga', 'catatan' => null]) === 'Widia (I) — Izin, Acara keluarga');
