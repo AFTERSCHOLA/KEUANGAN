@@ -383,14 +383,33 @@ function resetUserPassword(array $data, array $user): never {
 
     $pdo = database();
     if ($userId !== '') {
-        $stmt = $pdo->prepare('SELECT id, username, role, cabang_id FROM users WHERE id = :id AND active = 1 LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, username, role, cabang_id, active FROM users WHERE id = :id LIMIT 1');
         $stmt->execute([':id' => $userId]);
     } else {
-        $stmt = $pdo->prepare('SELECT id, username, role, cabang_id FROM users WHERE trainer_id = :tid AND active = 1 LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, username, role, cabang_id, active FROM users WHERE trainer_id = :tid LIMIT 1');
         $stmt->execute([':tid' => $trainerId]);
     }
     $existing = $stmt->fetch();
-    if ($existing === false) jsonResponse(['error' => 'User tidak ditemukan atau nonaktif'], 422);
+    if ($existing === false) {
+        // Trainer record existence != login row existence (USER_PROVISIONING
+        // D6: substitute trainers may have no login; eksternal asisten
+        // never have one). Tell the admin which case this is instead of
+        // the old conflated "tidak ditemukan atau nonaktif".
+        // Gated on $userId === '': the tcheck only applies to the
+        // trainerId-lookup branch — an id-lookup miss must stay a plain
+        // "not found" even if a trainerId was also (irrelevantly) sent.
+        if ($userId === '' && $trainerId !== '') {
+            $tcheck = $pdo->prepare('SELECT id FROM trainer WHERE id = :id LIMIT 1');
+            $tcheck->execute([':id' => $trainerId]);
+            if ($tcheck->fetchColumn() !== false) {
+                jsonResponse(['error' => 'Trainer ini belum memiliki akun login'], 422);
+            }
+        }
+        jsonResponse(['error' => 'User tidak ditemukan'], 422);
+    }
+    if ((int) ($existing['active'] ?? 0) !== 1) {
+        jsonResponse(['error' => 'Akun login nonaktif'], 422);
+    }
     // Resolve the login row id from whichever lookup matched.
     $userId = (string) $existing['id'];
 

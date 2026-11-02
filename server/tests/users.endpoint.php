@@ -418,6 +418,53 @@ $row->execute(['usr-test-trainer1']);
 $reset = $row->fetch();
 check('after reset, must_change_password == 1', $reset !== false && (int) $reset['must_change_password'] === 1);
 
+echo "\n--- users.php: reset_password disambiguation (no-login vs nonaktif) ---\n";
+
+// Idempotent fixtures: a crashed run can leave these behind (same class of
+// leftover as the pre-existing usr-test-trainer1 seed below), so delete
+// first — the end-of-file cleanup only covers the original fixture list.
+$pdo->prepare('DELETE FROM users WHERE id = ?')->execute(['usr-test-inactive1']);
+$pdo->prepare('DELETE FROM trainer WHERE id = ?')->execute(['trn-USER-NOLOGIN']);
+
+// Fixture 1: trainer record with NO login row (USER_PROVISIONING D6:
+// substitute trainers may have no login; eksternal never have one).
+$noLoginTrainerId = 'trn-USER-NOLOGIN';
+$pdo->prepare('INSERT INTO trainer (id, cabang_id, payload) VALUES (:id, :cabang, :payload)')->execute([
+    ':id' => $noLoginTrainerId, ':cabang' => $branchA,
+    ':payload' => json_encode(['id' => $noLoginTrainerId, 'nama' => 'No Login Trainer']),
+]);
+
+[$status, $body] = reqU('POST', "$base/server/api/users.php", [
+    'action' => 'reset_password',
+    'trainerId' => $noLoginTrainerId,
+], $cookieSuper, $csrfSuper2);
+
+check('reset_password trainer without login -> 422 belum memiliki akun login', $status === 422 && isset($body['error']) && stripos((string) $body['error'], 'belum memiliki akun login') !== false, "got $status body=" . json_encode($body));
+
+// Fixture 2: users row with active = 0.
+seedUser($pdo, 'usr-test-inactive1', 'test_inactive1', 'trainer', $branchA);
+$pdo->prepare('UPDATE users SET active = 0 WHERE id = ?')->execute(['usr-test-inactive1']);
+
+[$status, $body] = reqU('POST', "$base/server/api/users.php", [
+    'action' => 'reset_password',
+    'id' => 'usr-test-inactive1',
+], $cookieSuper, $csrfSuper2);
+
+check('reset_password inactive account -> 422 Akun login nonaktif', $status === 422 && isset($body['error']) && stripos((string) $body['error'], 'Akun login nonaktif') !== false, "got $status body=" . json_encode($body));
+
+// Fixture 3: neither user nor trainer exists. Exact match (not stripos):
+// the old conflated message superstrings the new one, so only === pins it.
+[$status, $body] = reqU('POST', "$base/server/api/users.php", [
+    'action' => 'reset_password',
+    'id' => 'usr-USER-GHOST',
+], $cookieSuper, $csrfSuper2);
+
+check('reset_password unknown id -> 422 User tidak ditemukan', $status === 422 && isset($body['error']) && $body['error'] === 'User tidak ditemukan', "got $status body=" . json_encode($body));
+
+// New fixtures leave no residue: the trainer row sits in branchA (covered by
+// cleanupUsersFixtures()), the inactive user is removed explicitly.
+$pdo->prepare('DELETE FROM users WHERE id = ?')->execute(['usr-test-inactive1']);
+
 echo "\n--- audit events written ---\n";
 
 $row = $pdo->prepare("SELECT COUNT(*) AS c FROM audit_log WHERE event_type IN ('user_created','trainer_created') AND actor_user_id = 'usr-test-super'");
