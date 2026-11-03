@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
-import { readCached, writeRemote, getRoleContext } from '../../lib/store.js'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { readCached, read, writeRemote, subscribeStore, getRoleContext } from '../../lib/store.js'
 import { getSafeIdentityContext } from '../../lib/auth.js'
 import { newAbsensiPengajar, localDateString } from '../../lib/constants.js'
-import { penugasanInvolvesTrainer } from '../../lib/penugasan.js'
+import { fetchMyPenugasan, visibleSekolahOnDate } from '../../lib/myPenugasan.js'
 import AlertDialog from '../../components/AlertDialog.jsx'
 
 const STATUS_OPTIONS = ['Hadir', 'Izin', 'Alpa']
@@ -22,7 +22,8 @@ const PERAN_OPTIONS = [
 // logic-nya dengan trainerHasActiveAssignmentClient() di store.js dan
 // trainerHasActiveAssignment() di server/auth/authorize.php.
 export default function TrainerAttendanceForm({ trainerId }) {
-  const [dataRev, setDataRev] = useState(0)
+  const [tick, setTick] = useState(0)
+  const bump = useCallback(() => setTick(t => t + 1), [])
   const [tanggal, setTanggal] = useState(localDateString())
   const [sekolahId, setSekolahId] = useState('')
   const [personId, setPersonId] = useState('') // '' = self; else external id
@@ -33,36 +34,51 @@ export default function TrainerAttendanceForm({ trainerId }) {
   const [saved, setSaved] = useState(false)
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertMsg, setAlertMsg] = useState('')
+  // SF.3 (D3) — own assignment rows from the trainer-only lane
+  // (server/api/myPenugasan.php): host-held rows included, host PII
+  // never leaves the server. In-memory per session (D2), never the
+  // afterschola_v4_* trainer localStorage key.
+  const [myRows, setMyRows] = useState([])
 
-  const sekolahAll = useMemo(() => readCached('sekolah'), [dataRev])
-  const trainers = useMemo(() => readCached('trainer'), [dataRev])
-  const eksternals = useMemo(() => readCached('eksternal'), [dataRev])
+  // SF.3 (D4) — mirror TrainerAttendanceAdmin.jsx:49-60: re-render when
+  // hydrateServerData() lands post-mount cache writes, plus a mount
+  // read('sekolah') so the server-scoped school list appears without
+  // remount. myPenugasan is fetched once on mount; tanggal changes
+  // re-derive via the memo below.
+  useEffect(() => {
+    const unsubscribe = subscribeStore(bump)
+    return unsubscribe
+  }, [bump])
+
+  useEffect(() => {
+    read('sekolah').then(() => setTick(t => t + 1))
+    let cancelled = false
+    fetchMyPenugasan().then(rows => {
+      if (!cancelled) setMyRows(rows)
+    }).catch(() => {
+      if (!cancelled) setMyRows([])
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const sekolahAll = useMemo(() => readCached('sekolah'), [tick])
+  const trainers = useMemo(() => readCached('trainer'), [tick])
+  const eksternals = useMemo(() => readCached('eksternal'), [tick])
   const trainer = trainers.find(t => t.id === trainerId)
   const ctx = getRoleContext()
   const identity = getSafeIdentityContext()
 
-  // Sekolah yang valid untuk tanggal terpilih: assignment aktif=true di
-  // trainer manapun yang mencantumkan trainerId ini sebagai trainerId,
-  // asistenId ATAU asistenIds (CS.B.2 D-CS4 union read), dan tanggal
-  // masuk periodeMulai..periodeSelesai (periodeSelesai null = ongoing,
-  // sama keputusan seperti server).
+  // SF.3 (D3; R-TA8) — sekolah yang valid untuk tanggal terpilih:
+  // sekolah cache (server-scoped) ∩ myPenugasan date check
+  // (isAssignmentActiveOnDate via visibleSekolahOnDate, shared, no
+  // fork). The trainers-loop derivation over readCached('trainer')
+  // is deleted: for role trainer that cache is own-record-only, so a
+  // host-held asisten assignment always computed an empty set here
+  // while the server write gate would ALLOW the same write (F-SF1).
   const validSekolahForDate = useMemo(() => {
-    const ids = new Set()
-    trainers.forEach(t => {
-      const assignments = Array.isArray(t.penugasanPengajar) ? t.penugasanPengajar : []
-      assignments.forEach(a => {
-        if (!a || !a.sekolahId) return
-        // DC.C.1 — union read via shared helper (legacy asistenId +
-        // asistenIds, same as the server gate).
-        if (!penugasanInvolvesTrainer(a, trainerId)) return
-        if (a.aktif !== true) return
-        if (!a.periodeMulai || tanggal < a.periodeMulai) return
-        if (a.periodeSelesai != null && tanggal > a.periodeSelesai) return
-        ids.add(a.sekolahId)
-      })
-    })
+    const ids = new Set(visibleSekolahOnDate(myRows, tanggal))
     return sekolahAll.filter(s => ids.has(s.id))
-  }, [trainers, sekolahAll, trainerId, tanggal])
+  }, [sekolahAll, myRows, tanggal])
 
   // CS.B.2 (D-CS5) — external picker, reference-only for trainers: only
   // externals attached to the trainer's own valid schools for this date.

@@ -1,4 +1,4 @@
-import { test, expect, loginViaApi, primeCsrf } from './fixtures.js'
+import { test, expect, loginViaApi, primeCsrf, createTrainerSuperadmin, readEntity, deleteSekolah } from './fixtures.js'
 
 // ============================================================
 // TA.B.3 — Trainer self-attendance form (absensiPengajar).
@@ -233,4 +233,196 @@ test('TA.B.3: sekolah tanpa penugasan aktif tidak muncul di dropdown', async ({ 
 
   const unassignedOption = page.locator(`option[value="${unassignedSekolah.id}"]`)
   await expect(unassignedOption).toHaveCount(0)
+})
+
+// SF.3 — asisten whose assignment lives on the HOST trainer's record
+// (F-SF1): own trainer cache = own record only (penugasanPengajar reset
+// to []), sekolah cache = server-scoped host-assigned schools, scope
+// via the real /api/myPenugasan.php lane (no route stub — the point is
+// the client/server union agrees end to end). Row A uses the legacy
+// asistenId slot, row B the asistenIds[] slot (DC.C.1 union, both legs).
+async function updateTrainerPenugasanAsSuperadmin(page, csrf, trainerId, rows) {
+  const listRes = await page.request.get('/api/read.php?entity=trainer', {
+    headers: { 'X-CSRF-Token': csrf },
+  })
+  if (!listRes.ok()) {
+    throw new Error(`read trainer failed: ${listRes.status()} ${await listRes.text()}`)
+  }
+  const list = await listRes.json()
+  const current = list.find(t => t.id === trainerId)
+  if (!current) {
+    throw new Error(`trainer ${trainerId} tidak ditemukan di /api/read.php?entity=trainer`)
+  }
+  const { cabangId: _omitCabangId, ...rest } = current
+  const updateRes = await page.request.post('/api/trainer.php', {
+    headers: { 'X-CSRF-Token': csrf },
+    data: { ...rest, id: trainerId, action: 'update', penugasanPengajar: rows },
+  })
+  if (!updateRes.ok()) {
+    throw new Error(`update penugasanPengajar failed: ${updateRes.status()} ${await updateRes.text()}`)
+  }
+}
+
+async function seedHostHeldAssignmentAsSuperadmin(page, suffix) {
+  // Sweep leaked fixtures from crashed runs: host trainers created by
+  // this test carry "Host SF3 " names. Their host-held rows reference
+  // TRAINER_ID, which would 422 later seeds via the BUG7 cross-host
+  // guard — delete them (admin_cabang owns trainer delete, scoped to
+  // its own branch) before seeding.
+  await loginViaApi(page, 'adminCabang')
+  let csrf = await primeCsrf(page)
+  const trunkedTrainers = await readEntity(page, 'trainer', csrf)
+  for (const t of trunkedTrainers.filter(t => typeof t?.nama === 'string' && t.nama.startsWith('Host SF3 '))) {
+    await page.request.post('/api/trainer.php', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { id: t.id, action: 'delete' },
+    })
+  }
+
+  await loginViaApi(page, 'superadmin')
+  csrf = await primeCsrf(page)
+  const leakedSchools = (await readEntity(page, 'sekolah', csrf))
+    .filter(s => typeof s?.nama === 'string' && s.nama.startsWith('SD SF.3 Host '))
+  for (const s of leakedSchools) {
+    await deleteSekolah(page, csrf, s.id)
+  }
+
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const yearAhead = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+  async function createSchool(id, nama, jadwalList) {
+    const res = await page.request.post('/api/sekolah.php', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { id, nama, spp: 500000, cabangId: CABANG_ID, action: 'create', jadwalList },
+    })
+    if (!res.ok()) {
+      throw new Error(`seed sekolah failed: ${res.status()} ${await res.text()}`)
+    }
+    return (await res.json()).id
+  }
+
+  // BUG7 (F-PG5) guard: one host payload cannot hold two unscoped
+  // overlapping rows (any two unscoped rows in one payload conflict, no
+  // occupant check). Scope the rows to different weekdays so the
+  // server write gate accepts them; the form's date predicate
+  // (isAssignmentActiveOnDate) ignores slot scope, so both schools stay
+  // visible on any tanggal inside the range — same as unscoped rows.
+  const schoolAId = await createSchool(`skl-SF3A-${suffix}`, `SD SF.3 Host A ${suffix}`,
+    [{ dayOfWeek: 'Senin', time: '08:00', endTime: '09:00' }])
+  const schoolBId = await createSchool(`skl-SF3B-${suffix}`, `SD SF.3 Host B ${suffix}`,
+    [{ dayOfWeek: 'Selasa', time: '08:00', endTime: '09:00' }])
+
+  const host = await createTrainerSuperadmin(
+    page, csrf,
+    `host-sf3-${suffix}`, `Host SF3 ${suffix}`, `Host SF3 ${suffix}`,
+    CABANG_ID, [],
+  )
+  const hostTrainerId = host.user?.trainerId || host.trainer?.id || host.trainerId
+  if (!hostTrainerId) {
+    throw new Error(`host trainer create returned no trainerId: ${JSON.stringify(host)}`)
+  }
+
+  // F-SF1 premise: the asisten's own record carries no penugasan — the
+  // pre-SF.3 trainers-loop derivation always computed an empty set here.
+  // Reset FIRST: the BUG7 cross-host guard scans other hosts' rows, so a
+  // leftover own assignment (unscoped, from an earlier seed) would 422
+  // the host update below via the shared-occupant overlap.
+  await updateTrainerPenugasanAsSuperadmin(page, csrf, TRAINER_ID, [])
+  await updateTrainerPenugasanAsSuperadmin(page, csrf, hostTrainerId, [
+    {
+      id: `pgs-SF3A-${suffix}`,
+      sekolahId: schoolAId,
+      trainerId: hostTrainerId,
+      asistenId: TRAINER_ID,
+      asistenIds: null,
+      cabangId: CABANG_ID,
+      periodeMulai: yearAgo,
+      periodeSelesai: yearAhead,
+      aktif: true,
+      hari: 'Senin',
+      jamMulai: null,
+      jamSelesai: null,
+    },
+    {
+      id: `pgs-SF3B-${suffix}`,
+      sekolahId: schoolBId,
+      trainerId: hostTrainerId,
+      asistenId: null,
+      asistenIds: [TRAINER_ID],
+      cabangId: CABANG_ID,
+      periodeMulai: yearAgo,
+      periodeSelesai: null,
+      aktif: true,
+      hari: 'Selasa',
+      jamMulai: null,
+      jamSelesai: null,
+    },
+  ])
+
+  return { schoolAId, schoolBId, today, hostTrainerId, hostUserId: host.user?.id }
+}
+
+// Delete the host trainer record (admin_cabang owns trainer delete) and
+// its schools + user so this test never poisons the shared DB for
+// suites that seed trn-test-1 afterwards (BUG7 cross-host guard).
+async function cleanupHostHeldAssignment(page, { schoolAId, schoolBId, hostTrainerId, hostUserId }) {
+  try {
+    await loginViaApi(page, 'adminCabang')
+    const csrf = await primeCsrf(page)
+    if (hostTrainerId) {
+      await page.request.post('/api/trainer.php', {
+        headers: { 'X-CSRF-Token': csrf },
+        data: { id: hostTrainerId, action: 'delete' },
+      })
+    }
+    if (hostUserId) {
+      await page.request.post('/api/users.php', {
+        headers: { 'X-CSRF-Token': csrf },
+        data: { id: hostUserId, action: 'delete' },
+      })
+    }
+  } catch { /* best-effort: never fail the test on cleanup */ }
+  try {
+    await loginViaApi(page, 'superadmin')
+    const csrf = await primeCsrf(page)
+    for (const id of [schoolAId, schoolBId]) {
+      if (id) await deleteSekolah(page, csrf, id)
+    }
+  } catch { /* best-effort: never fail the test on cleanup */ }
+}
+
+test('SF.3: asisten sees host-held schools on covered date, empty message on uncovered date', async ({ page }) => {
+  const suffix = String(Date.now()).slice(-6)
+  const seed = await seedHostHeldAssignmentAsSuperadmin(page, suffix)
+  const { schoolAId, schoolBId, today } = seed
+  try {
+    await loginViaApi(page, 'trainer')
+    await gotoApp(page)
+    await openTab(page, 'Absensi Saya')
+
+    await expect(page.getByRole('heading', { name: 'Absensi Saya' })).toBeVisible()
+
+    const sekolahSelect = page.locator('label', { hasText: 'Sekolah' }).first().locator('xpath=following-sibling::select[1]')
+
+    // Covered date (default today): both host-held schools offered.
+    await expect(sekolahSelect.locator(`option[value="${schoolAId}"]`)).toHaveCount(1)
+    await expect(sekolahSelect.locator(`option[value="${schoolBId}"]`)).toHaveCount(1)
+    await expect(page.getByText('Tidak ada penugasan aktif untuk tanggal ini.')).toHaveCount(0)
+
+    // Uncovered date: host schools gone, verbatim empty message, Simpan disabled.
+    await page.locator('input[type="date"]').fill('2020-01-01')
+    await expect(sekolahSelect.locator(`option[value="${schoolAId}"]`)).toHaveCount(0)
+    await expect(sekolahSelect.locator(`option[value="${schoolBId}"]`)).toHaveCount(0)
+    await expect(page.getByText('Tidak ada penugasan aktif untuk tanggal ini. Minta Admin Cabang membuat penugasan.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Simpan Absensi' })).toBeDisabled()
+
+    // Back to the covered date without remount: options return (D4 live derive).
+    await page.locator('input[type="date"]').fill(today)
+    await expect(sekolahSelect.locator(`option[value="${schoolAId}"]`)).toHaveCount(1)
+    await expect(sekolahSelect.locator(`option[value="${schoolBId}"]`)).toHaveCount(1)
+  } finally {
+    await cleanupHostHeldAssignment(page, seed)
+  }
 })
