@@ -16,9 +16,20 @@ require_once __DIR__ . '/../bootstrap.php';
 //
 // Deliberate non-goals (plan §4): no aktif/date gate here — the client
 // applies isAssignmentActiveOnDate per tanggal (SF.2). No sekolahId
-// query-param filtering (YAGNI). coverOf rows are returned verbatim;
-// filtering stays the client's date gate + the server write-gate
-// (trainerHasActiveAssignment) concern, not this lane's.
+// query-param filtering (YAGNI).
+//
+// SF.1 fix 1/5 (chain-level, amends plan D1 minimally, R1 intact):
+// cover rows are NOT returned verbatim. A row with non-null coverOf is
+// OMITTED unless its origin passes the live-origin check — origin
+// exists, same sekolahId + overlapping scope per coverScopeOverlaps(),
+// origin aktif, origin dates well-formed — mirroring the authorize.php
+// trainerHasActiveAssignment() cover block minus the $tanggal
+// comparisons (the lane is date-agnostic; per-tanggal origin covering
+// stays the client date-gate + server write-gate concern). Without this
+// a dangling-cover row (coverOf -> missing/inactive/non-overlapping
+// origin) would surface in the SF.3 dropdown yet 403 on write.
+// Empty-string coverOf counts as absent (legacy). Non-cover rows pass
+// through unchanged; the exact 5-key shape is untouched.
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'Method tidak diizinkan'], 405);
 
@@ -66,6 +77,27 @@ foreach ($trainerRows as $row) {
             }
         }
         if ($matchedAs === null) continue;
+
+        // SF.1 fix 1/5: cover rows need a live origin (write-gate
+        // parity, authorize.php cover block minus $tanggal). OMIT when
+        // the origin is missing, scope-mismatched, inactive, or
+        // date-malformed; the SF.3 dropdown must never offer a row the
+        // write gate will 403. Empty-string coverOf counts as absent
+        // (legacy) and falls through; non-string coverOf fails closed
+        // like the write gate. Helpers via bootstrap -> authorize ->
+        // entities.php; $pdo is the same read handle as above.
+        $coverOf = $assignment['coverOf'] ?? null;
+        if ($coverOf !== null && !(is_string($coverOf) && trim($coverOf) === '')) {
+            if (!is_string($coverOf)) continue;
+            $origin = findAssignmentById($pdo, $coverOf);
+            if ($origin === null) continue;
+            if (!coverScopeOverlaps($assignment, $origin)) continue;
+            if (($origin['aktif'] ?? null) !== true) continue;
+            $originMulai = $origin['periodeMulai'] ?? null;
+            if (!is_string($originMulai) || $originMulai === '') continue;
+            $originSelesai = $origin['periodeSelesai'] ?? null;
+            if ($originSelesai !== null && (!is_string($originSelesai) || $originSelesai === '')) continue;
+        }
 
         // R1: only the 5 whitelisted keys leave the server — never host
         // trainer PII (nama/WA/honor/cabang internals stay server-side).

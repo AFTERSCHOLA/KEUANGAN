@@ -40,6 +40,7 @@ $branch = 'cbg-SF1';
 $schTridaya = 'skl-sf1-tridaya';
 $schAlbiruni = 'skl-sf1-albiruni';
 $schDecoy = 'skl-sf1-decoy';
+$schCover = 'skl-sf1-cover';
 $trnWidia = 'trn-sf1-widia';
 $trnAlifah = 'trn-sf1-alifah';
 $trnOther = 'trn-sf1-other';
@@ -58,7 +59,7 @@ $pdo->prepare('INSERT INTO cabang (id, kode, nama, payload) VALUES (:id, :kode, 
     ':id' => $branch, ':kode' => 'SFT1', ':nama' => 'Cabang SF1',
     ':p' => json_encode(['id' => $branch, 'kode' => 'SFT1', 'nama' => 'Cabang SF1'], JSON_UNESCAPED_UNICODE),
 ]);
-foreach ([$schTridaya, $schAlbiruni, $schDecoy] as $schId) {
+foreach ([$schTridaya, $schAlbiruni, $schDecoy, $schCover] as $schId) {
     $pdo->prepare('INSERT INTO sekolah (id, cabang_id, payload) VALUES (:id, :c, :p)')->execute([
         ':id' => $schId, ':c' => $branch,
         ':p' => json_encode(['id' => $schId, 'cabangId' => $branch], JSON_UNESCAPED_UNICODE),
@@ -88,6 +89,30 @@ $hostPayload = [
             'id' => 'pgs-sf1-decoy', 'sekolahId' => $schDecoy,
             'trainerId' => $trnWidia, 'asistenId' => $trnOther,
             'aktif' => true, 'periodeMulai' => '2026-07-01', 'periodeSelesai' => null,
+        ],
+        [
+            // SF.1 fix 1/5 fixtures (4th school — base-school counts stay
+            // 2). Origin names Other (not Alifah) so it never surfaces
+            // for her; only the cover rows matching her do.
+            'id' => 'pgs-sf1-origin', 'sekolahId' => $schCover,
+            'trainerId' => $trnWidia, 'asistenId' => $trnOther,
+            'aktif' => true, 'periodeMulai' => '2026-07-01', 'periodeSelesai' => null,
+        ],
+        [
+            // Live-cover row: same school + unscoped overlap + aktif
+            // origin => PRESENT. Distinct mulai date-marks the row (the
+            // lane projects no row id).
+            'id' => 'pgs-sf1-cover-live', 'sekolahId' => $schCover,
+            'trainerId' => $trnWidia, 'asistenId' => $trnAlifah,
+            'coverOf' => 'pgs-sf1-origin',
+            'aktif' => true, 'periodeMulai' => '2026-08-01', 'periodeSelesai' => null,
+        ],
+        [
+            // Dangling-cover row: coverOf -> missing id => ABSENT.
+            'id' => 'pgs-sf1-cover-dangling', 'sekolahId' => $schCover,
+            'trainerId' => $trnWidia, 'asistenId' => $trnAlifah,
+            'coverOf' => 'pgs-sf1-no-such-origin',
+            'aktif' => true, 'periodeMulai' => '2026-09-01', 'periodeSelesai' => null,
         ],
     ],
 ];
@@ -212,7 +237,8 @@ echo "\n--- myPenugasan.php (asisten own rows) ---\n";
 check('asisten GET -> 200', $status === 200, "got $status " . json_encode($body));
 
 $rows = is_array($body) ? array_values($body) : [];
-check('asisten sees exactly her 2 host rows', count($rows) === 2, json_encode($body));
+$baseRows = array_values(array_filter($rows, static fn($r) => is_array($r) && in_array($r['sekolahId'] ?? null, [$schTridaya, $schAlbiruni], true)));
+check('asisten sees exactly her 2 host rows on the base schools', count($baseRows) === 2, json_encode($body));
 
 $bySekolah = [];
 foreach ($rows as $r) {
@@ -241,6 +267,19 @@ check('null periodeSelesai stays null (tridaya)',
 check('empty-string periodeSelesai stays "" (albiruni)',
     array_key_exists('periodeSelesai', $bySekolah[$schAlbiruni] ?? []) && ($bySekolah[$schAlbiruni]['periodeSelesai'] ?? null) === '',
     json_encode($bySekolah[$schAlbiruni] ?? null));
+
+// --- SF.1 fix 1/5: cover rows need a live origin ----------------------
+$coverRows = array_values(array_filter($rows, static fn($r) => is_array($r) && ($r['sekolahId'] ?? null) === $schCover));
+$coverStarts = array_map(static fn($r) => $r['periodeMulai'] ?? null, $coverRows);
+check('live-cover row (origin aktif + overlapping + same sekolah) is present',
+    count($coverRows) === 1 && ($coverRows[0]['periodeMulai'] ?? null) === '2026-08-01',
+    json_encode($coverRows));
+check('dangling-cover row (coverOf -> missing id) is absent',
+    !in_array('2026-09-01', $coverStarts, true),
+    json_encode($coverRows));
+check('live-cover row carries peran A',
+    ($coverRows[0]['peran'] ?? null) === 'A',
+    json_encode($coverRows));
 
 // --- peran is per-row: trainerId match on the same person -> 'I' ------
 $flip = $hostPayload;
