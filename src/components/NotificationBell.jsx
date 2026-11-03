@@ -11,6 +11,7 @@ import {
 import { filterEntitiesByBranch } from '../lib/branchScope.js'
 import { remindersForTrainer } from '../lib/reminders.js'
 import { localDateString } from '../lib/constants.js'
+import { fetchMyPenugasan, visibleSekolahOnDate } from '../lib/myPenugasan.js'
 
 // Branch-linkage pre-filter for the admin/superadmin lane:
 // filterEntitiesByBranch narrows `trainer` by sekolahIds[] only, so a
@@ -53,7 +54,7 @@ function aggregateForTrainers(trainers, sekolah, absensi, absensiPengajar, nowLo
   return { today, tomorrow, counts: { todayUndone, tomorrow: tomorrow.length, total: todayUndone + tomorrow.length } }
 }
 
-function computeReminders(roleCtx, selectedCabangId) {
+function computeReminders(roleCtx, selectedCabangId, myRows = []) {
   const nowLocal = new Date()
   const sekolah = readCached('sekolah')
   const trainerRows = readCached('trainer')
@@ -61,13 +62,31 @@ function computeReminders(roleCtx, selectedCabangId) {
   const absensiPengajar = readCached('absensiPengajar')
   if (roleCtx.role === 'trainer' && roleCtx.trainerId) {
     const trainer = trainerRows.find(t => t.id === roleCtx.trainerId) || null
+    // SF.5 (F3) — additive OR with myPenugasan for today/tomorrow
+    // (visibleSekolahOnDate, shared predicate, no fork). Existing
+    // schoolIds/trainerHasAny logic untouched.
+    const todayISO = localDateString(nowLocal)
+    const tomorrowISO = localDateString(new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate() + 1))
+    const myIds = new Set([
+      ...visibleSekolahOnDate(myRows, todayISO),
+      ...visibleSekolahOnDate(myRows, tomorrowISO),
+    ])
     // Filter to own scope BEFORE calling the helper (union sekolahIds +
     // active penugasan, mirroring TrainerDashboard.jsx:70-78).
     const own = sekolah.filter(s =>
       (Array.isArray(trainer?.sekolahIds) && trainer.sekolahIds.includes(s.id)) ||
+      myIds.has(s.id) ||
       trainerHasAnyActiveAssignmentToSekolahClient(roleCtx.trainerId, s.id)
     )
-    return remindersForTrainer({ trainerId: roleCtx.trainerId, sekolah: own, trainer, absensi, absensiPengajar, nowLocal })
+    // remindersForTrainer re-checks isAssignedToTrainer over the trainer
+    // object (own-record-only for role trainer), which would drop the
+    // host-held schools just admitted above. Carry the myPenugasan ids
+    // on the helper's trainer stub so the inner gate passes too; the
+    // outer `own` list still bounds what is displayed.
+    const trainerForHelper = trainer
+      ? { ...trainer, sekolahIds: [...(Array.isArray(trainer.sekolahIds) ? trainer.sekolahIds : []), ...myIds] }
+      : { sekolahIds: [...myIds] }
+    return remindersForTrainer({ trainerId: roleCtx.trainerId, sekolah: own, trainer: trainerForHelper, absensi, absensiPengajar, nowLocal })
   }
   if (roleCtx.role === 'admin_cabang' || roleCtx.role === 'superadmin') {
     const scopeId = roleCtx.role === 'admin_cabang' ? roleCtx.cabangId : (selectedCabangId || '')
@@ -108,6 +127,21 @@ export default function NotificationBell({ onOpenJadwal }) {
   useEffect(() => subscribeStore(bump), [bump])
   const wrapperRef = useRef(null)
   const { selectedCabangId } = useBranch()
+  // SF.5 (F3) — own assignment rows from the trainer-only lane, fetched
+  // once on mount (mirror SF.3 TrainerAttendanceForm.jsx:53-62).
+  // In-memory per session, never the trainer localStorage key. Passed
+  // into computeReminders as an optional arg (default []); admin lane
+  // ignores it.
+  const [myRows, setMyRows] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetchMyPenugasan().then(rows => {
+      if (!cancelled) setMyRows(rows)
+    }).catch(() => {
+      if (!cancelled) setMyRows([])
+    })
+    return () => { cancelled = true }
+  }, [])
 
   // Escape/mousedown-outside close mirrors AccountMenu.jsx:19-33.
   useEffect(() => {
@@ -128,8 +162,8 @@ export default function NotificationBell({ onOpenJadwal }) {
 
   const roleCtx = getRoleContext()
   const reminders = useMemo(
-    () => computeReminders(roleCtx, selectedCabangId),
-    [tick, roleCtx.role, roleCtx.trainerId, roleCtx.cabangId, selectedCabangId]
+    () => computeReminders(roleCtx, selectedCabangId, myRows),
+    [tick, roleCtx.role, roleCtx.trainerId, roleCtx.cabangId, selectedCabangId, myRows]
   )
   const nowLocal = new Date()
   const todayISO = localDateString(nowLocal)

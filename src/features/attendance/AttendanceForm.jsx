@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { readCached, read, writeRemote } from '../../lib/store.js'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { readCached, read, writeRemote, subscribeStore } from '../../lib/store.js'
 import { apiRequest, ApiError } from '../../lib/api.js'
 import { newAbsensi, localDateString } from '../../lib/constants.js'
 import { findIssuedInvoiceForPeriod } from '../../lib/invoices.js'
@@ -11,7 +11,12 @@ import { localStorageUsageBytes, LOCALSTORAGE_WARN_THRESHOLD } from '../../lib/p
 import PhotoSlot from '../../components/PhotoSlot.jsx'
 
 export default function AttendanceForm({ editingRecord, onSaved }) {
-  const [dataRev, setDataRev] = useState(0)
+  // SF.5 (F5) — hygiene only: tick + subscribeStore so a pre-hydrate
+  // mount re-renders when the sync lands (mirrors
+  // TrainerAttendanceAdmin.jsx:49-60). No scope-logic change; trainer
+  // role never uses this form in practice.
+  const [tick, setTick] = useState(0)
+  const bump = useCallback(() => setTick(t => t + 1), [])
   const [tanggal, setTanggal] = useState(localDateString())
   const [sekolahId, setSekolahId] = useState('')
   const [trainerId, setTrainerId] = useState('')
@@ -26,9 +31,17 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
   const [alertMsg, setAlertMsg] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const sekolah = useMemo(() => readCached('sekolah'), [dataRev])
-  const trainers = useMemo(() => readCached('trainer'), [dataRev])
-  const siswa = useMemo(() => readCached('siswa'), [dataRev])
+  useEffect(() => subscribeStore(bump), [bump])
+
+  const sekolah = useMemo(() => readCached('sekolah'), [tick])
+  const trainers = useMemo(() => readCached('trainer'), [tick])
+  const siswa = useMemo(() => readCached('siswa'), [tick])
+
+  useEffect(() => {
+    read('sekolah').then(() => setTick(t => t + 1))
+    read('trainer').then(() => setTick(t => t + 1))
+    read('siswa').then(() => setTick(t => t + 1))
+  }, [])
 
   useEffect(() => {
     if (editingRecord) {
@@ -44,7 +57,6 @@ export default function AttendanceForm({ editingRecord, onSaved }) {
       const map = {}
       ;(editingRecord.siswaList || []).forEach(s => { map[s.siswaId] = s.status })
       setSiswaStatus(map)
-      setDataRev(prev => prev + 1)
     }
   }, [editingRecord])
 

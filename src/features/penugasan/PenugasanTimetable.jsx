@@ -3,6 +3,7 @@ import { apiRequest } from '../../lib/api.js'
 import { readCached, getRoleContext, subscribeStore, getUiState, setUiState } from '../../lib/store.js'
 import { localDateString } from '../../lib/constants.js'
 import { buildDailyTimetable, dayNameForTanggal, penugasanInvolvesTrainer, coverMarksForRows } from '../../lib/penugasan.js'
+import { fetchMyPenugasan, visibleSekolahOnDate } from '../../lib/myPenugasan.js'
 import { exportJadwalPenugasanCSV } from '../../lib/csv.js'
 import PrintButton from '../../components/PrintButton.jsx'
 
@@ -49,6 +50,43 @@ function monthLabel(iso) {
 
 const WEEKDAY_SHORT = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
 
+// SF.5 (F4) — presence-over-precision fallback for the trainer lane:
+// host-held assignments are invisible in the own-only trainer cache,
+// so buildDailyTimetable yields zero rows for a covered school. For
+// each myPenugasan-covered sekolahId on tanggal with zero rows in `all`,
+// synthesize one unscoped display row so the school appears instead of
+// vanishing. Slot time is unresolved without host rows (waktu '—');
+// YAGNI: presence over precision. Admin lane untouched.
+function myFallbackRows(all, { myRows, tanggal, sekolah, trainerId }) {
+  if (!Array.isArray(myRows) || myRows.length === 0) return []
+  if (!trainerId) return []
+  const hari = dayNameForTanggal(tanggal)
+  if (!hari) return []
+  const existing = new Set((all || []).map(r => r && r.sekolahId))
+  const covered = visibleSekolahOnDate(myRows, tanggal)
+  const schoolById = new Map((sekolah || []).map(s => [s && s.id, s]))
+  const out = []
+  for (const id of covered) {
+    if (existing.has(id)) continue
+    const sch = schoolById.get(id)
+    if (!sch) continue
+    out.push({
+      assignmentId: null,
+      coverOf: null,
+      sekolahId: id,
+      sekolahNama: sch.nama || id,
+      trainerId,
+      asistenId: null,
+      asistenIds: null,
+      hari,
+      waktu: '—',
+      waktuSingkat: '—',
+    })
+  }
+  out.sort((a, b) => String(a.sekolahNama).localeCompare(String(b.sekolahNama), 'id'))
+  return out
+}
+
 // PG.B.1 (F-PG2; D-PG4, D-PG5, D-PG7, D-PG8) — date-driven daily timetable.
 // Read-only derived view over trainer.penugasanPengajar[] ×
 // sekolah.jadwalList[]; no writes here. Table idiom mirrors
@@ -87,6 +125,20 @@ export default function PenugasanTimetable() {
     setUiState({ jadwalView: v, jadwalTanggal: undefined })
   }
 
+  // SF.5 (F4) — own assignment rows from the trainer-only lane, fetched
+  // once on mount (mirror SF.3 TrainerAttendanceForm.jsx:53-62).
+  // In-memory per session, never the trainer localStorage key.
+  const [myRows, setMyRows] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetchMyPenugasan().then(rows => {
+      if (!cancelled) setMyRows(rows)
+    }).catch(() => {
+      if (!cancelled) setMyRows([])
+    })
+    return () => { cancelled = true }
+  }, [])
+
   // readCached is already role-scoped; trainer rows are narrowed to self
   // below (R-TA6: personal scope), admins keep the scoped set as-is.
   const sekolah = useMemo(() => readCached('sekolah'), [tick])
@@ -107,10 +159,11 @@ export default function PenugasanTimetable() {
     const all = buildDailyTimetable({ trainers, sekolah, tanggal })
     if (ctx.role === 'trainer' && ctx.trainerId) {
       // DC.C.2 — union scope: a 2nd assistant sees their own sessions.
-      return all.filter(r => penugasanInvolvesTrainer(r, ctx.trainerId))
+      const filtered = all.filter(r => penugasanInvolvesTrainer(r, ctx.trainerId))
+      return [...filtered, ...myFallbackRows(all, { myRows, tanggal, sekolah, trainerId: ctx.trainerId })]
     }
     return all
-  }, [trainers, sekolah, tanggal, ctx.role, ctx.trainerId])
+  }, [trainers, sekolah, tanggal, ctx.role, ctx.trainerId, myRows])
 
   // Slice 3 — jangkar aman untuk derivasi minggu/bulan: input date
   // yang dikosongkan menghasilkan "" (Invalid Date bila di-parse) —
@@ -149,11 +202,11 @@ export default function PenugasanTimetable() {
       }
       const all = buildDailyTimetable({ trainers, sekolah, tanggal: iso })
       map[iso] = (ctx.role === 'trainer' && ctx.trainerId)
-        ? all.filter(r => penugasanInvolvesTrainer(r, ctx.trainerId))
+        ? [...all.filter(r => penugasanInvolvesTrainer(r, ctx.trainerId)), ...myFallbackRows(all, { myRows, tanggal: iso, sekolah, trainerId: ctx.trainerId })]
         : all
     }
     return map
-  }, [visibleDates, rows, trainers, sekolah, ctx.role, ctx.trainerId])
+  }, [visibleDates, rows, trainers, sekolah, ctx.role, ctx.trainerId, myRows])
 
   // Slice 3 — cover marks per hari (semantik cover harian, sama seperti
   // tampilan Harian sebelum slice ini).

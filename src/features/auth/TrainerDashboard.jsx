@@ -3,6 +3,7 @@ import { readCached, usePeriod, subscribeStore, read, trainerHasAnyActiveAssignm
 import { financialData } from '../../lib/finance.js'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 import { penugasanInvolvesTrainer } from '../../lib/penugasan.js'
+import { fetchMyPenugasan, visibleSekolahOnDate } from '../../lib/myPenugasan.js'
 
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
@@ -41,6 +42,22 @@ export default function TrainerDashboard({ trainerId }) {
     read('absensiPengajar').then(() => setTick(t => t + 1))
     read('honorPayments').then(() => setTick(t => t + 1))
   }, [])
+  // SF.5 (F2) — own assignment rows from the trainer-only lane
+  // (server/api/myPenugasan.php): host-held rows included, host PII
+  // never leaves the server. In-memory per session, never the
+  // afterschola_v4_* trainer localStorage key. Fetched once on mount
+  // (mirror SF.3 TrainerAttendanceForm.jsx:53-62); tanggal changes
+  // re-derive via the memos below.
+  const [myRows, setMyRows] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    fetchMyPenugasan().then(rows => {
+      if (!cancelled) setMyRows(rows)
+    }).catch(() => {
+      if (!cancelled) setMyRows([])
+    })
+    return () => { cancelled = true }
+  }, [])
   const sppPayments = readCached('sppPayments')
   const finance = useMemo(
     () => financialData({ sekolah, siswa, trainer: trainers, absensi, absensiPengajar, honorPayments, sppPayments, periode }),
@@ -68,23 +85,28 @@ export default function TrainerDashboard({ trainerId }) {
   const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
   const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`
   const tomorrowName = DAY_NAMES[tomorrowDate.getDay()]
+  // SF.5 (F2) — additive OR with myPenugasan: host-held rows cover
+  // today/tomorrow via visibleSekolahOnDate (shared predicate, no
+  // fork). Existing schoolIds/trainerHasAny logic untouched.
+  const myTodayIds = useMemo(() => new Set(visibleSekolahOnDate(myRows, today)), [myRows, today])
+  const myTomorrowIds = useMemo(() => new Set(visibleSekolahOnDate(myRows, tomorrow)), [myRows, tomorrow])
   const assignedSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
     const ledgerPengajar = Array.isArray(absensiPengajar) ? absensiPengajar : []
     return sekolah
-      .filter(s => (schoolIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, todayName))
+      .filter(s => (schoolIds.has(s.id) || myTodayIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, todayName))
       .map(s => ({
         ...s,
         done: ledgerPengajar.some(a => a && a.tanggal === today && a.sekolahId === s.id && (a.trainerId === trainerId || a.dicatatOleh === trainerId || penugasanInvolvesTrainer(a, trainerId))) || absensi.some(a => a.tanggal === today && a.sekolahId === s.id && a.trainerId === trainerId),
       }))
-  }, [absensi, absensiPengajar, sekolah, today, todayName, trainer, trainerId])
+  }, [absensi, absensiPengajar, sekolah, today, todayName, trainer, trainerId, myTodayIds])
   // Slice 4 — sekolah terjadwal besok (cermin Hari Ini, tanpa status
   // pill: belum ada yang bisa ditandai selesai untuk besok).
   const tomorrowSchools = useMemo(() => {
     const schoolIds = new Set(trainer?.sekolahIds || [])
     return sekolah
-      .filter(s => (schoolIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, tomorrowName))
-  }, [sekolah, tomorrowName, trainer, trainerId])
+      .filter(s => (schoolIds.has(s.id) || myTomorrowIds.has(s.id) || trainerHasAnyActiveAssignmentToSekolahClient(trainerId, s.id)) && scheduleIncludesToday(s, tomorrowName))
+  }, [sekolah, tomorrowName, trainer, trainerId, myTomorrowIds])
 
   return (
     <div className="space-y-6 animate-fadeIn">
