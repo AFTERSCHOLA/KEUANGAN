@@ -73,6 +73,7 @@ export function ReceiptPreview({ entry }) {
           if (typeof window !== 'undefined') {
             const w = window.open('')
             w?.document?.write(`<img src="${url}" style="max-width:100%;height:auto;" />`)
+            w?.document?.close?.()
           }
         }}
         title="Klik untuk memperbesar"
@@ -251,7 +252,7 @@ export function InvoiceFollowUpSection({
                   } else {
                     entry = await storePhoto(compressed, 'invoice-fu')
                   }
-                  onFormChange({ ...fuForm, buktiBayar: entry })
+                  onFormChange({ ...fuForm, buktiBayar: entry, uploadError: null })
                 } catch (err) {
                   onFormChange({ ...fuForm, uploadError: err?.message || 'Gagal memproses gambar' })
                 }
@@ -268,6 +269,9 @@ export function InvoiceFollowUpSection({
               </button>
             )}
           </div>
+          {fuForm.uploadError && (
+            <p className="text-[11px] text-rose-600 font-semibold mt-1">{fuForm.uploadError}</p>
+          )}
           {fuForm.buktiBayar && (
             <div className="mt-1">
               <ReceiptPreview entry={fuForm.buktiBayar} />
@@ -477,6 +481,28 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
       if (result.status === 'conflict') {
         setErrorMsg('Invoice ini sudah berubah di server. Muat ulang halaman sebelum menyimpan lagi.')
         return
+      }
+      if (latestFu.nominal > 0) {
+        const sch = sekolahAll.find(s => s.id === inv.sekolahId)
+        const cabangId = inv.cabangId || sch?.cabangId
+        const cabangKode = cabangAll.find(c => c.id === cabangId)?.kode
+        await addSppPayment(newSppPayment({
+          siswaId: null,
+          sekolahId: inv.sekolahId,
+          cabangId,
+          cabangKode,
+          invoiceId: inv.id,
+          nominal: latestFu.nominal,
+          periode: inv.periode || (inv.periodeList && inv.periodeList[0]) || '',
+          tanggalBayar: latestFu.tanggalFollowUp || latestFu.tanggalKirim || localDateString(),
+          metode: 'Transfer',
+          diterimaOleh: latestFu.penerima || 'Admin',
+          sumberDana: 'sekolah',
+          catatan: latestFu.catatan || 'Pembayaran via follow-up',
+          buktiBayar: latestFu.buktiBayar || null,
+        }))
+        await read('sppPayments')
+        recomputeAllSppLunas()
       }
       setFuEditing(null)
       await read('invoices')
@@ -693,7 +719,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       <p className="text-slate-400">{formatRupiah(inv.grandTotal ?? inv.total)} — {inv.periode || (inv.mode === 'semester' ? 'Semester' : 'Bulanan')}</p>
                       {!isLegacyDraft && (
                         <p className="text-slate-400 mt-0.5">
-                          Dibayar {formatRupiah(settlement.dibayar)} · Sisa {formatRupiah(settlement.sisa)}
+                          Dibayar {formatRupiah(settlement.dibayar)} · <span className={settlement.sisa > 0 ? 'text-rose-600 font-bold' : ''}>Sisa {formatRupiah(settlement.sisa)}</span>
                           {settlement.credit > 0 && ` · Lebih bayar ${formatRupiah(settlement.credit)}`}
                         </p>
                       )}
@@ -748,7 +774,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                           </div>
                         ))}
                         <p className="text-slate-500 font-semibold px-1">
-                          Total dibayar {formatRupiah(settlement.dibayar)} · Sisa {formatRupiah(settlement.sisa)}
+                          Total dibayar {formatRupiah(settlement.dibayar)} · <span className={settlement.sisa > 0 ? 'text-rose-600 font-bold' : ''}>Sisa {formatRupiah(settlement.sisa)}</span>
                         </p>
                       </div>
                     )}

@@ -124,9 +124,17 @@ export function financialData({ sekolah = [], siswa = [], trainer = [], absensi 
     // fractions into targetSpp/Potensi. Integer-spp schools are unaffected
     // (Math.round is identity); the per-meeting path is untouched.
     const targetSpp = Math.round(siswaBilling.length * sch.spp)
-    const realisasiSpp = siswaBilling.reduce((sum, s) => sum + sppPayments
+    const studentPayments = siswaBilling.reduce((sum, s) => sum + sppPayments
       .filter(p => p.siswaId === s.id && p.periode === periode)
       .reduce((studentSum, p) => studentSum + Number(p.nominal || 0), 0), 0)
+    const schoolPayments = sppPayments
+      .filter(p => {
+        if (p.periode !== periode) return false
+        if (p.sekolahId !== sch.id) return false
+        return !p.siswaId || (p.sumberDana === 'sekolah' && !siswaBilling.some(s => s.id === p.siswaId))
+      })
+      .reduce((sum, p) => sum + Number(p.nominal || 0), 0)
+    const realisasiSpp = studentPayments + schoolPayments
 
     potensiSpp += targetSpp
     pemasukanSpp += realisasiSpp

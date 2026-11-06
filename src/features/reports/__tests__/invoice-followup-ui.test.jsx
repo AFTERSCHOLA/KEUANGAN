@@ -3,10 +3,12 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import InvoiceModal, {
   normalizeInvoiceFollowUps,
+  ReceiptPreview,
   InvoiceFollowUpSection,
   appendInvoiceFollowUp,
 } from '../InvoiceModal.jsx'
 import * as store from '../../../lib/store.js'
+import { formatRupiah } from '../../../lib/format.js'
 
 // Mock Modal to render children directly for static testing
 vi.mock('../../../components/Modal.jsx', () => ({
@@ -276,6 +278,32 @@ describe('Invoice Follow-Up Schema & UI', () => {
       expect(html).toContain('Simpan Follow-up')
       expect(html).toContain('Batal')
     })
+
+    it('renders uploadError when present on fuForm', () => {
+      const html = renderToStaticMarkup(
+        <InvoiceFollowUpSection
+          inv={mockInvoice}
+          expandedCards={{}}
+          onToggleCard={() => {}}
+          fuForm={{
+            penerima: '',
+            wa: '',
+            tanggalKirim: '',
+            tanggalFollowUp: '',
+            nominal: 0,
+            buktiBayar: null,
+            catatan: '',
+            uploadError: 'Gagal mengompres gambar bukti bayar',
+          }}
+          onFormChange={() => {}}
+          onSave={() => {}}
+          onCancel={() => {}}
+          saving={false}
+        />
+      )
+
+      expect(html).toContain('Gagal mengompres gambar bukti bayar')
+    })
   })
 
   describe('Role Authorization for Follow-Up in InvoiceModal', () => {
@@ -335,6 +363,39 @@ describe('Invoice Follow-Up Schema & UI', () => {
       )
 
       expect(html).not.toContain('Follow-up')
+    })
+
+    it('renders remaining balance with text-rose-600 font-bold when settlement sisa > 0', () => {
+      vi.mocked(store.getRoleContext).mockReturnValue({ role: 'superadmin' })
+      vi.mocked(store.readCached).mockImplementation((key) => {
+        if (key === 'invoices') return [{ id: 'inv-1', sekolahId: 'skl-bdg-1', status: 'Terbit', grandTotal: 500000 }]
+        if (key === 'sppPayments') return []
+        return []
+      })
+
+      const html = renderToStaticMarkup(
+        <InvoiceModal open={true} onClose={() => {}} sekolah={mockSekolah} onPrint={() => {}} />
+      )
+
+      expect(html).toContain('text-rose-600 font-bold')
+      expect(html).toContain(`Sisa ${formatRupiah(500000)}`)
+    })
+  })
+
+  describe('ReceiptPreview Component', () => {
+    it('renders static thumbnail when entry is given', () => {
+      const html = renderToStaticMarkup(
+        <ReceiptPreview entry="data:image/png;base64,testdata" />
+      )
+      expect(html).toContain('data:image/png;base64,testdata')
+      expect(html).toContain('Bukti Bayar')
+    })
+
+    it('renders fallback when no entry is provided', () => {
+      const html = renderToStaticMarkup(
+        <ReceiptPreview entry={null} />
+      )
+      expect(html).toContain('Bukti bayar terlampir')
     })
   })
 })

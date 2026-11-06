@@ -12,6 +12,8 @@ export function newSppPayment({
   metode,
   diterimaOleh,
   bukti = null,
+  buktiBayar = null,
+  catatan = '',
   sudahDisetor = false,
   sumberDana = 'sekolah',
   invoiceId = null,
@@ -27,13 +29,15 @@ export function newSppPayment({
     tanggalBayar,
     metode,
     diterimaOleh,
-    bukti,
+    bukti: bukti || buktiBayar || null,
     sudahDisetor,
     sumberDana,
     cabangId,
   }
   if (invoiceId) payment.invoiceId = invoiceId
   if (sekolahId) payment.sekolahId = sekolahId
+  if (catatan) payment.catatan = catatan
+  if (buktiBayar) payment.buktiBayar = buktiBayar
   return payment
 }
 
