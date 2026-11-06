@@ -11,6 +11,7 @@ import OverviewCards from './features/overview/OverviewCards.jsx'
 import Modal from './components/Modal.jsx'
 import BackupRestorePanel from './components/BackupRestorePanel.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
+import ChangePasswordModal from './components/ChangePasswordModal.jsx'
 import SidebarLayout from './components/SidebarLayout.jsx'
 import AccountMenu from './components/AccountMenu.jsx'
 import NotificationBell from './components/NotificationBell.jsx'
@@ -188,6 +189,7 @@ useEffect(() => {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [backupModalOpen, setBackupModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   // M-AUTH.3: hydrate ONLY when an identity is present. An anonymous
   // bootstrap must not pull protected records.
   // DC.B.3 (D-DC1) — no sync state: every write posts direct, so login
@@ -363,6 +365,7 @@ if (currentUser?.mustChangePassword) {
               username={currentUser?.username || 'Akun'}
               onOpenBackup={() => setBackupModalOpen(true)}
               onOpenSettings={() => setSettingsModalOpen(true)}
+              onOpenChangePassword={() => setChangePasswordOpen(true)}
               onLogout={async () => { await logout(); setActiveTab('overview') }}
             /></div>
           </div>
@@ -395,6 +398,8 @@ if (currentUser?.mustChangePassword) {
       </Modal>
 
       <SettingsModal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} onSaved={() => setSettings(getSettings())} />
+
+      <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
     </div>
   )
 }
