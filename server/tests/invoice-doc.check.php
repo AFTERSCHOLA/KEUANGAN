@@ -96,6 +96,17 @@ $missingLegacy = containsAll($htmlLegacy, ['September 2026', 'Pembayaran SPP bul
 docCheck('legacy shape renders single row unchanged', count($missingLegacy) === 0, implode(' | ', $missingLegacy));
 docCheck('null settlement hides appendix', strpos($htmlLegacy, 'STATUS PEMBAYARAN') === false);
 
+$tarifPertemuanInvoice = [
+    'id' => 'inv-doc-tarif', 'sekolahId' => 'skl-doc-test-1',
+    'status' => 'Terbit',
+    'items' => [
+        ['deskripsi' => 'Ekskul Robotik', 'jumlahSiswa' => 5, 'tarifPerPertemuan' => 75000, 'total' => 375000],
+    ],
+    'grandTotal' => 375000,
+];
+$htmlTarif = renderInvoiceDoc($tarifPertemuanInvoice, $sekolah, $settings, null, []);
+docCheck('tarifPerPertemuan fallback renders unit price in invoiceDoc', strpos($htmlTarif, 'Rp 75.000') !== false);
+
 $settle = invoiceDocSettlement(
     ['id' => 'inv-x', 'grandTotal' => 1000000, 'periode' => '2026-09', 'sekolahId' => 'skl-1'],
     [

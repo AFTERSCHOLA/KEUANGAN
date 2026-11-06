@@ -82,10 +82,10 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
         no: idx + 1,
         uraian: it.deskripsi || invoice.uraian || '',
         qty: it.jumlahSiswa,
-        harga: it.hargaSatuan,
+        harga: Number(it.hargaSatuan ?? it.tarifPerPertemuan ?? invoice.hargaSatuan ?? 0) || 0,
         total: it.total,
       }))
-    : [{ no: 1, uraian: invoice.uraian || '', qty: invoice.jumlahSiswa, harga: invoice.hargaSatuan, total: invoice.total }]
+    : [{ no: 1, uraian: invoice.uraian || '', qty: invoice.jumlahSiswa, harga: Number(invoice.hargaSatuan ?? 0) || 0, total: invoice.total }]
   const pjDisplay = invoice.pjSekolah || invoice.pjNama || ''
 
   return (

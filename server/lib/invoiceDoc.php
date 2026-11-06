@@ -96,7 +96,7 @@ function invoiceDocRows(array $invoice): array {
                 'no' => $no++,
                 'uraian' => (string) ($it['deskripsi'] ?? $invoice['uraian'] ?? ''),
                 'qty' => $it['jumlahSiswa'] ?? null,
-                'harga' => $it['hargaSatuan'] ?? null,
+                'harga' => $it['hargaSatuan'] ?? $it['tarifPerPertemuan'] ?? $invoice['hargaSatuan'] ?? 0,
                 'total' => isset($it['total']) && is_numeric($it['total']) ? (float) $it['total'] : 0.0,
             ];
         }
@@ -106,7 +106,7 @@ function invoiceDocRows(array $invoice): array {
         'no' => 1,
         'uraian' => (string) ($invoice['uraian'] ?? ''),
         'qty' => $invoice['jumlahSiswa'] ?? null,
-        'harga' => $invoice['hargaSatuan'] ?? null,
+        'harga' => $invoice['hargaSatuan'] ?? 0,
         'total' => invoiceDocTotal($invoice),
     ]];
 }

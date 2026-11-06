@@ -84,7 +84,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
     ? [periodeKey(bulanTunggal, period.selectedYear)]
     : (semester === 'ganjil' ? [7, 8, 9, 10, 11, 12] : [1, 2, 3, 4, 5, 6]).map(m => periodeKey(m, period.selectedYear))
 
-  const hargaSatuanEstimasi = (sekolah.spp || 0) * periodeList.length
+  const hargaSatuanEstimasi = (Number(sekolah.spp) || 0) * periodeList.length
   const totalEstimasi = jumlahSiswa * hargaSatuanEstimasi
 
   const existing = invoicesForSekolah(sekolah.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))

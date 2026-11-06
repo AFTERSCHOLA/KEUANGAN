@@ -3,12 +3,14 @@ import { MONTHS, MONTH_KEYS, periodeKey } from './constants.js'
 export { MONTHS, MONTH_KEYS, periodeKey }
 
 export function formatRupiah(amount) {
+  const num = Number(amount)
+  const safeAmount = Number.isFinite(num) ? num : 0
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(safeAmount);
 }
 
 export function waNormalize(wa) {
