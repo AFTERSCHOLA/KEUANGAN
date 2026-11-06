@@ -24,3 +24,5 @@ docs/exemplar
 docs/EVALUATION_LOG.md
 .worktrees/
 .gitignore
+server/config.smtp.php
+server/data/

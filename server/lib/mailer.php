@@ -37,10 +37,13 @@ function smtpConfig(): ?array {
  * @param array $extraHeaders Optional extra headers as key => value pairs
  * @return string RFC 2822 formatted email message
  */
-function buildEmailMessage(string $to, string $subject, string $htmlBody, array $extraHeaders = []): string {
-    $cfg = smtpConfig();
-    $fromEmail = trim((string)($cfg['from_email'] ?? 'no-reply@afterschola.com'));
-    $fromName = trim((string)($cfg['from_name'] ?? 'Afterschola Admin'));
+function buildEmailMessage(string $to, string $subject, string $htmlBody, array $extraHeaders = [], ?array $configOverride = null): string {
+    // CRLF header injection defense
+    $to = str_replace(["\r", "\n"], '', trim($to));
+    $subject = str_replace(["\r", "\n"], '', trim($subject));
+    $cfg = $configOverride ?? smtpConfig();
+    $fromEmail = str_replace(["\r", "\n"], '', trim((string)($cfg['from_email'] ?? 'no-reply@afterschola.com')));
+    $fromName = str_replace(["\r", "\n"], '', trim((string)($cfg['from_name'] ?? 'Afterschola Admin')));
 
     $fromHeader = $fromName !== '' ? "{$fromName} <{$fromEmail}>" : $fromEmail;
 
@@ -179,7 +182,7 @@ function sendEmail(
             return false;
         }
 
-        $clientDomain = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'localhost';
+        $clientDomain = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : (gethostname() ?: 'localhost');
 
         // 2. EHLO
         [$code, $resp] = $sendSmtpCommand($socket, "EHLO {$clientDomain}");
@@ -284,7 +287,7 @@ function sendEmail(
             return false;
         }
 
-        $message = buildEmailMessage($to, $subject, $htmlBody, $extraHeaders);
+        $message = buildEmailMessage($to, $subject, $htmlBody, $extraHeaders, $cfg);
         // RFC 5321 Section 4.5.2 dot stuffing
         $stuffedMessage = preg_replace('/^\./m', '..', $message);
         fwrite($socket, $stuffedMessage . "\r\n.\r\n");
