@@ -33,6 +33,7 @@ import { recomputeAllSppLunas } from './lib/sppPayments.js'
 import { bootstrapAuth, getCurrentUser, logout, subscribeAuth } from './lib/auth.js'
 import LoginPage from './features/auth/LoginPage.jsx'
 import MustChangePasswordPage from './features/auth/MustChangePasswordPage.jsx'
+import ResetPasswordPage from './features/auth/ResetPasswordPage.jsx'
 
 
 
@@ -142,6 +143,7 @@ function isValidISODate(s) {
 }
 
 export default function App() {
+  const [, setTick] = useState(0)
   const period = usePeriod()
   const [settings, setSettings] = useState(() => getSettings())
   const [authReady, setAuthReady] = useState(false)
@@ -278,6 +280,19 @@ useEffect(() => {
     // Semua tab baca ulang lewat store.read() saat mount; cara paling
     // aman untuk memastikan setiap tab ter-refresh setelah restore.
     window.location.reload()
+  }
+
+  const resetToken = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('resetToken') : null
+  if (resetToken) {
+    return (
+      <ResetPasswordPage
+        token={resetToken}
+        onFinished={() => {
+          window.history.replaceState({}, '', window.location.pathname)
+          setTick(t => t + 1)
+        }}
+      />
+    )
   }
 
   if (!authReady) {

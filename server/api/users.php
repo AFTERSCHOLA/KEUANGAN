@@ -68,6 +68,19 @@ function createUser(array $data, array $user): never {
     $displayName = isset($data['displayName']) && is_string($data['displayName']) ? trim($data['displayName']) : '';
     if ($displayName === '') jsonResponse(['error' => 'Nama tampilan wajib diisi'], 422);
 
+    $email = isset($data['email']) && is_string($data['email']) && trim($data['email']) !== '' ? trim($data['email']) : null;
+    if ($email !== null) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            jsonResponse(['error' => 'Format email tidak valid'], 422);
+        }
+        $checkEmail = database()->prepare('SELECT id, display_name FROM users WHERE email = :e LIMIT 1');
+        $checkEmail->execute([':e' => $email]);
+        $dupEmail = $checkEmail->fetch();
+        if ($dupEmail !== false) {
+            jsonResponse(['error' => "Email \"$email\" sudah dipakai oleh \"{$dupEmail['display_name']}\". Pilih email lain."], 422);
+        }
+    }
+
     // ---- 2. Branch scoping per role ----
     // Session is the authority for branch assignment, never the client.
     // Mirrors server/api/trainer.php:20-33 — Branch Admin's session.cabangId
@@ -134,13 +147,14 @@ function createUser(array $data, array $user): never {
     try {
         $userId = 'usr-' . bin2hex(random_bytes(12));
         $stmt = $pdo->prepare(
-            'INSERT INTO users (id, username, display_name, password_hash, role, cabang_id, trainer_id, active, must_change_password)
-             VALUES (:id, :username, :display_name, :password_hash, :role, :cabang_id, :trainer_id, 1, 1)'
+            'INSERT INTO users (id, username, display_name, email, password_hash, role, cabang_id, trainer_id, active, must_change_password)
+             VALUES (:id, :username, :display_name, :email, :password_hash, :role, :cabang_id, :trainer_id, 1, 1)'
         );
         $stmt->execute([
             ':id' => $userId,
             ':username' => $username,
             ':display_name' => $displayName,
+            ':email' => $email,
             ':password_hash' => $passwordHash,
             ':role' => $targetRole,
             ':cabang_id' => $cabangId,

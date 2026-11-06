@@ -41,6 +41,7 @@ export default function BranchManager() {
   const [createAdminAccount, setCreateAdminAccount] = useState(true)
   const [adminDisplayName, setAdminDisplayName] = useState('')
   const [adminUsername, setAdminUsername] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [initialPasswordDialog, setInitialPasswordDialog] = useState(null)
   const [passwordAcknowledged, setPasswordAcknowledged] = useState(false)
@@ -78,6 +79,7 @@ export default function BranchManager() {
     setForm(newCabang())
     setAdminDisplayName('')
     setAdminUsername('')
+    setAdminEmail('')
     setCreateAdminAccount(true)
     setInitialPasswordDialog(null)
     setPasswordAcknowledged(false)
@@ -88,6 +90,7 @@ export default function BranchManager() {
     setForm({ ...c })
     setAdminDisplayName('')
     setAdminUsername('')
+    setAdminEmail('')
     setCreateAdminAccount(false)
     setModalOpen(true)
   }
@@ -144,6 +147,7 @@ export default function BranchManager() {
         role: 'admin_cabang',
         username: adminUsername.trim(),
         displayName: adminDisplayName.trim(),
+        email: adminEmail.trim() || undefined,
         cabangId: form.id,
       })
       if (result.status === 'forbidden') {
@@ -320,6 +324,8 @@ export default function BranchManager() {
           setAdminDisplayName={setAdminDisplayName}
           adminUsername={adminUsername}
           setAdminUsername={setAdminUsername}
+          adminEmail={adminEmail}
+          setAdminEmail={setAdminEmail}
         />
       </Modal>
 
@@ -403,7 +409,7 @@ export default function BranchManager() {
   )
 }
 
-function BranchOnboardingForm({ form, setForm, save, onClose, saving, isEdit, createAdminAccount, setCreateAdminAccount, adminDisplayName, setAdminDisplayName, adminUsername, setAdminUsername }) {
+function BranchOnboardingForm({ form, setForm, save, onClose, saving, isEdit, createAdminAccount, setCreateAdminAccount, adminDisplayName, setAdminDisplayName, adminUsername, setAdminUsername, adminEmail, setAdminEmail }) {
   return (
     <>
       <div>
@@ -465,6 +471,17 @@ function BranchOnboardingForm({ form, setForm, save, onClose, saving, isEdit, cr
                 <p className="text-[11px] text-slate-400 mt-1">
                   3-64 karakter, hanya huruf/angka/titik/garis-bawah/strip. Password sementara akan dibuat otomatis dan ditampilkan setelah simpan.
                 </p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase">Email Admin Cabang (opsional)</label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={e => setAdminEmail(e.target.value)}
+                  disabled={saving}
+                  placeholder="contoh: admin@example.com"
+                  className="w-full mt-1 rounded-lg border p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60"
+                />
               </div>
             </>
           )}

@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { login } from '../../lib/auth.js'
 import { SidebarLogo } from '../../components/SidebarLayout.jsx'
 import PasswordField from '../../components/PasswordField.jsx'
+import ForgotPasswordModal from './ForgotPasswordModal.jsx'
 
 export default function LoginPage({ onAuthenticated }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   // D-RM1 — opt-in persistent login, default off (unchecked reads as today).
   const [remember, setRemember] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -87,6 +89,14 @@ export default function LoginPage({ onAuthenticated }) {
               placeholder="Masukkan password"
             />
 
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              className="text-xs text-blue-600 hover:underline font-semibold block text-right w-full mt-1"
+            >
+              Lupa kata sandi?
+            </button>
+
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
@@ -112,6 +122,11 @@ export default function LoginPage({ onAuthenticated }) {
               {loading ? 'Memproses...' : 'Masuk'}
             </button>
           </form>
+
+          <ForgotPasswordModal
+            open={forgotOpen}
+            onClose={() => setForgotOpen(false)}
+          />
         </div>
       </div>
     </div>
