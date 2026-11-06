@@ -56,9 +56,19 @@ export function newSekolah(cabangId, cabangKode = DEFAULT_CABANG_KODE) {
     //   jumlahN: number|null, jumlahMinggu: number|null,
     //   sumberDana: 'sekolah'|'ortu' }
     metodePembayaran: null,
+    status: 'Aktif',
     trainerIds: [],
     cabangId: branchId,
   }
+}
+
+export function filterSekolahByStatus(schools, filter) {
+  if (!Array.isArray(schools)) return []
+  return schools.filter(s => {
+    if (filter === 'Aktif') return s?.status !== 'Non-Aktif'
+    if (filter === 'Non-Aktif') return s?.status === 'Non-Aktif'
+    return true
+  })
 }
 
 // TEAM_FEEDBACK D2 (G3.1) — new-entry factory: default Senin 14:00–15:00

@@ -167,6 +167,9 @@ function validateSekolah(array $data, PDO $pdo): array {
     } elseif (!rowExists($pdo, 'cabang', $data['cabangId'])) {
         $errors[] = 'sekolah: cabangId does not reference an existing cabang';
     }
+    if (isset($data['status']) && !in_array($data['status'], ['Aktif', 'Non-Aktif'], true)) {
+        $errors[] = 'sekolah: status must be Aktif or Non-Aktif';
+    }
     return $errors;
 }
 

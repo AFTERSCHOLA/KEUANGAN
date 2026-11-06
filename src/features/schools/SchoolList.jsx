@@ -29,6 +29,7 @@ export default function SchoolList() {
     return list.length ? list : [defaultCabang()]
   })
   const [selectedCabangId, setSelectedCabangId] = useState('')
+  const [statusFilter, setStatusFilter] = useState('Aktif')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(newSekolah())
   const [alertOpen, setAlertOpen] = useState(false)
@@ -89,7 +90,14 @@ export default function SchoolList() {
 }, [])
 
   const role = getRoleContext().role
-  const visibleSekolah = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah
+  const visibleSekolah = useMemo(() => {
+    const byBranch = selectedCabangId ? sekolah.filter(s => s.cabangId === selectedCabangId) : sekolah
+    return byBranch.filter(s => {
+      if (statusFilter === 'Aktif') return s.status !== 'Non-Aktif'
+      if (statusFilter === 'Non-Aktif') return s.status === 'Non-Aktif'
+      return true
+    })
+  }, [sekolah, selectedCabangId, statusFilter])
   // Perf slice: one siswa read + one count pass per render. Was
   // readCached('siswa').filter() per card (N JSON.parse + N scans).
   const siswaCounts = useMemo(() => countSiswaBySekolahId(readCached('siswa')), [sekolah])
@@ -111,6 +119,7 @@ export default function SchoolList() {
     jadwalList: [],
     trainerIds: [],
     ...sch,
+    status: sch.status || 'Aktif',
     cabangId: sch.cabangId,
   }
 
@@ -306,8 +315,9 @@ try {
             <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
             <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <BranchFilter cabang={cabang} value={selectedCabangId} onChange={setSelectedCabangId} role={role} />
+            <StatusFilter value={statusFilter} onChange={setStatusFilter} />
             <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
           </div>
         </div>
@@ -353,8 +363,9 @@ try {
             <h2 className="text-xl font-bold text-slate-800">Manajemen Sekolah Mitra</h2>
             <p className="text-xs text-slate-500">Kelola profil, trainer penanggung jawab, jadwal, dan tarif SPP.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <BranchFilter cabang={cabang} value={selectedCabangId} onChange={setSelectedCabangId} role={role} />
+            <StatusFilter value={statusFilter} onChange={setStatusFilter} />
             <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition shadow-sm active:scale-95">Tambah Sekolah Mitra</button>
           </div>
         </div>
@@ -378,7 +389,14 @@ try {
             <div className="p-5 flex-1 flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-bold text-slate-800 line-clamp-1">{sch.nama}</h3>
-                <p className="text-[10px] text-blue-600 font-bold uppercase mt-1">{cabang.find(c => c.id === sch.cabangId)?.kode || 'PST'}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-[10px] text-blue-600 font-bold uppercase">{cabang.find(c => c.id === sch.cabangId)?.kode || 'PST'}</p>
+                  {sch.status === 'Non-Aktif' ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Non-Aktif</span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Aktif</span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
                   <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   <span className="line-clamp-1">{sch.alamat}</span>
@@ -460,6 +478,28 @@ function BranchFilter({ cabang, value, onChange, role }) {
   )
 }
 
+function StatusFilter({ value, onChange }) {
+  const options = ['Aktif', 'Non-Aktif', 'Semua']
+  return (
+    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+      {options.map(opt => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            value === opt
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function SchoolForm({ form, setForm, save, onClose, cabang }) {
   // EF.A.1 (F-EF1; D-EF1) — read-only effective-bill preview. Derived from
   // existing form state only, never stored; pupil count mirrors the
@@ -509,6 +549,18 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
               {c.nama} ({c.kode})
             </option>
           ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-slate-400 uppercase">Status Sekolah</label>
+        <select
+          value={form.status || 'Aktif'}
+          onChange={e => setForm({ ...form, status: e.target.value })}
+          className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white"
+        >
+          <option value="Aktif">Aktif</option>
+          <option value="Non-Aktif">Non-Aktif</option>
         </select>
       </div>
 

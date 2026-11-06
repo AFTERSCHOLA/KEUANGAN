@@ -601,7 +601,7 @@ function TrainerForm({ form, setForm, save, onClose, saving, isEdit, createAccou
       <div>
         <label className="text-xs font-bold text-slate-400 uppercase">Sekolah Penugasan</label>
         <div className="space-y-1 mt-1">
-          {sekolah.map(s => (
+          {sekolah.filter(s => s.status !== 'Non-Aktif' || form.sekolahIds.includes(s.id)).map(s => (
             <div key={s.id}>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.sekolahIds.includes(s.id)} disabled={saving} onChange={e => {

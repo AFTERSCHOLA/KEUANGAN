@@ -586,7 +586,7 @@ export default function PenugasanManager() {
             className="w-full mt-1 rounded-lg border p-2.5 text-sm bg-white disabled:opacity-60"
           >
             <option value="">-- Pilih Sekolah --</option>
-            {sekolah.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
+            {sekolah.filter(s => s.status !== 'Non-Aktif' || s.id === form.sekolahId).map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
           </select>
         </div>
         <div>

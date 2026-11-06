@@ -81,6 +81,10 @@ function generateInvoicesForPeriod(PDO $pdo, string $periode, string $uraian, ar
             $result['skipped'][] = ['sekolahId' => $sekolahId, 'reason' => 'sekolah_payload_invalid'];
             continue;
         }
+        if (($sekolahPayload['status'] ?? 'Aktif') === 'Non-Aktif') {
+            $result['skipped'][] = ['sekolahId' => $sekolahId, 'reason' => 'sekolah_non_aktif'];
+            continue;
+        }
         $defaultTarif = (float) ($sekolahPayload['spp'] ?? 0);
         $sekolahNama = (string) ($sekolahPayload['nama'] ?? '');
         $pjNama = (string) ($sekolahPayload['pjNama'] ?? '');

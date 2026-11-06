@@ -160,7 +160,8 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
     // Guard: trainer with no assigned school has no submit path even if
     // openAdd is reached programmatically (the button is also disabled).
     if (trainerScoped && !hasAllowedSekolah) return
-    const defaultSekolah = sekolah.length > 0 ? sekolah[0] : null
+    const activeSekolah = (sekolah || []).filter(sch => sch.status !== 'Non-Aktif')
+    const defaultSekolah = activeSekolah.length > 0 ? activeSekolah[0] : null
     const branch = defaultSekolah
       ? readCached('cabang').find(c => c.id === defaultSekolah.cabangId)
       : null
@@ -832,7 +833,7 @@ function SiswaForm({ form, setForm, save, onClose, sekolah, period }) {
         >
           <option value="">-- Pilih Sekolah --</option>
 
-          {sekolah.map(s => (
+          {(sekolah || []).filter(sch => sch.status !== 'Non-Aktif' || sch.id === form.sekolahId).map(s => (
             <option key={s.id} value={s.id}>
               {s.nama}
             </option>
