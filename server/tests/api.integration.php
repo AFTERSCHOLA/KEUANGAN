@@ -275,8 +275,12 @@ try {
     d1Check(!authorize('read', 'settings', [], $__d1AdmAUser), 'AA.D.1 admin-A Bearer must NOT read settings (boundary unchanged)');
     d1Check(!authorize('create', 'settings', ['cabangId' => $__d1CabA], $__d1AdmAUser), 'AA.D.1 admin-A Bearer must NOT create setting (boundary unchanged)');
     d1Check(!authorize('update', 'settings', ['cabangId' => $__d1CabA], $__d1AdmAUser), 'AA.D.1 admin-A Bearer must NOT update setting (boundary unchanged)');
-    foreach (['create', 'update', 'delete', 'write'] as $__d1Action) {
+    // Task 7: admin_cabang allowed to update/write own-branch invoices, blocked from create/delete
+    foreach (['create', 'delete'] as $__d1Action) {
         d1Check(!authorize($__d1Action, 'invoices', $__d1Own, $__d1AdmAUser), "AA.D.1 admin-A Bearer must NOT {$__d1Action} invoice even own branch (boundary unchanged)");
+    }
+    foreach (['update', 'write'] as $__d1Action) {
+        d1Check(authorize($__d1Action, 'invoices', $__d1Own, $__d1AdmAUser), "AA.D.1 admin-A Bearer must {$__d1Action} invoice own branch");
     }
     foreach (['create', 'update', 'delete'] as $__d1Action) {
         d1Check(!authorize($__d1Action, 'users', ['id' => 'x'], $__d1TrnUser), "AA.D.1 trainer Bearer {$__d1Action} users must be 403 (boundary unchanged)");

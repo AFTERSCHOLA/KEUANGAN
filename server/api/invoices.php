@@ -58,15 +58,25 @@ if ($action === 'delete') {
 // NOT NULL on this table (unlike settings), so cabangId is always
 // required and validated against the cabang table — same shape as
 // sekolah.php's superadmin path.
-if (!isset($data['cabangId']) || !is_string($data['cabangId']) || trim($data['cabangId']) === '') {
-    jsonResponse(['error' => 'Record membutuhkan cabangId'], 422);
+if (($user['role'] ?? null) === 'admin_cabang') {
+    $cabangId = $user['cabangId'] ?? null;
+    if (!is_string($cabangId) || $cabangId === '') {
+        jsonResponse(['error' => 'Sesi tidak memiliki cabang yang valid'], 422);
+    }
+    if (isset($data['cabangId']) && $data['cabangId'] !== $cabangId) {
+        jsonResponse(['error' => 'Tidak diizinkan mengubah invoice cabang lain'], 403);
+    }
+} else {
+    if (!isset($data['cabangId']) || !is_string($data['cabangId']) || trim($data['cabangId']) === '') {
+        jsonResponse(['error' => 'Record membutuhkan cabangId'], 422);
+    }
+    $check = $pdo->prepare('SELECT 1 FROM cabang WHERE id = :id');
+    $check->execute([':id' => $data['cabangId']]);
+    if ($check->fetchColumn() === false) {
+        jsonResponse(['error' => 'cabangId tidak ditemukan'], 422);
+    }
+    $cabangId = $data['cabangId'];
 }
-$check = $pdo->prepare('SELECT 1 FROM cabang WHERE id = :id');
-$check->execute([':id' => $data['cabangId']]);
-if ($check->fetchColumn() === false) {
-    jsonResponse(['error' => 'cabangId tidak ditemukan'], 422);
-}
-$cabangId = $data['cabangId'];
 
 $record = $data;
 $record['cabangId'] = $cabangId;

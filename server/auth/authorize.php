@@ -323,7 +323,10 @@ function authorize(string $action, string $resource, ?array $data = null, ?array
         // cabangId from the trainer's school, PaymentTable.jsx:45-47) while
         // cross-branch stays 403 via recordOwnsBranch. Every write is
         // trailed (insertLedger auditEvent, bootstrap.php:241).
-        if (in_array($resource, ['invoices', 'audit_log'], true) && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
+        if ($resource === 'audit_log' && in_array($action, ['create', 'update', 'delete', 'write'], true)) {
+            return false;
+        }
+        if ($resource === 'invoices' && in_array($action, ['create', 'delete'], true)) {
             return false;
         }
 

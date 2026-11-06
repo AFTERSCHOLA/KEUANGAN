@@ -1548,8 +1548,14 @@ check('duplicate id -> 409', $status === 409, "got $status");
 
 echo "\n--- invoices.php (update/delete) ---\n";
 $invUpdate = ['id' => $invNew['id'], 'action' => 'update', 'cabangId' => $branchA, 'total' => 750000];
-[$status] = req('POST', "$base/server/api/invoices.php", $invUpdate, $cookieAdminA, $csrfAdminA);
-check('admin_cabang updating invoice -> 403 (read-only per matrix)', $status === 403, "got $status");
+// Task 7: admin_cabang updating own-branch invoice -> 200
+[$status, $body] = req('POST', "$base/server/api/invoices.php", $invUpdate, $cookieAdminA, $csrfAdminA);
+check('admin_cabang updating own branch invoice -> 200', $status === 200, "got $status");
+
+// admin_cabang updating cross branch invoice -> 403
+$invCrossUpdate = ['id' => $invNew['id'], 'action' => 'update', 'cabangId' => $branchB, 'total' => 800000];
+[$status] = req('POST', "$base/server/api/invoices.php", $invCrossUpdate, $cookieAdminA, $csrfAdminA);
+check('admin_cabang updating cross-branch invoice -> 403', $status === 403, "got $status");
 
 [$status, $body] = req('POST', "$base/server/api/invoices.php", $invUpdate, $cookieSuper, $csrfSuper);
 check('superadmin updating invoice -> 200', $status === 200, "got $status");

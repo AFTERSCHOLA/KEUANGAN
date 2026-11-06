@@ -421,3 +421,15 @@ export async function openInvoiceDoc(id) {
   window.open(url, '_blank', 'noopener')
   return url
 }
+
+/**
+ * Task 7: Normalizes invoice follow-up history to an array of follow-up entries.
+ * Supports legacy single { followUp: { ... } } and multi-entry { followUps: [ ... ] }.
+ */
+export function normalizeInvoiceFollowUps(inv) {
+  if (Array.isArray(inv?.followUps)) return inv.followUps
+  if (inv?.followUp && typeof inv.followUp === 'object') {
+    return [{ id: 'fu-legacy', createdAt: inv.followUp.tanggalKirim || inv.createdAt || '', ...inv.followUp }]
+  }
+  return []
+}

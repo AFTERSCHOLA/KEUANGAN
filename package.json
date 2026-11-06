@@ -10,7 +10,7 @@
     "build:deploy": "node scripts/build-deploy.cjs",
     "db:reset": "node scripts/run-db-reset.cjs",
     "setup": "node scripts/setup-local.mjs",
-    "test": "vitest run src/lib/__tests__",
+    "test": "vitest run",
     "test:destructive": "playwright test --project=destructive",
     "rc:verify": "node scripts/rc-verify.cjs",
     "test:server": "node scripts/run-contract-battery.cjs",
