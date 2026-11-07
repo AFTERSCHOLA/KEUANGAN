@@ -105,6 +105,27 @@ if (is_string($sekolahId) && $sekolahId !== '') {
 }
 $settlement = invoiceDocSettlement($invoice, $payments, $siswaIds);
 
+if (!empty($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) {
+    foreach ($invoice['carryOverLines'] as &$cline) {
+        if (!is_array($cline)) continue;
+        $prevId = $cline['invoiceId'] ?? null;
+        if (!empty($prevId) && ($cline['kind'] ?? '') === 'outstanding') {
+            $prevStmt = $pdo->prepare('SELECT payload FROM invoices WHERE id = :id');
+            $prevStmt->execute([':id' => $prevId]);
+            $prevRow = $prevStmt->fetch();
+            if ($prevRow !== false) {
+                $prevInv = json_decode((string) $prevRow['payload'], true);
+                if (is_array($prevInv)) {
+                    $prevSettle = invoiceDocSettlement($prevInv, $payments, $siswaIds);
+                    $cline['activeAmount'] = min((float) ($cline['amount'] ?? 0), (float) $prevSettle['sisa']);
+                    $cline['isSettled'] = ($prevSettle['sisa'] <= 0.0);
+                }
+            }
+        }
+    }
+    unset($cline);
+}
+
 // --- images: explicit dataURL override wins, else tracked on-disk asset -
 $assets = ['logoDataUrl' => null, 'signatureDataUrl' => null];
 $pairs = ['logoDataUrl' => 'logo.png', 'signatureDataUrl' => 'signature.png'];

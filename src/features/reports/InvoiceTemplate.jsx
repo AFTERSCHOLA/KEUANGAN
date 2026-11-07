@@ -2,13 +2,20 @@ import { useState, useEffect } from 'react'
 import { formatRupiah } from '../../lib/format.js'
 import { terbilang } from '../../lib/terbilang.js'
 import { readCached, getSettings } from '../../lib/store.js'
-import { invoiceSettlement, invoiceTotal, invoicePeriods, openInvoiceDoc } from '../../lib/invoices.js'
+import { invoiceSettlement, invoiceTotal, invoicePeriods, openInvoiceDoc, resolvedCarryOverLines } from '../../lib/invoices.js'
 import { fitPrintableToSinglePage, restorePrintFit } from '../../lib/printFit.js'
 
 const LOGO_URL = '/invoice/logo.png'
 const SIGNATURE_URL = '/invoice/signature.png'
 
-export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
+export default function InvoiceTemplate({
+  invoice,
+  sekolah,
+  onBack,
+  invoices: invoicesProp,
+  sppPayments: sppPaymentsProp,
+  siswa: siswaProp,
+}) {
   const [docError, setDocError] = useState(null)
   const [docBusy, setDocBusy] = useState(false)
 
@@ -58,8 +65,15 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
   // InvoiceModal (D-SB9). Draft belum punya settlement karena belum resmi
   // diterbitkan/ditagih.
   const isDraft = invoice.status === 'Draft'
+  const invoicesAll = invoicesProp ?? readCached('invoices') ?? []
+  const sppPaymentsAll = sppPaymentsProp ?? readCached('sppPayments') ?? []
+  const siswaAll = siswaProp ?? readCached('siswa') ?? []
   const settlement = !isDraft
-    ? invoiceSettlement(invoice, { sppPayments: readCached('sppPayments'), siswa: readCached('siswa') })
+    ? invoiceSettlement(invoice, {
+        sppPayments: sppPaymentsAll,
+        siswa: siswaAll,
+        invoices: invoicesAll,
+      })
     : null
 
   const periodeList = invoicePeriods(invoice)
@@ -76,7 +90,11 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
   const tanggalSrc = invoice.tanggalTerbit || invoice.tanggal || (invoice.createdAt ? invoice.createdAt.slice(0, 10) : '')
   const tanggalLabel = tanggalSrc ? tanggalSrc.split('-').reverse().join('-') : '-'
   const grandTotal = invoiceTotal(invoice)
-  const carryLines = Array.isArray(invoice.carryOverLines) ? invoice.carryOverLines : []
+  const carryLines = resolvedCarryOverLines(invoice, {
+    invoices: invoicesAll,
+    sppPayments: sppPaymentsAll,
+    siswa: siswaAll,
+  })
   const tableRows = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.map((it, idx) => {
         const isTrainer = it.basis === 'trainer' || Boolean(it.tarifPerPertemuan && !it.hargaSatuan && !it.jumlahSiswa)
@@ -189,15 +207,28 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
 
         {carryLines.length > 0 && (
           <div className="mt-1 mb-2 space-y-0.5 text-xs">
-            {carryLines.map(line => (
-              <p
-                key={`${line.invoiceId}-${line.kind}`}
-                className={line.amount < 0 ? 'text-emerald-600' : 'text-amber-600'}
-              >
-                {line.description}: {formatRupiah(Math.abs(line.amount))}
-                {line.amount < 0 ? ' (credit)' : ''}
-              </p>
-            ))}
+            {carryLines.map(line => {
+              if (line.isSettled || line.activeAmount === 0) {
+                return (
+                  <p
+                    key={`${line.invoiceId}-${line.kind}`}
+                    className="text-emerald-600 line-through opacity-70"
+                  >
+                    {line.description}: Lunas (Rp 0)
+                  </p>
+                )
+              }
+              const amt = line.activeAmount ?? line.amount
+              return (
+                <p
+                  key={`${line.invoiceId}-${line.kind}`}
+                  className={amt < 0 ? 'text-emerald-600' : 'text-amber-600'}
+                >
+                  {line.description}: {formatRupiah(Math.abs(amt))}
+                  {amt < 0 ? ' (credit)' : ''}
+                </p>
+              )
+            })}
           </div>
         )}
 

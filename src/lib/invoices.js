@@ -220,20 +220,119 @@ export function matchedPaymentsForInvoice(invoice, { sppPayments = [], siswa = [
  * (overpayment additionally reports a positive `credit`). A Rp0
  * payment with zero balance stays 'Belum Lunas' — no funds received.
  */
-export function invoiceSettlement(invoice, { sppPayments = [], siswa = [] } = {}) {
+export function invoiceSettlement(
+  invoice,
+  { sppPayments = [], siswa = [], invoices = [] } = {}
+) {
   const matched = matchedPaymentsForInvoice(invoice, { sppPayments, siswa })
   const dibayar = matched.reduce((sum, p) => sum + Number(p.nominal || 0), 0)
   const total = invoiceTotal(invoice)
   const sisa = Math.max(0, total - dibayar)
   const credit = Math.max(0, dibayar - total)
 
+  let hasActiveDebt = false
+  if (Array.isArray(invoice?.carryOverLines) && invoice.carryOverLines.length > 0) {
+    const contextInvoices = invoices.filter(i => i?.id !== invoice?.id)
+    const resolved = resolvedCarryOverLines(invoice, {
+      invoices: contextInvoices,
+      sppPayments,
+      siswa,
+    })
+    hasActiveDebt = resolved.some(
+      line =>
+        line.kind === 'outstanding' &&
+        !line.isSettled &&
+        (line.activeAmount ?? line.amount) > 0
+    )
+  }
+
   return {
     total,
     dibayar,
     sisa,
     credit,
-    status: sisa <= 0 && total > 0 && dibayar > 0 ? 'Lunas' : 'Belum Lunas',
+    status: sisa <= 0 && total > 0 && dibayar > 0 && !hasActiveDebt ? 'Lunas' : 'Belum Lunas',
   }
+}
+
+/**
+ * Evaluates each carryOverLines entry on an invoice against referenced invoices.
+ * If the referenced invoice has prevSettlement.sisa <= 0, marks isSettled: true, activeAmount: 0.
+ * Otherwise activeAmount: Math.min(line.amount, prevSettlement.sisa), isSettled: false.
+ */
+export function resolvedCarryOverLines(
+  invoice,
+  { invoices = [], sppPayments = [], siswa = [] } = {}
+) {
+  if (
+    !invoice ||
+    !Array.isArray(invoice.carryOverLines) ||
+    invoice.carryOverLines.length === 0
+  ) {
+    return []
+  }
+
+  return invoice.carryOverLines.map(line => {
+    if (!line || typeof line !== 'object') return line
+
+    if (line.kind === 'outstanding') {
+      if (line.invoiceId) {
+        const prev = invoices.find(i => i.id === line.invoiceId)
+        if (prev) {
+          const prevSettlement = invoiceSettlement(prev, { sppPayments, siswa })
+          const lineAmount = Number(line.amount) || 0
+          const activeAmount = Math.max(0, Math.min(lineAmount, prevSettlement.sisa))
+          const isSettled = prevSettlement.sisa <= 0
+          return {
+            ...line,
+            activeAmount,
+            isSettled,
+          }
+        }
+      }
+      return {
+        ...line,
+        activeAmount: Number(line.amount) || 0,
+        isSettled: false,
+      }
+    }
+
+    if (line.kind === 'credit') {
+      if (line.invoiceId) {
+        const prev = invoices.find(i => i.id === line.invoiceId)
+        if (prev) {
+          const prevSettlement = invoiceSettlement(prev, { sppPayments, siswa })
+          const isSettled = prevSettlement.credit <= 0
+          const rawAmt = Number(line.amount) || 0
+          if (isSettled) {
+            return {
+              ...line,
+              activeAmount: 0,
+              isSettled: true,
+            }
+          }
+          const activeCredit = Math.min(Math.abs(rawAmt), prevSettlement.credit)
+          const activeAmount = rawAmt < 0 ? -activeCredit : activeCredit
+          return {
+            ...line,
+            activeAmount,
+            isSettled: false,
+          }
+        }
+      }
+      return {
+        ...line,
+        activeAmount: Number(line.amount) || 0,
+        isSettled: false,
+      }
+    }
+
+    return {
+      ...line,
+      activeAmount: Number(line.amount) || 0,
+      isSettled: false,
+    }
+  })
 }
 
 /**

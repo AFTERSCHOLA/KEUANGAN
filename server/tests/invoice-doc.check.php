@@ -146,6 +146,33 @@ docCheck('settlement mirrors invoiceSettlement (500rb/500rb/Belum Lunas)',
     $settle['dibayar'] === 500000.0 && $settle['sisa'] === 500000.0 && $settle['status'] === 'Belum Lunas',
     json_encode($settle, JSON_UNESCAPED_UNICODE));
 
+$settleSchoolLevel = invoiceDocSettlement(
+    ['id' => 'inv-sch', 'grandTotal' => 1000000, 'periode' => '2026-09', 'sekolahId' => 'skl-1'],
+    [
+        ['sekolahId' => 'skl-1', 'periode' => '2026-09', 'nominal' => 1000000],
+    ],
+    []
+);
+docCheck('settlement matches school-level payment without siswaId',
+    $settleSchoolLevel['dibayar'] === 1000000.0 && $settleSchoolLevel['sisa'] === 0.0 && $settleSchoolLevel['status'] === 'Lunas',
+    json_encode($settleSchoolLevel, JSON_UNESCAPED_UNICODE));
+
+$invSettledCarry = $canonical;
+$invSettledCarry['carryOverLines'] = [
+    [
+        'type' => 'carry-over',
+        'kind' => 'outstanding',
+        'invoiceId' => 'inv-prev',
+        'description' => 'Sisa tagihan invoice BDG-202607-0001',
+        'amount' => 500000,
+        'activeAmount' => 0,
+        'isSettled' => true,
+    ],
+];
+$htmlSettledCarry = renderInvoiceDoc($invSettledCarry, $sekolah, $settings, $settlement, []);
+docCheck('settled carry-over line renders with Lunas and line-through emerald style',
+    strpos($htmlSettledCarry, 'color:#059669') !== false && strpos($htmlSettledCarry, 'Lunas') !== false && strpos($htmlSettledCarry, 'Sisa tagihan invoice BDG-202607-0001: Lunas (Rp 0)') !== false);
+
 $draft = $canonical;
 $draft['status'] = 'Draft';
 $draft['nomor'] = null;

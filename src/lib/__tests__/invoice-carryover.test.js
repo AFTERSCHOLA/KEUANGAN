@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 import {
   carryOverLines,
   invoiceTotal,
+  resolvedCarryOverLines,
+  invoiceSettlement,
 } from '../invoices.js'
+import InvoiceTemplate from '../../features/reports/InvoiceTemplate.jsx'
+import { write } from '../store.js'
 
 const siswaFixture = [
   { id: 'sw-1', sekolahId: 'skl-1' },
@@ -403,3 +409,244 @@ describe('carryOverLines', () => {
     expect(previousInvoice).toEqual(beforePrevious)
     expect(nextInvoice).toEqual(beforeNext)
   })
+
+describe('resolvedCarryOverLines and dynamic reconciliation', () => {
+  const previousInvoice = {
+    id: 'inv-1',
+    sekolahId: 'skl-1',
+    periode: '2026-09',
+    grandTotal: 1000000,
+    status: 'Terbit',
+    nomor: 'BDG-202609-0001',
+    tanggalTerbit: '2026-09-01',
+  }
+
+  const nextInvoiceWithCarryOver = {
+    id: 'inv-2',
+    sekolahId: 'skl-1',
+    periode: '2026-10',
+    grandTotal: 800000,
+    status: 'Terbit',
+    nomor: 'BDG-202610-0002',
+    tanggalTerbit: '2026-10-01',
+    carryOverLines: [
+      {
+        type: 'carry-over',
+        kind: 'outstanding',
+        invoiceId: 'inv-1',
+        nomorInvoiceAsal: 'BDG-202609-0001',
+        description: 'Sisa tagihan invoice BDG-202609-0001',
+        amount: 400000,
+      },
+    ],
+  }
+
+  it('returns empty array when carryOverLines is empty or not an array', () => {
+    expect(resolvedCarryOverLines({})).toEqual([])
+    expect(resolvedCarryOverLines({ carryOverLines: [] })).toEqual([])
+    expect(resolvedCarryOverLines({ carryOverLines: null })).toEqual([])
+  })
+
+  it('when previous invoice is unsettled, returns line with activeAmount and isSettled: false', () => {
+    // Only 600,000 paid towards 1,000,000 total -> 400,000 sisa
+    const sppPayments = [
+      {
+        invoiceId: 'inv-1',
+        nominal: 600000,
+      },
+    ]
+
+    const resolved = resolvedCarryOverLines(nextInvoiceWithCarryOver, {
+      invoices: [previousInvoice, nextInvoiceWithCarryOver],
+      sppPayments,
+      siswa: siswaFixture,
+    })
+
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toMatchObject({
+      invoiceId: 'inv-1',
+      kind: 'outstanding',
+      amount: 400000,
+      activeAmount: 400000,
+      isSettled: false,
+    })
+  })
+
+  it('when previous invoice is settled via payment, returns isSettled: true and activeAmount: 0', () => {
+    // 1,000,000 fully paid towards previous invoice
+    const sppPayments = [
+      {
+        invoiceId: 'inv-1',
+        nominal: 1000000,
+      },
+    ]
+
+    const resolved = resolvedCarryOverLines(nextInvoiceWithCarryOver, {
+      invoices: [previousInvoice, nextInvoiceWithCarryOver],
+      sppPayments,
+      siswa: siswaFixture,
+    })
+
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toMatchObject({
+      invoiceId: 'inv-1',
+      kind: 'outstanding',
+      amount: 400000,
+      activeAmount: 0,
+      isSettled: true,
+    })
+  })
+
+  it('when previous invoice is partially settled, caps activeAmount at prevSettlement.sisa', () => {
+    // Paid 800,000 towards 1,000,000 total -> sisa is 200,000 (less than carry-over line amount 400,000)
+    const sppPayments = [
+      {
+        invoiceId: 'inv-1',
+        nominal: 800000,
+      },
+    ]
+
+    const resolved = resolvedCarryOverLines(nextInvoiceWithCarryOver, {
+      invoices: [previousInvoice, nextInvoiceWithCarryOver],
+      sppPayments,
+      siswa: siswaFixture,
+    })
+
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toMatchObject({
+      invoiceId: 'inv-1',
+      kind: 'outstanding',
+      amount: 400000,
+      activeAmount: 200000,
+      isSettled: false,
+    })
+  })
+
+  it('preserves line amount and isSettled: false when referenced invoice is not found', () => {
+    const resolved = resolvedCarryOverLines(nextInvoiceWithCarryOver, {
+      invoices: [nextInvoiceWithCarryOver], // prev invoice omitted
+      sppPayments: [],
+      siswa: siswaFixture,
+    })
+
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toMatchObject({
+      invoiceId: 'inv-1',
+      amount: 400000,
+      activeAmount: 400000,
+      isSettled: false,
+    })
+  })
+
+  it('resolves credit carry-over line properly', () => {
+    const invWithCredit = {
+      ...nextInvoiceWithCarryOver,
+      carryOverLines: [
+        {
+          type: 'carry-over',
+          kind: 'credit',
+          invoiceId: 'inv-1',
+          nomorInvoiceAsal: 'BDG-202609-0001',
+          description: 'Kelebihan bayar invoice BDG-202609-0001',
+          amount: -200000,
+        },
+      ],
+    }
+
+    // Previous invoice received 1,200,000 (200,000 credit)
+    const sppPaymentsWithCredit = [
+      {
+        invoiceId: 'inv-1',
+        nominal: 1200000,
+      },
+    ]
+
+    const resolved = resolvedCarryOverLines(invWithCredit, {
+      invoices: [previousInvoice, invWithCredit],
+      sppPayments: sppPaymentsWithCredit,
+      siswa: siswaFixture,
+    })
+
+    expect(resolved[0].isSettled).toBe(false)
+    expect(resolved[0].activeAmount).toBe(-200000)
+
+    // When previous invoice had no credit
+    const sppPaymentsExact = [
+      {
+        invoiceId: 'inv-1',
+        nominal: 1000000,
+      },
+    ]
+    const resolvedNoCredit = resolvedCarryOverLines(invWithCredit, {
+      invoices: [previousInvoice, invWithCredit],
+      sppPayments: sppPaymentsExact,
+      siswa: siswaFixture,
+    })
+    expect(resolvedNoCredit[0].isSettled).toBe(true)
+    expect(resolvedNoCredit[0].activeAmount).toBe(0)
+  })
+
+  it('invoiceSettlement updates Invoice 2 status to Lunas only after Invoice 1 is settled', () => {
+    // Invoice 2 itself is fully paid (800,000)
+    const paymentInv2 = {
+      invoiceId: 'inv-2',
+      nominal: 800000,
+    }
+
+    // Invoice 1 is not fully paid yet (600,000 / 1,000,000)
+    const partialPaymentInv1 = {
+      invoiceId: 'inv-1',
+      nominal: 600000,
+    }
+
+    const settlementBefore = invoiceSettlement(nextInvoiceWithCarryOver, {
+      invoices: [previousInvoice, nextInvoiceWithCarryOver],
+      sppPayments: [paymentInv2, partialPaymentInv1],
+      siswa: siswaFixture,
+    })
+    expect(settlementBefore.sisa).toBe(0)
+    expect(settlementBefore.status).toBe('Belum Lunas')
+
+    // Now Invoice 1 is settled with additional payment of 400,000
+    const fullPaymentInv1 = {
+      invoiceId: 'inv-1',
+      nominal: 400000,
+    }
+
+    const settlementAfter = invoiceSettlement(nextInvoiceWithCarryOver, {
+      invoices: [previousInvoice, nextInvoiceWithCarryOver],
+      sppPayments: [paymentInv2, partialPaymentInv1, fullPaymentInv1],
+      siswa: siswaFixture,
+    })
+    expect(settlementAfter.sisa).toBe(0)
+    expect(settlementAfter.status).toBe('Lunas')
+  })
+
+  it('InvoiceTemplate renders settled carry-over as line-through emerald Lunas (Rp 0)', () => {
+    const sekolah = { id: 'skl-1', nama: 'SD Sukajadi', spp: 100000 }
+    const invoices = [previousInvoice, nextInvoiceWithCarryOver]
+    const sppPayments = [
+      { invoiceId: 'inv-1', nominal: 1000000 },
+      { invoiceId: 'inv-2', nominal: 800000 },
+    ]
+    write('invoices', invoices)
+    write('sppPayments', sppPayments)
+    write('siswa', siswaFixture)
+
+    const html = renderToStaticMarkup(
+      React.createElement(InvoiceTemplate, {
+        invoice: nextInvoiceWithCarryOver,
+        sekolah,
+        invoices,
+        sppPayments,
+        siswa: siswaFixture,
+      })
+    )
+
+    // Must show line-through emerald and Lunas (Rp 0)
+    expect(html).toContain('text-emerald-600 line-through opacity-70')
+    expect(html).toContain('Sisa tagihan invoice BDG-202609-0001: Lunas (Rp 0)')
+    // Must not display old unsettled amber style
+    expect(html).not.toContain('text-amber-600')
+  })
+})

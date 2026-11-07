@@ -18,6 +18,7 @@ import {
   invoiceSettlement,
   matchedPaymentsForInvoice,
   carryOverLines,
+  resolvedCarryOverLines,
   generateInvoiceForSekolah,
   deleteInvoiceServer,
   normalizeInvoiceFollowUps,
@@ -701,10 +702,18 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                 // cache lokal, tapi tidak akan pernah dibuat lagi).
                 const isLegacyDraft = inv.status === 'Draft'
                 const settlement = !isLegacyDraft
-                  ? invoiceSettlement(inv, { sppPayments: sppPaymentsAll, siswa: siswaAll })
+                  ? invoiceSettlement(inv, {
+                      sppPayments: sppPaymentsAll,
+                      siswa: siswaAll,
+                      invoices: existing,
+                    })
                   : null
 
-                const carryLines = Array.isArray(inv.carryOverLines) ? inv.carryOverLines : []
+                const carryLines = resolvedCarryOverLines(inv, {
+                  invoices: existing,
+                  sppPayments: sppPaymentsAll,
+                  siswa: siswaAll,
+                })
                 const displayStatus = isLegacyDraft ? 'Draft (legacy)' : settlement.status
                 // BR.2 — pure preview per invoice (cells settled -> skipped
                 // by construction, so a re-open after settling shows 0 rows).
@@ -750,15 +759,28 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       {fuLine && <p className="text-slate-500 mt-0.5">{fuLine}</p>}
                       {carryLines.length > 0 && (
                         <div className="mt-1 space-y-0.5">
-                          {carryLines.map(line => (
-                            <p
-                              key={`${line.invoiceId}-${line.kind}`}
-                              className={line.amount < 0 ? 'text-emerald-600' : 'text-amber-600'}
-                            >
-                              {line.description}: {formatRupiah(Math.abs(line.amount))}
-                              {line.amount < 0 ? ' (credit)' : ''}
-                            </p>
-                          ))}
+                          {carryLines.map(line => {
+                            if (line.isSettled || line.activeAmount === 0) {
+                              return (
+                                <p
+                                  key={`${line.invoiceId}-${line.kind}`}
+                                  className="text-emerald-600 line-through opacity-70"
+                                >
+                                  {line.description}: Lunas (Rp 0)
+                                </p>
+                              )
+                            }
+                            const amt = line.activeAmount ?? line.amount
+                            return (
+                              <p
+                                key={`${line.invoiceId}-${line.kind}`}
+                                className={amt < 0 ? 'text-emerald-600' : 'text-amber-600'}
+                              >
+                                {line.description}: {formatRupiah(Math.abs(amt))}
+                                {amt < 0 ? ' (credit)' : ''}
+                              </p>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

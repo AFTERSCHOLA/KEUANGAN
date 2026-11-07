@@ -146,6 +146,10 @@ function invoiceDocSettlement(array $invoice, array $payments, array $siswaIds):
             $dibayar += (float) ($p['nominal'] ?? 0);
             continue;
         }
+        if (!empty($p['sekolahId']) && $p['sekolahId'] === ($invoice['sekolahId'] ?? null) && in_array($p['periode'] ?? null, $periods, true)) {
+            $dibayar += (float) ($p['nominal'] ?? 0);
+            continue;
+        }
         // Historical per-siswa rows: sekolahId + periode intersection.
         $sid = isset($p['siswaId']) ? (string) $p['siswaId'] : '';
         if ($sid === '' || !isset($siswaSet[$sid])) continue;
@@ -226,11 +230,17 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
     $carryHtml = '';
     foreach ($carryLines as $line) {
         if (!is_array($line)) continue;
-        $amount = (float) ($line['amount'] ?? 0);
-        $cls = $amount < 0 ? 'color:#059669' : 'color:#d97706';
-        $suffix = $amount < 0 ? ' (credit)' : '';
-        $carryHtml .= '<p style="margin:2px 0;font-size:12px;' . $cls . '">'
-            . $h($line['description'] ?? '') . ': ' . invoiceDocRupiah(abs($amount)) . $suffix . '</p>';
+        $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
+        $amount = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
+        if ($isSettled) {
+            $carryHtml .= '<p style="margin:2px 0;font-size:12px;color:#059669;text-decoration:line-through;opacity:0.7">'
+                . $h($line['description'] ?? '') . ': Lunas (' . invoiceDocRupiah(0) . ')</p>';
+        } else {
+            $cls = $amount < 0 ? 'color:#059669' : 'color:#d97706';
+            $suffix = $amount < 0 ? ' (credit)' : '';
+            $carryHtml .= '<p style="margin:2px 0;font-size:12px;' . $cls . '">'
+                . $h($line['description'] ?? '') . ': ' . invoiceDocRupiah(abs($amount)) . $suffix . '</p>';
+        }
     }
     if ($carryHtml !== '') $carryHtml = '<div style="margin:4px 0 8px">' . $carryHtml . '</div>';
 
