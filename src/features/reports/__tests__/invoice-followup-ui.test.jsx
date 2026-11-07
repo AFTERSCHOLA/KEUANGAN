@@ -398,4 +398,61 @@ describe('Invoice Follow-Up Schema & UI', () => {
       expect(html).toContain('Bukti bayar terlampir')
     })
   })
+
+  describe('InvoiceModal billing method preview differentiation', () => {
+    it('displays session tarif and basis in preview when metodePembayaran is active (trainer)', () => {
+      vi.mocked(store.getRoleContext).mockReturnValue({ role: 'superadmin' })
+      const trainerSekolah = {
+        id: 'skl-tr-1',
+        nama: 'SMP Robotik',
+        spp: 50000,
+        metodePembayaran: {
+          basis: 'trainer',
+          tarifPerPertemuan: 80000,
+        },
+      }
+      const html = renderToStaticMarkup(
+        <InvoiceModal open={true} onClose={() => {}} sekolah={trainerSekolah} onPrint={() => {}} />
+      )
+      expect(html).toContain('Tarif per Pertemuan (Basis: Per Trainer)')
+      expect(html).toContain('Tarif per Sesi')
+      expect(html.replace(/\s/g, ' ')).toContain('Rp 80.000')
+      expect(html).not.toContain('Estimasi Harga Satuan (SPP')
+    })
+
+    it('displays session tarif and basis in preview when metodePembayaran is active (siswa)', () => {
+      vi.mocked(store.getRoleContext).mockReturnValue({ role: 'superadmin' })
+      const siswaSekolah = {
+        id: 'skl-sw-1',
+        nama: 'SMP Mandiri',
+        spp: 50000,
+        metodePembayaran: {
+          basis: 'siswa',
+          tarifPerPertemuan: 70000,
+        },
+      }
+      const html = renderToStaticMarkup(
+        <InvoiceModal open={true} onClose={() => {}} sekolah={siswaSekolah} onPrint={() => {}} />
+      )
+      expect(html).toContain('Tarif per Pertemuan (Basis: Per Siswa)')
+      expect(html).toContain('Tarif per Sesi')
+      expect(html.replace(/\s/g, ' ')).toContain('Rp 70.000')
+      expect(html).not.toContain('Estimasi Harga Satuan (SPP')
+    })
+
+    it('displays SPP estimation in preview for flat school without metodePembayaran', () => {
+      vi.mocked(store.getRoleContext).mockReturnValue({ role: 'superadmin' })
+      const flatSekolah = {
+        id: 'skl-fl-1',
+        nama: 'SD Sukajadi',
+        spp: 60000,
+      }
+      const html = renderToStaticMarkup(
+        <InvoiceModal open={true} onClose={() => {}} sekolah={flatSekolah} onPrint={() => {}} />
+      )
+      expect(html).toContain('Estimasi Harga Satuan (SPP')
+      expect(html.replace(/\s/g, ' ')).toContain('Rp 60.000')
+      expect(html).not.toContain('Tarif per Pertemuan')
+    })
+  })
 })

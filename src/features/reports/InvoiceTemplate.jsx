@@ -78,14 +78,37 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
   const grandTotal = invoiceTotal(invoice)
   const carryLines = Array.isArray(invoice.carryOverLines) ? invoice.carryOverLines : []
   const tableRows = Array.isArray(invoice.items) && invoice.items.length > 0
-    ? invoice.items.map((it, idx) => ({
-        no: idx + 1,
-        uraian: it.deskripsi || invoice.uraian || '',
-        qty: it.jumlahSiswa,
-        harga: Number(it.hargaSatuan ?? it.tarifPerPertemuan ?? invoice.hargaSatuan ?? 0) || 0,
-        total: it.total,
-      }))
-    : [{ no: 1, uraian: invoice.uraian || '', qty: invoice.jumlahSiswa, harga: Number(invoice.hargaSatuan ?? 0) || 0, total: invoice.total }]
+    ? invoice.items.map((it, idx) => {
+        const isTrainer = it.basis === 'trainer' || Boolean(it.tarifPerPertemuan && !it.hargaSatuan && !it.jumlahSiswa)
+        return {
+          no: idx + 1,
+          uraian: it.deskripsi || invoice.uraian || '',
+          qty: isTrainer
+            ? (it.pertemuanAktual ?? it.jumlahSiswa ?? 1)
+            : it.jumlahSiswa,
+          harga: isTrainer
+            ? (Number(it.tarifPerPertemuan || it.hargaSatuan || sekolah?.spp || invoice.hargaSatuan || 0) || 0)
+            : (Number(it.hargaSatuan ?? sekolah?.spp ?? it.tarifPerPertemuan ?? invoice.hargaSatuan ?? 0) || 0),
+          total: it.total,
+          isTrainer,
+        }
+      })
+    : (() => {
+        const isTrainer = invoice.basis === 'trainer' || Boolean(invoice.tarifPerPertemuan && !invoice.hargaSatuan && !invoice.jumlahSiswa)
+        return [{
+          no: 1,
+          uraian: invoice.uraian || '',
+          qty: isTrainer
+            ? (invoice.pertemuanAktual ?? invoice.jumlahSiswa ?? 1)
+            : invoice.jumlahSiswa,
+          harga: isTrainer
+            ? (Number(invoice.tarifPerPertemuan || invoice.hargaSatuan || sekolah?.spp || 0) || 0)
+            : (Number(invoice.hargaSatuan ?? sekolah?.spp ?? invoice.tarifPerPertemuan ?? 0) || 0),
+          total: invoice.total,
+          isTrainer,
+        }]
+      })()
+  const isTrainerTable = tableRows.some(r => r.isTrainer)
   const pjDisplay = invoice.pjSekolah || invoice.pjNama || ''
 
   return (
@@ -146,8 +169,8 @@ export default function InvoiceTemplate({ invoice, sekolah, onBack }) {
             <tr className="border-b-2 border-slate-800 text-[11px] font-bold uppercase text-slate-700">
               <th className="text-left py-2 pr-2 w-8">No</th>
               <th className="text-left py-2">Uraian</th>
-              <th className="text-center py-2">Siswa</th>
-              <th className="text-right py-2">Harga<br />Satuan</th>
+              <th className="text-center py-2">{isTrainerTable ? 'Sesi' : 'Siswa'}</th>
+              <th className="text-right py-2">{isTrainerTable ? 'Tarif per Sesi' : <>Harga<br />Satuan</>}</th>
               <th className="text-right py-2">Total</th>
             </tr>
           </thead>

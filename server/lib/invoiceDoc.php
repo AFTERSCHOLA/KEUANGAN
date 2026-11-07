@@ -86,29 +86,45 @@ function invoiceDocTotal(array $invoice): float {
 }
 
 /** Normalize table rows across both shapes (display-only). */
-function invoiceDocRows(array $invoice): array {
+function invoiceDocRows(array $invoice, array $sekolah = []): array {
     if (isset($invoice['items']) && is_array($invoice['items']) && count($invoice['items']) > 0) {
         $rows = [];
         $no = 1;
         foreach ($invoice['items'] as $it) {
             if (!is_array($it)) continue;
+            $isTrainer = ($it['basis'] ?? '') === 'trainer' || (!empty($it['tarifPerPertemuan']) && empty($it['hargaSatuan']) && empty($it['jumlahSiswa']));
+            $qty = $isTrainer ? ($it['pertemuanAktual'] ?? $it['jumlahSiswa'] ?? 1) : ($it['jumlahSiswa'] ?? null);
+            $harga = $isTrainer
+                ? ($it['tarifPerPertemuan'] ?? $it['hargaSatuan'] ?? $sekolah['spp'] ?? $invoice['hargaSatuan'] ?? 0)
+                : ($it['hargaSatuan'] ?? $sekolah['spp'] ?? $it['tarifPerPertemuan'] ?? $invoice['hargaSatuan'] ?? 0);
             $rows[] = [
                 'no' => $no++,
                 'uraian' => (string) ($it['deskripsi'] ?? $invoice['uraian'] ?? ''),
-                'qty' => $it['jumlahSiswa'] ?? null,
-                'harga' => $it['hargaSatuan'] ?? $it['tarifPerPertemuan'] ?? $invoice['hargaSatuan'] ?? 0,
+                'qty' => $qty,
+                'harga' => $harga,
                 'total' => isset($it['total']) && is_numeric($it['total']) ? (float) $it['total'] : 0.0,
+                'isTrainer' => $isTrainer,
             ];
         }
         if (count($rows) > 0) return $rows;
     }
+    $isTrainerFallback = ($invoice['basis'] ?? '') === 'trainer' || (!empty($invoice['tarifPerPertemuan']) && empty($invoice['hargaSatuan']) && empty($invoice['jumlahSiswa']));
+    $qtyFallback = $isTrainerFallback ? ($invoice['pertemuanAktual'] ?? $invoice['jumlahSiswa'] ?? 1) : ($invoice['jumlahSiswa'] ?? null);
+    $hargaFallback = $isTrainerFallback
+        ? ($invoice['tarifPerPertemuan'] ?? $invoice['hargaSatuan'] ?? $sekolah['spp'] ?? 0)
+        : ($invoice['hargaSatuan'] ?? $sekolah['spp'] ?? $invoice['tarifPerPertemuan'] ?? 0);
     return [[
         'no' => 1,
         'uraian' => (string) ($invoice['uraian'] ?? ''),
-        'qty' => $invoice['jumlahSiswa'] ?? null,
-        'harga' => $invoice['hargaSatuan'] ?? 0,
+        'qty' => $qtyFallback,
+        'harga' => $hargaFallback,
         'total' => invoiceDocTotal($invoice),
+        'isTrainer' => $isTrainerFallback,
     ]];
+}
+
+function invoiceDocTableRows(array $invoice, array $sekolah = []): array {
+    return invoiceDocRows($invoice, $sekolah);
 }
 
 /**
@@ -169,11 +185,21 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
     }
     $periods = invoiceDocPeriods($invoice);
     $periodeLabel = invoiceDocPeriodeLabel($periods);
-    $rows = invoiceDocRows($invoice);
+    $rows = invoiceDocRows($invoice, $sekolah);
     $grandTotal = invoiceDocTotal($invoice);
     $terbilang = invoiceDocTerbilang($grandTotal);
     $pj = $invoice['pjNama'] ?? $invoice['pjSekolah'] ?? '';
     $carryLines = (isset($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) ? $invoice['carryOverLines'] : [];
+
+    $isTrainerTable = false;
+    foreach ($rows as $r) {
+        if (!empty($r['isTrainer'])) {
+            $isTrainerTable = true;
+            break;
+        }
+    }
+    $qtyHeader = $isTrainerTable ? 'Sesi' : 'Siswa';
+    $rateHeader = $isTrainerTable ? 'Tarif per Sesi' : 'Harga<br>Satuan';
 
     $logoImg = '';
     if (!empty($assets['logoDataUrl'])) {
@@ -264,8 +290,8 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '<thead><tr style="border-bottom:2px solid #1e293b;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#334155">'
         . '<th style="text-align:left;padding:8px 8px 8px 0;width:32px">No</th>'
         . '<th style="text-align:left;padding:8px 8px 8px 0">Uraian</th>'
-        . '<th style="text-align:center;padding:8px">Siswa</th>'
-        . '<th style="text-align:right;padding:8px">Harga<br>Satuan</th>'
+        . '<th style="text-align:center;padding:8px">' . $qtyHeader . '</th>'
+        . '<th style="text-align:right;padding:8px">' . $rateHeader . '</th>'
         . '<th style="text-align:right;padding:8px 0 8px 8px">Total</th>'
         . '</tr></thead><tbody>' . $tableRows . '</tbody></table>'
         . $carryHtml

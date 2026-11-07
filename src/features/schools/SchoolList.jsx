@@ -115,28 +115,18 @@ export default function SchoolList() {
   }
 
   function openEdit(sch) {
-  const nextForm = {
-    jadwalList: [],
-    trainerIds: [],
-    ...sch,
-    status: sch.status || 'Aktif',
-    cabangId: sch.cabangId,
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(sch, 'metodePembayaran')) {
-    nextForm.metodePembayaran = {
-      basis: 'siswa',
-      tarifPerPertemuan: 0,
-      trigger: 'per_bulan',
-      jumlahN: null,
-      jumlahMinggu: null,
-      sumberDana: 'sekolah',
+    const nextForm = {
+      jadwalList: [],
+      trainerIds: [],
+      ...sch,
+      status: sch.status || 'Aktif',
+      cabangId: sch.cabangId,
+      metodePembayaran: sch.metodePembayaran || null,
     }
-  }
 
-  setForm(nextForm)
-  setModalOpen(true)
-}
+    setForm(nextForm)
+    setModalOpen(true)
+  }
 
 async function save() {
   if (!form.nama.trim()) {
@@ -774,6 +764,11 @@ function SchoolForm({ form, setForm, save, onClose, cabang }) {
 
   <p className="text-xs text-slate-500 mt-2">
     {form.metodePembayaran ? 'Kategori: Tarif per Pertemuan' : 'Kategori: Flat / Beku'}
+  </p>
+  <p className="text-[11px] text-slate-500 mt-1">
+    {form.metodePembayaran
+      ? "Tagihan dihitung berdasarkan jumlah kehadiran sesi pertemuan. Pilih basis 'Per Siswa' (jumlah siswa × sesi × tarif) atau 'Per Trainer' (sesi × tarif per sesi kunjungan)."
+      : "Tagihan dihitung dari SPP bulanan per siswa aktif. Cocok untuk sekolah dengan iuran bulanan tetap."}
   </p>
   {!form.metodePembayaran && (
     <p className="text-[11px] text-slate-400 mt-1">

@@ -650,16 +650,40 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
           </div>
 
           <div className="bg-white rounded-lg p-3 text-xs space-y-1 border">
-            <p className="flex justify-between"><span className="text-slate-400">Jumlah Siswa (aktif, non-trial):</span><span className="font-bold">{jumlahSiswa}</span></p>
-            <p className="flex justify-between"><span className="text-slate-400">Estimasi Harga Satuan (SPP × {periodeList.length} bulan):</span><span className="font-bold">{formatRupiah(hargaSatuanEstimasi)}</span></p>
-            <p className="flex justify-between text-sm border-t pt-1"><span className="font-semibold">Estimasi Total:</span><span className="font-extrabold text-blue-700">{formatRupiah(totalEstimasi)}</span></p>
-            <p className="text-slate-400 italic pt-1">Total final dihitung server (bisa beda kalau ada siswa dengan tarif khusus) — lihat Riwayat Invoice setelah dibuat.</p>
+            {sekolah.metodePembayaran ? (
+              <>
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Kategori:</span>
+                  <span className="font-bold">Tarif per Pertemuan (Basis: {sekolah.metodePembayaran.basis === 'trainer' ? 'Per Trainer' : 'Per Siswa'})</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Tarif per Sesi:</span>
+                  <span className="font-bold">{formatRupiah(sekolah.metodePembayaran.tarifPerPertemuan || 0)}</span>
+                </p>
+                {sekolah.metodePembayaran.basis !== 'trainer' && (
+                  <p className="flex justify-between">
+                    <span className="text-slate-400">Jumlah Siswa:</span>
+                    <span className="font-bold">{jumlahSiswa}</span>
+                  </p>
+                )}
+                <p className="text-slate-400 italic pt-1 border-t">
+                  Total tagihan dihitung otomatis oleh server berdasarkan kehadiran sesi pertemuan aktual pada periode yang dipilih.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="flex justify-between"><span className="text-slate-400">Jumlah Siswa (aktif, non-trial):</span><span className="font-bold">{jumlahSiswa}</span></p>
+                <p className="flex justify-between"><span className="text-slate-400">Estimasi Harga Satuan (SPP × {periodeList.length} bulan):</span><span className="font-bold">{formatRupiah(hargaSatuanEstimasi)}</span></p>
+                <p className="flex justify-between text-sm border-t pt-1"><span className="font-semibold">Estimasi Total:</span><span className="font-extrabold text-blue-700">{formatRupiah(totalEstimasi)}</span></p>
+                <p className="text-slate-400 italic pt-1">Total final dihitung server (bisa beda kalau ada siswa dengan tarif khusus) — lihat Riwayat Invoice setelah dibuat.</p>
+              </>
+            )}
           </div>
 
           {errorMsg && <p className="text-xs text-rose-600 font-semibold">{errorMsg}</p>}
 
-          <button onClick={handleCreateClick} disabled={jumlahSiswa === 0 || submitting} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-extrabold text-sm py-2.5 rounded-xl transition">
-            {jumlahSiswa === 0 ? 'Tidak ada siswa aktif' : submitting ? 'Memproses...' : 'Buat & Terbitkan Invoice'}
+          <button onClick={handleCreateClick} disabled={(sekolah.metodePembayaran?.basis === 'trainer' ? false : jumlahSiswa === 0) || submitting} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-extrabold text-sm py-2.5 rounded-xl transition">
+            {sekolah.metodePembayaran?.basis !== 'trainer' && jumlahSiswa === 0 ? 'Tidak ada siswa aktif' : submitting ? 'Memproses...' : 'Buat & Terbitkan Invoice'}
           </button>
         </div>
 

@@ -107,6 +107,31 @@ $tarifPertemuanInvoice = [
 $htmlTarif = renderInvoiceDoc($tarifPertemuanInvoice, $sekolah, $settings, null, []);
 docCheck('tarifPerPertemuan fallback renders unit price in invoiceDoc', strpos($htmlTarif, 'Rp 75.000') !== false);
 
+$sekolahFlat = ['id' => 'skl-flat', 'nama' => 'SD Sukajadi', 'spp' => 45000];
+$invFlatFallback = [
+    'id' => 'inv-flat-fb', 'sekolahId' => 'skl-flat',
+    'status' => 'Terbit',
+    'items' => [
+        ['deskripsi' => 'SPP Siswa', 'jumlahSiswa' => 10, 'total' => 450000],
+    ],
+    'grandTotal' => 450000,
+];
+$htmlFlatFb = renderInvoiceDoc($invFlatFallback, $sekolahFlat, $settings, null, []);
+docCheck('flat invoice item missing hargaSatuan falls back to sekolah.spp', strpos($htmlFlatFb, 'Rp 45.000') !== false && strpos($htmlFlatFb, 'Siswa') !== false);
+
+$invTrainerDoc = [
+    'id' => 'inv-tr-1', 'sekolahId' => 'skl-tr',
+    'status' => 'Terbit',
+    'items' => [
+        ['deskripsi' => 'Kunjungan Trainer', 'basis' => 'trainer', 'tarifPerPertemuan' => 85000, 'pertemuanAktual' => 4, 'total' => 340000],
+    ],
+    'grandTotal' => 340000,
+];
+$htmlTrainerDoc = renderInvoiceDoc($invTrainerDoc, $sekolahFlat, $settings, null, []);
+docCheck('trainer basis invoice renders Sesi and Tarif per Sesi headers',
+    strpos($htmlTrainerDoc, 'Tarif per Sesi') !== false && strpos($htmlTrainerDoc, 'Sesi') !== false && strpos($htmlTrainerDoc, 'Rp 85.000') !== false);
+
+
 $settle = invoiceDocSettlement(
     ['id' => 'inv-x', 'grandTotal' => 1000000, 'periode' => '2026-09', 'sekolahId' => 'skl-1'],
     [
