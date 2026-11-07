@@ -119,6 +119,12 @@ if (!empty($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) 
                     $prevSettle = invoiceDocSettlement($prevInv, $payments, $siswaIds);
                     $cline['activeAmount'] = min((float) ($cline['amount'] ?? 0), (float) $prevSettle['sisa']);
                     $cline['isSettled'] = ($prevSettle['sisa'] <= 0.0);
+                    $cline['prevNomor'] = $prevInv['nomor'] ?? $prevInv['nomorInvoice'] ?? null;
+                    $cline['prevTotal'] = $prevSettle['total'];
+                    $cline['prevPaid'] = $prevSettle['dibayar'];
+                    $cline['prevPaidPrev'] = $prevSettle['sudahDibayarSebelumnya'] ?? 0.0;
+                    $cline['prevPaidCurrent'] = $prevSettle['pembayaranSaatIni'] ?? 0.0;
+                    $cline['prevSisa'] = $prevSettle['sisa'];
                 }
             }
         }

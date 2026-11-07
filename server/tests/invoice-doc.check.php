@@ -234,6 +234,81 @@ $evil = $canonical;
 $evil['pjNama'] = '<script>alert(1)</script>';
 docCheck('interpolated strings are escaped', strpos(renderInvoiceDoc($evil, $sekolah, $settings, null, []), '<script>alert(1)</script>') === false);
 
+// Task 3: Case A - Carry-over installment audit trail
+$invCarryAudit = $canonical;
+$invCarryAudit['carryOverLines'] = [
+    [
+        'type' => 'carry-over',
+        'kind' => 'outstanding',
+        'invoiceId' => 'inv-prev-1',
+        'description' => 'Sisa tagihan invoice AFS-202607-0001',
+        'amount' => 350000,
+        'activeAmount' => 150000,
+        'isSettled' => false,
+        'prevNomor' => 'AFS-202607-0001',
+        'prevTotal' => 600000,
+        'prevPaidPrev' => 250000,
+        'prevPaidCurrent' => 200000,
+        'prevPaid' => 450000,
+        'prevSisa' => 150000,
+    ],
+];
+$htmlCarryAudit = renderInvoiceDoc($invCarryAudit, $sekolah, $settings, $settlement, []);
+$missingCarryAudit = containsAll($htmlCarryAudit, [
+    'Total tagihan awal:',
+    'Rp 600.000',
+    'Sudah dibayar sebelumnya:',
+    'Rp 250.000',
+    'Pembayaran saat ini:',
+    'Rp 200.000',
+    'Sisa tagihan:',
+    'Rp 150.000',
+    'Keterangan:',
+    'AFS-202607-0001',
+    'Rp 450.000',
+]);
+docCheck('Case A: carry-over installment audit breakdown renders initial total, previous paid, current paid, and sisa note',
+    count($missingCarryAudit) === 0, implode(' | ', $missingCarryAudit));
+
+// Task 3: Case B - Multi-stage installment settlement on current invoice
+$invDirectInstallment = [
+    'id' => 'inv-direct-check',
+    'sekolahId' => 'skl-doc-test-1',
+    'periode' => '2026-08',
+    'nomorInvoice' => 'AFS-202608-0002',
+    'status' => 'Terbit',
+    'grandTotal' => 600000,
+    'items' => [
+        ['deskripsi' => 'SPP Siswa', 'jumlahSiswa' => 1, 'hargaSatuan' => 600000, 'total' => 600000],
+    ],
+];
+$settleDirect = invoiceDocSettlement(
+    $invDirectInstallment,
+    [
+        ['invoiceId' => 'inv-direct-check', 'nominal' => 250000, 'tanggalBayar' => '2026-08-05'],
+        ['invoiceId' => 'inv-direct-check', 'nominal' => 200000, 'tanggalBayar' => '2026-08-15'],
+    ],
+    []
+);
+docCheck('settlement identifies multi-stage installments (hasMultiInstallment, paidPrev, paidCurrent)',
+    !empty($settleDirect['hasMultiInstallment']) && $settleDirect['sudahDibayarSebelumnya'] === 250000.0 && $settleDirect['pembayaranSaatIni'] === 200000.0 && $settleDirect['sisa'] === 150000.0,
+    json_encode($settleDirect, JSON_UNESCAPED_UNICODE));
+
+$htmlDirectInstallment = renderInvoiceDoc($invDirectInstallment, $sekolah, $settings, $settleDirect, []);
+$missingDirect = containsAll($htmlDirectInstallment, [
+    'Rincian Pembayaran Bertahap',
+    'Total tagihan awal:',
+    'Rp 600.000',
+    'Sudah dibayar sebelumnya:',
+    'Rp 250.000',
+    'Pembayaran saat ini:',
+    'Rp 200.000',
+    'Sisa tagihan:',
+    'Rp 150.000',
+]);
+docCheck('Case B: current invoice renders Rincian Pembayaran Bertahap audit trail for multi installments',
+    count($missingDirect) === 0, implode(' | ', $missingDirect));
+
 // --- HTTP protection leg (IP.2; skipped with --no-http) -------------------
 if (in_array('--no-http', $argv, true)) {
     echo "--- http leg SKIPPED (--no-http) ---\n";

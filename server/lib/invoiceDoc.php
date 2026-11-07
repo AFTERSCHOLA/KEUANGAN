@@ -160,12 +160,56 @@ function invoiceDocSettlement(array $invoice, array $payments, array $siswaIds):
     $total = invoiceDocTotal($invoice);
     $sisa = max(0.0, $total - $dibayar);
     $credit = max(0.0, $dibayar - $total);
+
+    $matched = [];
+    foreach ($payments as $p) {
+        if (!is_array($p)) continue;
+        $invoiceId = $p['invoiceId'] ?? null;
+        if (is_string($invoiceId) && $invoiceId !== '') {
+            if ($invoiceId === ($invoice['id'] ?? null)) {
+                $matched[] = $p;
+            }
+            continue;
+        }
+        if (!empty($p['sekolahId']) && $p['sekolahId'] === ($invoice['sekolahId'] ?? null) && in_array($p['periode'] ?? null, $periods, true)) {
+            $matched[] = $p;
+            continue;
+        }
+        $sid = isset($p['siswaId']) ? (string) $p['siswaId'] : '';
+        if ($sid !== '' && isset($siswaSet[$sid]) && in_array($p['periode'] ?? null, $periods, true)) {
+            $matched[] = $p;
+        }
+    }
+
+    usort($matched, function ($a, $b) {
+        $dateA = (string) ($a['tanggalBayar'] ?? $a['tanggal'] ?? $a['createdAt'] ?? '');
+        $dateB = (string) ($b['tanggalBayar'] ?? $b['tanggal'] ?? $b['createdAt'] ?? '');
+        return strcmp($dateA, $dateB);
+    });
+
+    $count = count($matched);
+    $paidPrev = 0.0;
+    $paidCurrent = 0.0;
+    if ($count >= 2) {
+        $paidCurrent = (float) ($matched[$count - 1]['nominal'] ?? 0);
+        for ($i = 0; $i < $count - 1; $i++) {
+            $paidPrev += (float) ($matched[$i]['nominal'] ?? 0);
+        }
+    } elseif ($count === 1) {
+        $paidCurrent = (float) ($matched[0]['nominal'] ?? 0);
+        $paidPrev = 0.0;
+    }
+
     return [
         'total' => $total,
         'dibayar' => $dibayar,
         'sisa' => $sisa,
         'credit' => $credit,
         'status' => ($sisa <= 0 && $total > 0 && $dibayar > 0) ? 'Lunas' : 'Belum Lunas',
+        'hasMultiInstallment' => ($count >= 2),
+        'sudahDibayarSebelumnya' => $paidPrev,
+        'pembayaranSaatIni' => $paidCurrent,
+        'payments' => $matched,
     ];
 }
 
@@ -261,6 +305,17 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
             . '<span style="font-weight:600">Sisa Periode Ini</span>'
             . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['sisa']) . '</span>'
             . '</div>';
+
+        if (!empty($settlement['hasMultiInstallment'])) {
+            $topBreakdownHtml .= '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:11px;color:#475569">'
+                . '<p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.06em;color:#334155;text-transform:uppercase">Rincian Pembayaran Bertahap</p>'
+                . '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Total tagihan awal:</span><span style="font-weight:600;color:#1e293b">' . invoiceDocRupiah($settlement['total']) . '</span></div>'
+                . '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Sudah dibayar sebelumnya:</span><span style="font-weight:600;color:#059669">' . invoiceDocRupiah($settlement['sudahDibayarSebelumnya'] ?? 0) . '</span></div>'
+                . '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Pembayaran saat ini:</span><span style="font-weight:600;color:#059669">' . invoiceDocRupiah($settlement['pembayaranSaatIni'] ?? 0) . '</span></div>'
+                . '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:2px;font-weight:700;color:#1d4ed8"><span>Sisa tagihan:</span><span>' . invoiceDocRupiah($settlement['sisa']) . '</span></div>'
+                . '<div style="margin-top:4px;font-size:10px;color:#64748b;font-style:italic"><strong style="font-style:normal;color:#475569">Keterangan:</strong> Total pembayaran diterima ' . invoiceDocRupiah($settlement['dibayar']) . ' dari total tagihan ' . invoiceDocRupiah($settlement['total']) . '.</div>'
+                . '</div>';
+        }
     }
     $topBreakdownHtml .= '</div>';
 
@@ -272,6 +327,7 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
             $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
             $amount = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
             $origAmount = isset($line['amount']) ? (float) $line['amount'] : null;
+            $hasAudit = !$isSettled && (isset($line['prevTotal']) || isset($line['prevPaidPrev']) || isset($line['prevPaidCurrent']) || isset($line['prevPaid']) || !empty($line['prevNomor']));
             if ($isSettled) {
                 $linesHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;font-size:12px;color:#059669;text-decoration:line-through;opacity:0.7">'
                     . '<span>' . $h($line['description'] ?? '') . ': Lunas (' . invoiceDocRupiah(0) . ')</span>'
@@ -281,13 +337,30 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
                 $isCredit = ($line['kind'] ?? '') === 'credit' || $amount < 0;
                 $cls = $isCredit ? 'color:#059669' : 'color:#d97706;font-weight:600';
                 $suffix = $isCredit ? ' (credit)' : '';
-                $origNote = ($origAmount !== null && isset($line['activeAmount']) && (float) $line['activeAmount'] !== $origAmount)
+                $origNote = ($origAmount !== null && isset($line['activeAmount']) && (float) $line['activeAmount'] !== $origAmount && !$hasAudit)
                     ? ' <span style="color:#94a3b8;font-weight:normal">(Awal: ' . invoiceDocRupiah($origAmount) . ')</span>'
                     : '';
                 $linesHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;font-size:12px;' . $cls . '">'
                     . '<span>' . $h($line['description'] ?? '') . $origNote . '</span>'
                     . '<span>' . invoiceDocRupiah(abs($amount)) . $suffix . '</span>'
                     . '</div>';
+
+                if ($hasAudit) {
+                    $prevTotal = (float) ($line['prevTotal'] ?? $origAmount ?? 0);
+                    $prevPaidPrev = (float) ($line['prevPaidPrev'] ?? 0);
+                    $prevPaidCurrent = (float) ($line['prevPaidCurrent'] ?? 0);
+                    $prevPaidTotal = (float) ($line['prevPaid'] ?? ($prevPaidPrev + $prevPaidCurrent));
+                    $prevSisa = (float) ($line['prevSisa'] ?? $amount);
+                    $prevNomor = (string) ($line['prevNomor'] ?? $line['invoiceId'] ?? '');
+
+                    $linesHtml .= '<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin:6px 0;font-size:11px;color:#475569">'
+                        . '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Total tagihan awal:</span><span style="font-weight:600;color:#1e293b">' . invoiceDocRupiah($prevTotal) . '</span></div>'
+                        . '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Sudah dibayar sebelumnya:</span><span style="font-weight:600;color:#059669">' . invoiceDocRupiah($prevPaidPrev) . '</span></div>'
+                        . '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Pembayaran saat ini:</span><span style="font-weight:600;color:#059669">' . invoiceDocRupiah($prevPaidCurrent) . '</span></div>'
+                        . '<div style="display:flex;justify-content:space-between;border-top:1px solid #f1f5f9;padding-top:2px;font-weight:700;color:#b45309"><span>Sisa tagihan:</span><span>' . invoiceDocRupiah($prevSisa) . '</span></div>'
+                        . '<div style="margin-top:4px;font-size:10px;color:#64748b;font-style:italic"><strong style="font-style:normal;color:#475569">Keterangan:</strong> Sisa tagihan dari invoice ' . $h($prevNomor) . ' (total pembayaran diterima ' . invoiceDocRupiah($prevPaidTotal) . ' dari total tagihan ' . invoiceDocRupiah($prevTotal) . ').</div>'
+                        . '</div>';
+                }
             }
         }
         if ($linesHtml !== '') {

@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react'
 import { formatRupiah } from '../../lib/format.js'
 import { terbilang } from '../../lib/terbilang.js'
 import { readCached, getSettings } from '../../lib/store.js'
-import { invoiceSettlement, invoiceTotal, invoicePeriods, openInvoiceDoc, resolvedCarryOverLines } from '../../lib/invoices.js'
+import {
+  invoiceSettlement,
+  invoiceTotal,
+  invoicePeriods,
+  openInvoiceDoc,
+  resolvedCarryOverLines,
+  invoicePaymentBreakdown,
+} from '../../lib/invoices.js'
 import { fitPrintableToSinglePage, restorePrintFit } from '../../lib/printFit.js'
 
 const LOGO_URL = '/invoice/logo.png'
@@ -70,6 +77,13 @@ export default function InvoiceTemplate({
   const siswaAll = siswaProp ?? readCached('siswa') ?? []
   const settlement = !isDraft
     ? invoiceSettlement(invoice, {
+        sppPayments: sppPaymentsAll,
+        siswa: siswaAll,
+        invoices: invoicesAll,
+      })
+    : null
+  const breakdown = !isDraft
+    ? invoicePaymentBreakdown(invoice, {
         sppPayments: sppPaymentsAll,
         siswa: siswaAll,
         invoices: invoicesAll,
@@ -234,6 +248,36 @@ export default function InvoiceTemplate({
                 <span className="font-semibold">Sisa Periode Ini</span>
                 <span className="font-bold">{formatRupiah(settlement.sisa)}</span>
               </div>
+              {breakdown && breakdown.payments && breakdown.payments.length >= 2 && (
+                <div className="my-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
+                  <p className="font-bold text-slate-700 uppercase tracking-wide text-[11px] mb-1">
+                    Rincian Pembayaran Bertahap
+                  </p>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Total tagihan awal:</span>
+                    <span className="font-semibold text-slate-800">{formatRupiah(breakdown.totalAwal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Sudah dibayar sebelumnya:</span>
+                    <span className="font-semibold text-emerald-700">
+                      {formatRupiah(breakdown.payments.slice(0, -1).reduce((s, p) => s + Number(p.nominal || 0), 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Pembayaran saat ini:</span>
+                    <span className="font-semibold text-emerald-700">
+                      {formatRupiah(Number(breakdown.latestPayment?.nominal || 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-700 border-t border-slate-200 pt-1 font-semibold">
+                    <span>Sisa tagihan:</span>
+                    <span className="font-bold text-blue-700">{formatRupiah(breakdown.sisaSaatIni)}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 pt-0.5 italic">
+                    <span className="font-semibold not-italic text-slate-600">Keterangan:</span> Total pembayaran diterima {formatRupiah(breakdown.sudahDibayar)} dari total tagihan {formatRupiah(breakdown.totalAwal)}.
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -259,23 +303,95 @@ export default function InvoiceTemplate({
                 )
               }
               const isCredit = line.kind === 'credit' || amt < 0
+              const prevInv = line.invoiceId ? invoicesAll.find(i => i.id === line.invoiceId) : null
+              const prevBreakdown = prevInv
+                ? invoicePaymentBreakdown(prevInv, {
+                    sppPayments: sppPaymentsAll,
+                    siswa: siswaAll,
+                    invoices: invoicesAll,
+                  })
+                : null
+
+              const hasAttachedAudit =
+                line.prevTotal !== undefined ||
+                line.prevPaid !== undefined ||
+                line.prevPaidPrev !== undefined ||
+                line.prevPaidCurrent !== undefined
+
+              const hasBreakdownAudit =
+                prevBreakdown &&
+                (prevBreakdown.payments?.length > 0 || prevBreakdown.sudahDibayar > 0)
+
+              const hasAudit = !isCredit && (hasAttachedAudit || hasBreakdownAudit)
+
+              let prevTotalAwal = 0
+              let prevPaidPrev = 0
+              let prevPaidCurrent = 0
+              let prevPaidTotal = 0
+              let prevSisa = 0
+              let prevNomor = line.prevNomor || (prevInv ? (prevInv.nomor || prevInv.nomorInvoice) : '') || line.invoiceId || ''
+
+              if (hasAttachedAudit) {
+                prevTotalAwal = Number(line.prevTotal ?? line.amount ?? 0)
+                prevPaidPrev = Number(line.prevPaidPrev ?? 0)
+                prevPaidCurrent = Number(line.prevPaidCurrent ?? ((line.prevPaid ?? 0) - prevPaidPrev))
+                prevPaidTotal = Number(line.prevPaid ?? (prevPaidPrev + prevPaidCurrent))
+                prevSisa = Number(line.prevSisa ?? Math.max(0, prevTotalAwal - prevPaidTotal))
+              } else if (hasBreakdownAudit) {
+                prevTotalAwal = prevBreakdown.totalAwal || Number(line.amount || 0)
+                if (prevBreakdown.payments.length >= 2) {
+                  prevPaidCurrent = Number(prevBreakdown.latestPayment?.nominal || 0)
+                  prevPaidPrev = prevBreakdown.payments.slice(0, -1).reduce((s, p) => s + Number(p.nominal || 0), 0)
+                } else if (prevBreakdown.payments.length === 1) {
+                  prevPaidCurrent = Number(prevBreakdown.latestPayment?.nominal || 0)
+                  prevPaidPrev = 0
+                }
+                prevPaidTotal = prevBreakdown.sudahDibayar
+                prevSisa = prevBreakdown.sisaSaatIni
+              }
+
               return (
-                <div
-                  key={`${line.invoiceId}-${line.kind}`}
-                  className={`flex justify-between items-center ${isCredit ? 'text-emerald-600' : 'text-amber-600 font-semibold'}`}
-                >
-                  <span>
-                    {line.description}
-                    {line.amount && line.activeAmount !== undefined && line.activeAmount !== line.amount && (
-                      <span className="text-slate-400 font-normal ml-1">
-                        (Awal: {formatRupiah(line.amount)})
-                      </span>
-                    )}
-                  </span>
-                  <span>
-                    {formatRupiah(Math.abs(amt))}
-                    {isCredit ? ' (credit)' : ''}
-                  </span>
+                <div key={`${line.invoiceId}-${line.kind}`} className="space-y-1">
+                  <div
+                    className={`flex justify-between items-center ${isCredit ? 'text-emerald-600' : 'text-amber-600 font-semibold'}`}
+                  >
+                    <span>
+                      {line.description}
+                      {line.amount && line.activeAmount !== undefined && line.activeAmount !== line.amount && !hasAudit && (
+                        <span className="text-slate-400 font-normal ml-1">
+                          (Awal: {formatRupiah(line.amount)})
+                        </span>
+                      )}
+                    </span>
+                    <span>
+                      {formatRupiah(Math.abs(amt))}
+                      {isCredit ? ' (credit)' : ''}
+                    </span>
+                  </div>
+
+                  {hasAudit && (
+                    <div className="bg-white rounded-lg p-2.5 my-1.5 border border-slate-200 text-xs space-y-1 text-slate-600">
+                      <div className="flex justify-between items-center">
+                        <span>Total tagihan awal:</span>
+                        <span className="font-semibold text-slate-800">{formatRupiah(prevTotalAwal)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Sudah dibayar sebelumnya:</span>
+                        <span className="font-semibold text-emerald-700">{formatRupiah(prevPaidPrev)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Pembayaran saat ini:</span>
+                        <span className="font-semibold text-emerald-700">{formatRupiah(prevPaidCurrent)}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-t border-slate-100 pt-1 font-semibold text-slate-700">
+                        <span>Sisa tagihan:</span>
+                        <span className="font-bold text-amber-700">{formatRupiah(prevSisa)}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 pt-0.5 italic">
+                        <span className="font-semibold not-italic text-slate-600">Keterangan:</span> Sisa tagihan dari invoice {prevNomor} (total pembayaran diterima {formatRupiah(prevPaidTotal)} dari total tagihan {formatRupiah(prevTotalAwal)}).
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
