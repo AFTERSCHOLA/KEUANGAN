@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { invoicePeriods, invoiceTotal } from '../invoices.js'
+import { invoicePeriods, invoiceTotal, totalYangHarusDibayar } from '../invoices.js'
+import { terbilang } from '../terbilang.js'
 
 // SBF.1 (F-SBF1; D-SBF1) — print-template shape contract. InvoiceTemplate
 // normalizes both shapes via invoicePeriods()/invoiceTotal(); this spec
@@ -57,5 +58,36 @@ describe('SBF.1 print shape contract', () => {
     expect(() => invoicePeriods({})).not.toThrow()
     expect(invoicePeriods({})).toEqual([])
     expect(invoiceTotal({})).toBe(0)
+  })
+
+  it('two-tier reconciliation: 2jt subtotal + 500rb payment + 1jt carry-over -> 2.5jt totalYangHarusDibayar', () => {
+    const invoice = {
+      id: 'inv-recon-1',
+      sekolahId: 'skl-1',
+      grandTotal: 2000000,
+      status: 'Terbit',
+      carryOverLines: [
+        {
+          type: 'carry-over',
+          kind: 'outstanding',
+          invoiceId: 'inv-prev-1',
+          description: 'Sisa tagihan sebelumnya',
+          amount: 1000000,
+          activeAmount: 1000000,
+          isSettled: false,
+        },
+      ],
+    }
+    const sppPayments = [
+      {
+        id: 'pay-1',
+        invoiceId: 'inv-recon-1',
+        nominal: 500000,
+      },
+    ]
+
+    const total = totalYangHarusDibayar(invoice, { sppPayments })
+    expect(total).toBe(2500000)
+    expect(terbilang(total).toLowerCase()).toBe('dua juta lima ratus ribu rupiah')
   })
 })

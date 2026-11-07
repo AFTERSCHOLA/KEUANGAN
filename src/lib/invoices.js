@@ -336,6 +336,37 @@ export function resolvedCarryOverLines(
 }
 
 /**
+ * Computes the total net amount due for an invoice including reconciled
+ * carry-over lines from previous periods and payments made.
+ */
+export function invoiceTotalYangHarusDibayar(
+  invoice,
+  { invoices = [], sppPayments = [], siswa = [], settlement = null } = {}
+) {
+  if (!invoice) return 0
+  const grandTotal = invoiceTotal(invoice)
+  const isDraft = invoice.status === 'Draft'
+  const activeSettlement = settlement !== null
+    ? settlement
+    : (!isDraft ? invoiceSettlement(invoice, { invoices, sppPayments, siswa }) : null)
+  const activeCarryOverLines = resolvedCarryOverLines(invoice, { invoices, sppPayments, siswa })
+  const totalActiveCarryOver = activeCarryOverLines
+    .filter(l => (l.kind === 'outstanding' || !l.kind) && !l.isSettled)
+    .reduce((sum, l) => sum + Number(l.activeAmount || 0), 0)
+  const totalCredit = activeCarryOverLines
+    .filter(l => l.kind === 'credit')
+    .reduce((sum, l) => sum + Number(l.activeAmount || l.amount || 0), 0)
+  return Math.max(
+    0,
+    activeSettlement
+      ? activeSettlement.sisa + totalActiveCarryOver + totalCredit
+      : grandTotal + totalActiveCarryOver + totalCredit
+  )
+}
+
+export const totalYangHarusDibayar = invoiceTotalYangHarusDibayar
+
+/**
  * SB.B.4 — Carry-over dari invoice sebelumnya.
  *
  * Carry-over tidak mengubah invoice.total.

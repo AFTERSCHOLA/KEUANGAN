@@ -90,11 +90,24 @@ export default function InvoiceTemplate({
   const tanggalSrc = invoice.tanggalTerbit || invoice.tanggal || (invoice.createdAt ? invoice.createdAt.slice(0, 10) : '')
   const tanggalLabel = tanggalSrc ? tanggalSrc.split('-').reverse().join('-') : '-'
   const grandTotal = invoiceTotal(invoice)
-  const carryLines = resolvedCarryOverLines(invoice, {
+  const subtotalCurrent = grandTotal
+  const activeCarryOverLines = resolvedCarryOverLines(invoice, {
     invoices: invoicesAll,
     sppPayments: sppPaymentsAll,
     siswa: siswaAll,
   })
+  const totalActiveCarryOver = activeCarryOverLines
+    .filter(l => (l.kind === 'outstanding' || !l.kind) && !l.isSettled)
+    .reduce((sum, l) => sum + Number(l.activeAmount || 0), 0)
+  const totalCredit = activeCarryOverLines
+    .filter(l => l.kind === 'credit')
+    .reduce((sum, l) => sum + Number(l.activeAmount || l.amount || 0), 0)
+  const totalYangHarusDibayar = Math.max(
+    0,
+    settlement
+      ? settlement.sisa + totalActiveCarryOver + totalCredit
+      : grandTotal + totalActiveCarryOver + totalCredit
+  )
   const tableRows = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.map((it, idx) => {
         const isTrainer = it.basis === 'trainer' || Boolean(it.tarifPerPertemuan && !it.hargaSatuan && !it.jumlahSiswa)
@@ -205,60 +218,83 @@ export default function InvoiceTemplate({
           </tbody>
         </table>
 
-        {carryLines.length > 0 && (
-          <div className="mt-1 mb-2 space-y-0.5 text-xs">
-            {carryLines.map(line => {
-              if (line.isSettled || line.activeAmount === 0) {
+        {/* Top breakdown: Periode Ini */}
+        <div className="pt-4 pb-2 border-t border-slate-200 space-y-1.5 text-sm">
+          <div className="flex justify-between items-center text-slate-700">
+            <span className="font-semibold">Subtotal Periode Ini</span>
+            <span className="font-bold">{formatRupiah(subtotalCurrent)}</span>
+          </div>
+          {!isDraft && settlement && settlement.dibayar > 0 && (
+            <>
+              <div className="flex justify-between items-center text-emerald-700">
+                <span>Sudah Dibayar (Periode Ini)</span>
+                <span className="font-bold">{formatRupiah(settlement.dibayar)}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-700">
+                <span className="font-semibold">Sisa Periode Ini</span>
+                <span className="font-bold">{formatRupiah(settlement.sisa)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Middle breakdown: Sisa Tagihan Sebelumnya (Carry-Over) */}
+        {activeCarryOverLines.length > 0 && (
+          <div className="my-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5 avoid-break">
+            <p className="font-bold text-slate-700 uppercase tracking-wide text-[11px]">
+              Rincian Tagihan Sebelumnya (Carry-Over)
+            </p>
+            {activeCarryOverLines.map(line => {
+              const isSettled = line.isSettled || line.activeAmount === 0
+              const amt = line.activeAmount ?? line.amount
+              if (isSettled) {
                 return (
-                  <p
+                  <div
                     key={`${line.invoiceId}-${line.kind}`}
-                    className="text-emerald-600 line-through opacity-70"
+                    className="flex justify-between items-center text-emerald-600 line-through opacity-70"
                   >
-                    {line.description}: Lunas (Rp 0)
-                  </p>
+                    <span>{line.description}: Lunas (Rp 0)</span>
+                    <span>Lunas (Rp 0)</span>
+                  </div>
                 )
               }
-              const amt = line.activeAmount ?? line.amount
+              const isCredit = line.kind === 'credit' || amt < 0
               return (
-                <p
+                <div
                   key={`${line.invoiceId}-${line.kind}`}
-                  className={amt < 0 ? 'text-emerald-600' : 'text-amber-600'}
+                  className={`flex justify-between items-center ${isCredit ? 'text-emerald-600' : 'text-amber-600 font-semibold'}`}
                 >
-                  {line.description}: {formatRupiah(Math.abs(amt))}
-                  {amt < 0 ? ' (credit)' : ''}
-                </p>
+                  <span>
+                    {line.description}
+                    {line.amount && line.activeAmount !== undefined && line.activeAmount !== line.amount && (
+                      <span className="text-slate-400 font-normal ml-1">
+                        (Awal: {formatRupiah(line.amount)})
+                      </span>
+                    )}
+                  </span>
+                  <span>
+                    {formatRupiah(Math.abs(amt))}
+                    {isCredit ? ' (credit)' : ''}
+                  </span>
+                </div>
               )
             })}
           </div>
         )}
 
-        <div className="flex justify-between items-center pt-4 pb-3">
-          <span className="font-extrabold text-slate-800 tracking-wide">GRAND TOTAL</span>
-          <span className="text-xl font-extrabold text-blue-700">{formatRupiah(grandTotal)}</span>
-        </div>
-        <div className={`bg-blue-50/60 rounded-lg px-4 py-2.5 text-xs text-slate-600 border border-blue-100/60 ${isDraft ? 'mb-10' : 'mb-6'}`}>
-          <span className="font-semibold text-slate-700">Terbilang: </span>
-          <span className="italic">"{terbilang(grandTotal)}"</span>
-        </div>
-
-        {!isDraft && (
-          <div className="grid grid-cols-3 gap-3 mb-10 text-xs avoid-break">
-            <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5">
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wide">Total Tagihan</p>
-              <p className="font-bold text-slate-800 mt-0.5">{formatRupiah(settlement.total)}</p>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5">
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wide">Sudah Dibayar</p>
-              <p className="font-bold text-emerald-700 mt-0.5">{formatRupiah(settlement.dibayar)}</p>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5">
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wide">Sisa Tagihan</p>
-              <p className={`font-bold mt-0.5 ${settlement.sisa > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>{formatRupiah(settlement.sisa)}</p>
-            </div>
+        {/* Bottom summary: TOTAL YANG HARUS DIBAYAR */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 my-4 avoid-break">
+          <div className="flex justify-between items-center">
+            <span className="font-extrabold text-slate-800 tracking-wide text-base">TOTAL YANG HARUS DIBAYAR</span>
+            <span className="text-2xl font-extrabold text-blue-700">{formatRupiah(totalYangHarusDibayar)}</span>
           </div>
-        )}
+          <div className="mt-2 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">Terbilang: </span>
+            <span className="italic">"{terbilang(totalYangHarusDibayar)}"</span>
+          </div>
+        </div>
 
-        <div className="grid grid-cols-2 gap-8 items-end avoid-break">
+        <div className="grid grid-cols-2 gap-8 items-end avoid-break mt-6">
           <div>
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-5 text-xs text-slate-600 leading-relaxed">
               <p className="font-bold text-slate-800 mb-1.5">Catatan Pembayaran:</p>

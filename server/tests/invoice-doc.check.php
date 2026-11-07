@@ -69,14 +69,14 @@ echo "--- renderer leg ---\n";
 $html = renderInvoiceDoc($canonical, $sekolah, $settings, $settlement, []);
 $missing = containsAll($html, [
     'AFS-202608-0001', 'SMP TRIDAYA TUNAS BANGSA', 'Mr. HADI', 'Agustus 2026',
-    'INVOICE', 'KEPADA YTH', 'BULAN TAGIHAN', 'Uraian', 'Harga', 'GRAND TOTAL',
+    'INVOICE', 'KEPADA YTH', 'BULAN TAGIHAN', 'Uraian', 'Harga',
+    'Subtotal Periode Ini', 'TOTAL YANG HARUS DIBAYAR',
     'Rp 9.350.000', 'Sembilan Juta Tiga Ratus Lima Puluh Ribu Rupiah',
     'Catatan Pembayaran', 'Bank BSI No. Rekening: 7230664565',
     'Hormat Kami', 'Irvan Arief Rachman',
-    'STATUS PEMBAYARAN (LAMPIRAN)', 'Belum Lunas',
     '@page', 'size:A4',
 ]);
-docCheck('canonical shape renders every D-IP4 slot + appendix + A4', count($missing) === 0, implode(' | ', $missing));
+docCheck('canonical shape renders every D-IP4 slot + two-tier summary + A4', count($missing) === 0, implode(' | ', $missing));
 
 docCheck('terbilang(9350000) matches template line', invoiceDocTerbilang(9350000) === 'Sembilan Juta Tiga Ratus Lima Puluh Ribu Rupiah', invoiceDocTerbilang(9350000));
 docCheck('terbilang(0) is Nol Rupiah', invoiceDocTerbilang(0) === 'Nol Rupiah');
@@ -94,7 +94,7 @@ $legacy = [
 $htmlLegacy = renderInvoiceDoc($legacy, $sekolah, $settings, null, []);
 $missingLegacy = containsAll($htmlLegacy, ['September 2026', 'Pembayaran SPP bulan September 2026', 'Ibu Sari', 'Rp 1.000.000']);
 docCheck('legacy shape renders single row unchanged', count($missingLegacy) === 0, implode(' | ', $missingLegacy));
-docCheck('null settlement hides appendix', strpos($htmlLegacy, 'STATUS PEMBAYARAN') === false);
+docCheck('null settlement hides payment breakdown lines', strpos($htmlLegacy, 'Sudah Dibayar (Periode Ini)') === false);
 
 $tarifPertemuanInvoice = [
     'id' => 'inv-doc-tarif', 'sekolahId' => 'skl-doc-test-1',
@@ -178,8 +178,57 @@ $draft['status'] = 'Draft';
 $draft['nomor'] = null;
 unset($draft['nomorInvoice']);
 $htmlDraft = renderInvoiceDoc($draft, $sekolah, $settings, $settlement, []);
-docCheck('draft hides nomor + appendix, shows DRAFT chip',
-    strpos($htmlDraft, '(Draft)') !== false && strpos($htmlDraft, 'STATUS PEMBAYARAN') === false && strpos($htmlDraft, 'DRAFT') !== false);
+docCheck('draft hides nomor + payment breakdown, shows DRAFT chip',
+    strpos($htmlDraft, '(Draft)') !== false && strpos($htmlDraft, 'Sudah Dibayar (Periode Ini)') === false && strpos($htmlDraft, 'DRAFT') !== false);
+
+$invTwoTier = [
+    'id' => 'inv-twotier-1',
+    'sekolahId' => 'skl-doc-test-1',
+    'periode' => '2026-08',
+    'nomorInvoice' => 'AFS-202608-TT01',
+    'status' => 'Terbit',
+    'items' => [
+        ['deskripsi' => 'Biaya Ekskul Coding', 'jumlahSiswa' => 4, 'hargaSatuan' => 500000, 'total' => 2000000],
+    ],
+    'grandTotal' => 2000000,
+    'carryOverLines' => [
+        [
+            'type' => 'carry-over',
+            'kind' => 'outstanding',
+            'invoiceId' => 'inv-prev-1',
+            'description' => 'Sisa tagihan sebelumnya',
+            'amount' => 1000000,
+            'activeAmount' => 1000000,
+            'isSettled' => false,
+        ],
+    ],
+];
+$settleTwoTier = [
+    'total' => 2000000,
+    'dibayar' => 500000,
+    'sisa' => 1500000,
+    'credit' => 0,
+    'status' => 'Belum Lunas',
+];
+$htmlTwoTier = renderInvoiceDoc($invTwoTier, $sekolah, $settings, $settleTwoTier, []);
+$missingTwoTier = containsAll($htmlTwoTier, [
+    'Subtotal Periode Ini',
+    'Rp 2.000.000',
+    'Sudah Dibayar (Periode Ini)',
+    'Rp 500.000',
+    'Sisa Periode Ini',
+    'Rp 1.500.000',
+    'Rincian Tagihan Sebelumnya (Carry-Over)',
+    'Sisa tagihan sebelumnya',
+    'TOTAL YANG HARUS DIBAYAR',
+    'Rp 2.500.000',
+    'Dua Juta Lima Ratus Ribu Rupiah',
+]);
+docCheck('two-tier breakdown renders Subtotal, Sudah Dibayar, Sisa, Carry-Over, TOTAL, and Terbilang',
+    count($missingTwoTier) === 0, implode(' | ', $missingTwoTier));
+docCheck('carry-over lines appear exactly once (no duplicate $carryHtml)',
+    substr_count($htmlTwoTier, 'Sisa tagihan sebelumnya') === 1,
+    'occurrences=' . substr_count($htmlTwoTier, 'Sisa tagihan sebelumnya'));
 
 $evil = $canonical;
 $evil['pjNama'] = '<script>alert(1)</script>';

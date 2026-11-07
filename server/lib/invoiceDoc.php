@@ -191,9 +191,28 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
     $periodeLabel = invoiceDocPeriodeLabel($periods);
     $rows = invoiceDocRows($invoice, $sekolah);
     $grandTotal = invoiceDocTotal($invoice);
-    $terbilang = invoiceDocTerbilang($grandTotal);
     $pj = $invoice['pjNama'] ?? $invoice['pjSekolah'] ?? '';
     $carryLines = (isset($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) ? $invoice['carryOverLines'] : [];
+
+    $subtotalCurrent = $grandTotal;
+    $totalActiveCarryOver = 0.0;
+    $totalCredit = 0.0;
+    foreach ($carryLines as $line) {
+        if (!is_array($line)) continue;
+        $kind = $line['kind'] ?? '';
+        $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
+        $amount = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
+        if ($kind === 'credit') {
+            $totalCredit += $amount;
+        } elseif (!$isSettled && ($kind === 'outstanding' || $kind === '')) {
+            $totalActiveCarryOver += $amount;
+        }
+    }
+    $totalYangHarusDibayar = max(0.0, ($settlement !== null && !$isDraft)
+        ? ((float) ($settlement['sisa'] ?? 0) + $totalActiveCarryOver + $totalCredit)
+        : ($grandTotal + $totalActiveCarryOver + $totalCredit)
+    );
+    $terbilang = invoiceDocTerbilang($totalYangHarusDibayar);
 
     $isTrainerTable = false;
     foreach ($rows as $r) {
@@ -227,39 +246,67 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
             . '</tr>';
     }
 
-    $carryHtml = '';
-    foreach ($carryLines as $line) {
-        if (!is_array($line)) continue;
-        $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
-        $amount = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
-        if ($isSettled) {
-            $carryHtml .= '<p style="margin:2px 0;font-size:12px;color:#059669;text-decoration:line-through;opacity:0.7">'
-                . $h($line['description'] ?? '') . ': Lunas (' . invoiceDocRupiah(0) . ')</p>';
-        } else {
-            $cls = $amount < 0 ? 'color:#059669' : 'color:#d97706';
-            $suffix = $amount < 0 ? ' (credit)' : '';
-            $carryHtml .= '<p style="margin:2px 0;font-size:12px;' . $cls . '">'
-                . $h($line['description'] ?? '') . ': ' . invoiceDocRupiah(abs($amount)) . $suffix . '</p>';
+    $topBreakdownHtml = '<div style="border-top:1px solid #e2e8f0;padding:12px 0 8px;font-size:13px">'
+        . '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+        . '<span style="font-weight:600;color:#334155">Subtotal Periode Ini</span>'
+        . '<span style="font-weight:700;color:#1e293b">' . invoiceDocRupiah($subtotalCurrent) . '</span>'
+        . '</div>';
+
+    if ($settlement !== null && !$isDraft && (float) ($settlement['dibayar'] ?? 0) > 0) {
+        $topBreakdownHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#059669">'
+            . '<span>Sudah Dibayar (Periode Ini)</span>'
+            . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['dibayar']) . '</span>'
+            . '</div>'
+            . '<div style="display:flex;justify-content:space-between;align-items:center;color:#334155">'
+            . '<span style="font-weight:600">Sisa Periode Ini</span>'
+            . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['sisa']) . '</span>'
+            . '</div>';
+    }
+    $topBreakdownHtml .= '</div>';
+
+    $middleBreakdownHtml = '';
+    if (count($carryLines) > 0) {
+        $linesHtml = '';
+        foreach ($carryLines as $line) {
+            if (!is_array($line)) continue;
+            $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
+            $amount = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
+            $origAmount = isset($line['amount']) ? (float) $line['amount'] : null;
+            if ($isSettled) {
+                $linesHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;font-size:12px;color:#059669;text-decoration:line-through;opacity:0.7">'
+                    . '<span>' . $h($line['description'] ?? '') . ': Lunas (' . invoiceDocRupiah(0) . ')</span>'
+                    . '<span>Lunas (' . invoiceDocRupiah(0) . ')</span>'
+                    . '</div>';
+            } else {
+                $isCredit = ($line['kind'] ?? '') === 'credit' || $amount < 0;
+                $cls = $isCredit ? 'color:#059669' : 'color:#d97706;font-weight:600';
+                $suffix = $isCredit ? ' (credit)' : '';
+                $origNote = ($origAmount !== null && isset($line['activeAmount']) && (float) $line['activeAmount'] !== $origAmount)
+                    ? ' <span style="color:#94a3b8;font-weight:normal">(Awal: ' . invoiceDocRupiah($origAmount) . ')</span>'
+                    : '';
+                $linesHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;font-size:12px;' . $cls . '">'
+                    . '<span>' . $h($line['description'] ?? '') . $origNote . '</span>'
+                    . '<span>' . invoiceDocRupiah(abs($amount)) . $suffix . '</span>'
+                    . '</div>';
+            }
+        }
+        if ($linesHtml !== '') {
+            $middleBreakdownHtml = '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin:12px 0">'
+                . '<p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.06em;color:#475569;text-transform:uppercase">Rincian Tagihan Sebelumnya (Carry-Over)</p>'
+                . $linesHtml
+                . '</div>';
         }
     }
-    if ($carryHtml !== '') $carryHtml = '<div style="margin:4px 0 8px">' . $carryHtml . '</div>';
 
-    $appendix = '';
-    if ($settlement !== null && !$isDraft) {
-        $sisaCls = $settlement['sisa'] > 0 ? 'color:#e11d48' : 'color:#059669';
-        $appendix = '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:0 0 24px;font-size:12px">'
-            . '<p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.08em;color:#94a3b8">STATUS PEMBAYARAN (LAMPIRAN)</p>'
-            . '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr>'
-            . '<td><span style="color:#94a3b8">Total Tagihan</span><br><strong>' . invoiceDocRupiah($settlement['total']) . '</strong></td>'
-            . '<td><span style="color:#94a3b8">Sudah Dibayar</span><br><strong style="color:#059669">' . invoiceDocRupiah($settlement['dibayar']) . '</strong></td>'
-            . '<td><span style="color:#94a3b8">Sisa Tagihan</span><br><strong style="' . $sisaCls . '">' . invoiceDocRupiah($settlement['sisa']) . '</strong>'
-            . ' <span style="font-weight:700">' . $h($settlement['status']) . '</span></td>'
-            . '</tr></table>'
-            . $carryHtml
-            . '</div>';
-    } elseif ($carryHtml !== '') {
-        $appendix = '<div style="margin:0 0 24px">' . $carryHtml . '</div>';
-    }
+    $bottomSummaryHtml = '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin:16px 0 24px">'
+        . '<div style="display:flex;justify-content:space-between;align-items:center">'
+        . '<span style="font-size:15px;font-weight:800;letter-spacing:.04em;color:#1e293b">TOTAL YANG HARUS DIBAYAR</span>'
+        . '<span style="font-size:22px;font-weight:800;color:#1d4ed8">' . invoiceDocRupiah($totalYangHarusDibayar) . '</span>'
+        . '</div>'
+        . '<div style="margin-top:8px;font-size:12px;color:#475569">'
+        . '<span style="font-weight:600;color:#334155">Terbilang: </span><em>&ldquo;' . $h($terbilang) . '&rdquo;</em>'
+        . '</div>'
+        . '</div>';
 
     $bankBlock = '';
     if (!empty($settings['rekeningBank'])) {
@@ -271,7 +318,15 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         $bankBlock = '<p style="margin:0;color:#94a3b8">Belum diatur — isi info rekening di Pengaturan.</p>';
     }
 
-    $draftChip = $isDraft ? ' <span style="font-size:10px;font-weight:700;background:#f1f5f9;color:#64748b;border-radius:999px;padding:2px 8px;vertical-align:middle">DRAFT</span>' : '';
+    $statusChip = '';
+    if ($isDraft) {
+        $statusChip = ' <span style="font-size:10px;font-weight:700;background:#f1f5f9;color:#64748b;border-radius:999px;padding:2px 8px;vertical-align:middle">DRAFT</span>';
+    } elseif ($settlement !== null) {
+        $isLunas = ($settlement['status'] ?? '') === 'Lunas';
+        $statusBg = $isLunas ? '#dcfce7' : '#dbeafe';
+        $statusColor = $isLunas ? '#15803d' : '#1d4ed8';
+        $statusChip = ' <span style="font-size:10px;font-weight:700;background:' . $statusBg . ';color:' . $statusColor . ';border-radius:999px;padding:2px 8px;vertical-align:middle">' . $h($settlement['status'] ?? '') . '</span>';
+    }
 
     return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
         . '<title>Invoice ' . $h($nomor ?? 'Draft') . ' — ' . $h($sekolah['nama'] ?? '') . '</title>'
@@ -284,7 +339,7 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '<div class="no-print" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:12px;color:#64748b;margin-bottom:16px">Dokumen invoice resmi — gunakan <strong>Cetak / Simpan sebagai PDF</strong> di browser untuk menyimpan.</div>'
         . '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:1px solid #e2e8f0">'
         . '<div>' . $logoImg . '<p style="margin:4px 0 0;font-size:14px;font-weight:800;color:#1e293b">AfterSchola</p><p style="font-size:12px;color:#94a3b8;margin:8px 0 0">' . $h($settings['alamatUsaha'] ?? '') . '</p></div>'
-        . '<div style="text-align:right"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:.04em;color:#1e3a8a">INVOICE' . $draftChip . '</h1>'
+        . '<div style="text-align:right"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:.04em;color:#1e3a8a">INVOICE' . $statusChip . '</h1>'
         . '<p style="margin:4px 0 0;font-size:14px;font-weight:700;color:#1d4ed8">' . $h($nomor ?? '(Draft)') . '</p>'
         . '<p style="margin:4px 0 0;font-size:12px;color:#94a3b8">Tanggal: ' . $h($tanggalLabel) . '</p></div>'
         . '</div>'
@@ -304,13 +359,9 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '<th style="text-align:right;padding:8px">' . $rateHeader . '</th>'
         . '<th style="text-align:right;padding:8px 0 8px 8px">Total</th>'
         . '</tr></thead><tbody>' . $tableRows . '</tbody></table>'
-        . $carryHtml
-        . '<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding:14px 0 12px">'
-        . '<span style="font-weight:800;letter-spacing:.04em">GRAND TOTAL</span>'
-        . '<span style="font-size:20px;font-weight:800;color:#1d4ed8">' . invoiceDocRupiah($grandTotal) . '</span></div>'
-        . '<div style="background:#eff6ff;border:1px solid #dbeafe;border-radius:8px;padding:10px 16px;font-size:12px;color:#475569;margin-bottom:24px">'
-        . '<span style="font-weight:600;color:#334155">Terbilang: </span><em>&ldquo;' . $h($terbilang) . '&rdquo;</em></div>'
-        . $appendix
+        . $topBreakdownHtml
+        . $middleBreakdownHtml
+        . $bottomSummaryHtml
         . '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:32px">'
         . '<div style="flex:1"><div style="background:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:20px;font-size:12px;line-height:1.7;color:#475569">'
         . '<p style="margin:0 0 6px;font-weight:700;color:#1e293b">Catatan Pembayaran:</p>' . $bankBlock . '</div></div>'
