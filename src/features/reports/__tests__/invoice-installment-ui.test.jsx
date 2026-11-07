@@ -8,11 +8,17 @@ import InvoiceModal, {
 } from '../InvoiceModal.jsx'
 import * as store from '../../../lib/store.js'
 import * as sppPaymentsModule from '../../../lib/sppPayments.js'
+import * as invoicesModule from '../../../lib/invoices.js'
 import { formatRupiah } from '../../../lib/format.js'
+
+let lastModalChildren = null
 
 // Mock Modal to render children directly for unit tests
 vi.mock('../../../components/Modal.jsx', () => ({
-  default: ({ open, children }) => (open ? <div data-testid="modal">{children}</div> : null),
+  default: ({ open, children }) => {
+    lastModalChildren = children
+    return open ? <div data-testid="modal">{children}</div> : null
+  },
 }))
 
 vi.mock('../../../components/ConfirmDialog.jsx', () => ({
@@ -115,6 +121,50 @@ describe('Invoice Installment Payment UI & Handler', () => {
 
       expect(html).not.toContain('>Catat Pembayaran</button>')
       expect(html).toContain('Invoice ini sudah lunas')
+    })
+
+    it('renders cleanly without ReferenceError and evaluates breakdown when Catat Pembayaran is clicked', () => {
+      const breakdownSpy = vi.spyOn(invoicesModule, 'invoicePaymentBreakdown')
+      vi.mocked(store.readCached).mockImplementation((key) => {
+        if (key === 'invoices') return [baseUnpaidInvoice]
+        if (key === 'sppPayments') return []
+        if (key === 'sekolah') return [mockSekolah]
+        return []
+      })
+
+      const html = renderToStaticMarkup(
+        <InvoiceModal open={true} onClose={() => {}} sekolah={mockSekolah} onPrint={() => {}} />
+      )
+
+      expect(html).toContain('Catat Pembayaran')
+      expect(breakdownSpy).toHaveBeenCalled()
+
+      // Find the Catat Pembayaran button element in the rendered tree
+      function findButton(node, text) {
+        if (!node) return null
+        if (Array.isArray(node)) {
+          for (const item of node) {
+            const found = findButton(item, text)
+            if (found) return found
+          }
+          return null
+        }
+        if (node.type === 'button') {
+          const childrenText = React.Children.toArray(node.props?.children).join('')
+          if (childrenText.includes(text)) return node
+        }
+        if (node.props?.children) {
+          return findButton(node.props.children, text)
+        }
+        return null
+      }
+
+      const catatBtn = findButton(lastModalChildren, 'Catat Pembayaran')
+      expect(catatBtn).not.toBeNull()
+      expect(typeof catatBtn.props.onClick).toBe('function')
+
+      // Executing onClick exercises `() => openPayment(inv, breakdown)` and verifies breakdown is in scope
+      expect(() => catatBtn.props.onClick()).not.toThrow()
     })
   })
 

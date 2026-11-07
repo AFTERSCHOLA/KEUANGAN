@@ -1020,6 +1020,14 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                     })
                   : null
 
+                const breakdown = !isLegacyDraft
+                  ? invoicePaymentBreakdown(inv, {
+                      sppPayments: sppPaymentsAll,
+                      siswa: siswaAll,
+                      invoices: existing,
+                    })
+                  : null
+
                 const carryLines = resolvedCarryOverLines(inv, {
                   invoices: existing,
                   sppPayments: sppPaymentsAll,
