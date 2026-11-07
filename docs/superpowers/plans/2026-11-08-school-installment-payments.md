@@ -48,9 +48,9 @@
 - Modify: `src/features/reports/InvoiceModal.jsx`
 - Test: `src/features/reports/__tests__/invoice-installment-ui.test.jsx`
 
-- [ ] **Step 2.1**: Write component tests in `src/features/reports/__tests__/invoice-installment-ui.test.jsx` verifying the "Catat Pembayaran" form renders with Invoice Number, Total Tagihan Awal, Sudah Dibayar Sebelumnya, Sisa Tagihan Saat Ini, updates "Sisa setelah pembayaran" live on input, and submits school-level payment.
-- [ ] **Step 2.2**: Run test to verify it fails (`npm test -- invoice-installment-ui`).
-- [ ] **Step 2.3**: In `InvoiceModal.jsx`:
+- [x] **Step 2.1**: Write component tests in `src/features/reports/__tests__/invoice-installment-ui.test.jsx` verifying the "Catat Pembayaran" form renders with Invoice Number, Total Tagihan Awal, Sudah Dibayar Sebelumnya, Sisa Tagihan Saat Ini, updates "Sisa setelah pembayaran" live on input, and submits school-level payment.
+- [x] **Step 2.2**: Run test to verify it fails (`npm test -- invoice-installment-ui`).
+- [x] **Step 2.3**: In `InvoiceModal.jsx`:
   - Add "Catat Pembayaran" button on invoice card (when not fully Lunas). If fully Lunas, show "Lunas" indicator.
   - Implement modal/editor matching Page 2 layout:
     - Header with Invoice Number.
@@ -60,8 +60,8 @@
     - Inputs: `Metode pembayaran` (Transfer / Tunai), `Tanggal pembayaran` (date picker), `Diterima oleh` (text), `Upload Bukti Bayar` (file input + receipt preview), `Catatan` (text).
     - Save action: appends `newSppPayment({ invoiceId: inv.id, ... })`, recomputes settlement, and updates UI state.
   - Preserve the Follow-Up history section for communication outreach.
-- [ ] **Step 2.4**: Run tests to verify they pass (`npm test -- invoice-installment-ui`).
-- [ ] **Step 2.5**: Commit Task 2 changes.
+- [x] **Step 2.4**: Run tests to verify they pass (`npm test -- invoice-installment-ui`).
+- [x] **Step 2.5**: Commit Task 2 changes.
 
 ---
 
@@ -94,8 +94,8 @@
 - All touched files
 - Test: Full Vitest suite & PHP contract suite
 
-- [ ] **Step 4.1**: Run `npm test` across all 46 test files.
-- [ ] **Step 4.2**: Run `npm run test:server` across all 18 PHP contract test suites.
-- [ ] **Step 4.3**: Run `npm run build` to verify clean Vite PWA production bundle.
-- [ ] **Step 4.4**: Verify `git status` to ensure working tree hygiene (untracked files `LOGBOOK_leyddddddd.md` and `docs/AdminDashboard/` untouched).
-- [ ] **Step 4.5**: Commit any final plan/doc updates.
+- [x] **Step 4.1**: Run `npm test` across all 48 test files.
+- [x] **Step 4.2**: Run `npm run test:server` across all 18 PHP contract test suites.
+- [x] **Step 4.3**: Run `npm run build` to verify clean Vite PWA production bundle.
+- [x] **Step 4.4**: Verify `git status` to ensure working tree hygiene (untracked files `LOGBOOK_leyddddddd.md` and `docs/AdminDashboard/` untouched).
+- [x] **Step 4.5**: Commit any final plan/doc updates.
