@@ -2,7 +2,7 @@
 // Koreksi lewat entry baru, bukan hapus/edit di tempat.
 import { readCached, write, writeRemote } from './store.js'
 import { generateId } from './constants.js'
-import { invoicePeriods } from './invoices.js'
+import { invoicePeriods, invoiceSettlement } from './invoices.js'
 
 export function newSppPayment({
   siswaId,
@@ -66,17 +66,36 @@ export async function addSppPayment(payment) {
 }
 
 /** Turunkan sppLunas dari jumlah nominal ledger terhadap tarif sekolah. */
-export function computeSppLunas(siswaId, allPayments, sppTarif = 0) {
+export function computeSppLunas(siswaId, allPayments, sppTarif = 0, { sekolahId = null, invoices = [], siswa = [] } = {}) {
   const map = {}
   const totalsByPeriode = {}
-  allPayments
-    .filter(p => p.siswaId === siswaId)
+  ;(Array.isArray(allPayments) ? allPayments : [])
+    .filter(p => p && p.siswaId === siswaId)
     .forEach(p => {
       totalsByPeriode[p.periode] = (totalsByPeriode[p.periode] || 0) + Number(p.nominal || 0)
     })
   Object.entries(totalsByPeriode).forEach(([periode, total]) => {
     if (total >= Number(sppTarif)) map[periode] = true
   })
+
+  if (sekolahId && Array.isArray(invoices) && invoices.length > 0) {
+    const schoolInvoices = invoices.filter(
+      inv => inv && inv.sekolahId === sekolahId && inv.status === 'Terbit'
+    )
+    for (const inv of schoolInvoices) {
+      const settlement = invoiceSettlement(inv, {
+        sppPayments: allPayments,
+        siswa,
+        invoices,
+      })
+      if (settlement.status === 'Lunas') {
+        for (const periode of invoicePeriods(inv)) {
+          map[periode] = true
+        }
+      }
+    }
+  }
+
   return map
 }
 
@@ -88,7 +107,12 @@ export function recomputeSppLunasForSiswa(siswaId) {
 
   const sekolah = readCached('sekolah').find(s => s.id === target.sekolahId)
   const allPayments = readCached('sppPayments')
-  const sppLunas = computeSppLunas(siswaId, allPayments, sekolah?.spp || 0)
+  const invoices = readCached('invoices')
+  const sppLunas = computeSppLunas(siswaId, allPayments, sekolah?.spp || 0, {
+    sekolahId: target.sekolahId,
+    invoices,
+    siswa: siswaList,
+  })
   const updated = { ...target, sppLunas }
   write('siswa', siswaList.map(s => (s.id === siswaId ? updated : s)))
   return updated
@@ -108,9 +132,14 @@ export function recomputeAllSppLunas() {
   if (siswaList.length === 0) return 0
   const sekolahById = new Map(readCached('sekolah').map(s => [s.id, s]))
   const allPayments = readCached('sppPayments')
+  const invoices = readCached('invoices')
   const updated = siswaList.map(s => ({
     ...s,
-    sppLunas: computeSppLunas(s.id, allPayments, sekolahById.get(s.sekolahId)?.spp || 0),
+    sppLunas: computeSppLunas(s.id, allPayments, sekolahById.get(s.sekolahId)?.spp || 0, {
+      sekolahId: s.sekolahId,
+      invoices,
+      siswa: siswaList,
+    }),
   }))
   write('siswa', updated)
   return updated.length

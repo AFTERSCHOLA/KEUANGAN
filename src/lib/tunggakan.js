@@ -4,6 +4,7 @@
 // that file's ownership boundary more than necessary (R7).
 
 import { MONTHS, MONTH_KEYS, calYear } from './constants'
+import { invoicePeriods, invoiceSettlement } from './invoices.js'
 
 /**
  * List of { monthName, periode } pairs for the academic year `academicStartYear`,
@@ -31,16 +32,45 @@ export function elapsedPeriods(academicStartYear, selectedMonthNum) {
  * Does this siswa have at least one unpaid month among the elapsed periods?
  * sppLunas is sparse: missing key = unpaid (Part 2 convention #2).
  */
-export function sppPaidForPeriode(siswa, periode, sppPayments = [], sppTarif = 0) {
-  const total = sppPayments
-    .filter(p => p.siswaId === siswa.id && p.periode === periode)
+export function sppPaidForPeriode(siswa, periode, sppPayments = [], sppTarif = 0, context = {}) {
+  if (siswa?.sppLunas?.[periode] === true) {
+    return true
+  }
+
+  const total = (Array.isArray(sppPayments) ? sppPayments : [])
+    .filter(p => p && p.siswaId === siswa?.id && p.periode === periode)
     .reduce((sum, p) => sum + Number(p.nominal || 0), 0)
-  return total >= Number(sppTarif)
+  if (total >= Number(sppTarif || 0)) {
+    return true
+  }
+
+  const invoices = context?.invoices
+  if (Array.isArray(invoices) && invoices.length > 0 && siswa?.sekolahId) {
+    const matching = invoices.filter(
+      inv =>
+        inv &&
+        inv.sekolahId === siswa.sekolahId &&
+        (inv.status === 'Terbit' || !inv.status) &&
+        invoicePeriods(inv).includes(periode)
+    )
+    for (const inv of matching) {
+      const settlement = invoiceSettlement(inv, {
+        sppPayments,
+        siswa: context.siswa || (siswa ? [siswa] : []),
+        invoices,
+      })
+      if (settlement.status === 'Lunas') {
+        return true
+      }
+    }
+  }
+
+  return false
 }
 
-export function isTunggakan(siswa, elapsed, sppPayments = [], sppTarif = 0) {
-  if (siswa.status === 'Trial') return false
-  return elapsed.some(({ periode }) => !sppPaidForPeriode(siswa, periode, sppPayments, sppTarif))
+export function isTunggakan(siswa, elapsed, sppPayments = [], sppTarif = 0, context = {}) {
+  if (siswa?.status === 'Trial') return false
+  return elapsed.some(({ periode }) => !sppPaidForPeriode(siswa, periode, sppPayments, sppTarif, context))
 }
 
 // Perf slice (Data Siswa / Data Sekolah lag): precomputed O(1) lookups so
@@ -78,14 +108,15 @@ export function countSiswaBySekolahId(siswaList = []) {
  * Each returned item is annotated with `unpaidMonths` (display names) for
  * the row UI to render, e.g. "Belum bayar: Agustus, Oktober".
  */
-export function filterTunggakan(siswaList, academicStartYear, selectedMonthNum, sppPayments = [], sppTarifForSiswa = () => 0) {
+export function filterTunggakan(siswaList, academicStartYear, selectedMonthNum, sppPayments = [], sppTarifForSiswa = () => 0, context = {}) {
   const elapsed = elapsedPeriods(academicStartYear, selectedMonthNum)
+  const ctx = { ...context, siswa: context.siswa || siswaList }
   return siswaList
-    .filter(s => isTunggakan(s, elapsed, sppPayments, sppTarifForSiswa(s)))
+    .filter(s => isTunggakan(s, elapsed, sppPayments, sppTarifForSiswa(s), ctx))
     .map(s => ({
       ...s,
       unpaidMonths: elapsed
-        .filter(({ periode }) => !sppPaidForPeriode(s, periode, sppPayments, sppTarifForSiswa(s)))
+        .filter(({ periode }) => !sppPaidForPeriode(s, periode, sppPayments, sppTarifForSiswa(s), ctx))
         .map(e => e.monthName),
     }))
 }

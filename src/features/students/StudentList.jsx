@@ -4,6 +4,7 @@ import { formatRupiah, waNormalize, MONTHS, MONTH_KEYS, periodeKey } from '../..
 import { newSiswa, defaultCabang, localDateString } from '../../lib/constants.js'
 import { attendanceStats } from '../../lib/finance.js'
 import { elapsedPeriods, buildSppTotalIndex, sppTotalFromIndex, buildTagihanWaLink } from '../../lib/tunggakan.js'
+import { invoicePeriods, invoiceSettlement } from '../../lib/invoices.js'
 import Modal from '../../components/Modal.jsx'
 import ConfirmDialog from '../../components/ConfirmDialog.jsx'
 import SppPaymentModal from '../payments/SppPaymentModal.jsx'
@@ -48,6 +49,7 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
   const sekolah = readCached('sekolah')
   const absensi = readCached('absensi')
   const sppPayments = readCached('sppPayments')
+  const invoices = readCached('invoices')
   const period = usePeriod()
   const elapsed = elapsedPeriods(period.selectedYear, period.selectedMonth)
   const viewedPeriode = period.periodeKey()
@@ -62,39 +64,92 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
     return m
   }, [sekolah])
   const sppIndex = useMemo(() => buildSppTotalIndex(sppPayments), [sppPayments])
-  const historyBySiswaId = useMemo(() => {
+
+  const schoolInvoiceSettlementIndex = useMemo(() => {
     const m = new Map()
-    for (const p of (Array.isArray(sppPayments) ? sppPayments : [])) {
-      if (!p || p.periode !== viewedPeriode || typeof p.siswaId !== 'string') continue
-      if (!m.has(p.siswaId)) m.set(p.siswaId, [])
-      m.get(p.siswaId).push(p)
+    for (const inv of (Array.isArray(invoices) ? invoices : [])) {
+      if (!inv || !inv.sekolahId || inv.status !== 'Terbit') continue
+      const settlement = invoiceSettlement(inv, { sppPayments, siswa, invoices })
+      for (const p of invoicePeriods(inv)) {
+        const key = `${inv.sekolahId}|${p}`
+        if (!m.has(key) || settlement.status === 'Lunas') {
+          m.set(key, settlement)
+        }
+      }
     }
     return m
-  }, [sppPayments, viewedPeriode])
+  }, [invoices, sppPayments, siswa])
+  const historyBySiswaId = useMemo(() => {
+    const m = new Map()
+    const payments = Array.isArray(sppPayments) ? sppPayments : []
+    const studentList = Array.isArray(siswa) ? siswa : []
+
+    const paymentsBySiswa = new Map()
+    const schoolPaymentsBySekolah = new Map()
+
+    for (const p of payments) {
+      if (!p || p.periode !== viewedPeriode) continue
+      if (typeof p.siswaId === 'string' && p.siswaId) {
+        if (!paymentsBySiswa.has(p.siswaId)) paymentsBySiswa.set(p.siswaId, [])
+        paymentsBySiswa.get(p.siswaId).push(p)
+      } else if (!p.siswaId && p.sekolahId) {
+        if (!schoolPaymentsBySekolah.has(p.sekolahId)) schoolPaymentsBySekolah.set(p.sekolahId, [])
+        schoolPaymentsBySekolah.get(p.sekolahId).push(p)
+      }
+    }
+
+    for (const s of studentList) {
+      if (!s || !s.id) continue
+      const direct = (paymentsBySiswa.get(s.id) || []).map(p => ({
+        ...p,
+        displaySumber: p.invoiceId ? 'Sekolah (Invoice)' : undefined,
+      }))
+      const schoolLevel = (schoolPaymentsBySekolah.get(s.sekolahId) || []).map(p => ({
+        ...p,
+        displaySumber: 'Sekolah (Invoice)',
+      }))
+      const combined = [...direct, ...schoolLevel]
+      if (combined.length > 0) {
+        m.set(s.id, combined)
+      }
+    }
+    return m
+  }, [sppPayments, siswa, viewedPeriode])
 
   function sppTarifOf(s) {
     return sekolahSppById.get(s.sekolahId) || 0
   }
 
   function sppPaidIndexed(s, periode) {
-    return sppTotalFromIndex(sppIndex, s.id, periode) >= Number(sppTarifOf(s) || 0)
+    if (sppTotalFromIndex(sppIndex, s.id, periode) >= Number(sppTarifOf(s) || 0)) {
+      return true
+    }
+    if (s.sppLunas?.[periode] === true) {
+      return true
+    }
+    if (schoolInvoiceSettlementIndex.get(`${s.sekolahId}|${periode}`)?.status === 'Lunas') {
+      return true
+    }
+    return false
   }
 
   function unpaidMonthsOf(s) {
-    const tarif = sppTarifOf(s)
     return elapsed
-      .filter(({ periode }) => sppTotalFromIndex(sppIndex, s.id, periode) < Number(tarif || 0))
+      .filter(({ periode }) => !sppPaidIndexed(s, periode))
       .map(e => e.monthName)
   }
 
   function sppTotalOf(s, periode) {
-    return sppTotalFromIndex(sppIndex, s.id, periode)
+    const directTotal = sppTotalFromIndex(sppIndex, s.id, periode)
+    if (sppPaidIndexed(s, periode)) {
+      return Math.max(directTotal, Number(sppTarifOf(s) || 0))
+    }
+    return directTotal
   }
 
   function isTunggakanIndexed(s) {
     if (s.status === 'Trial') return false
-    const tarif = Number(sppTarifOf(s) || 0)
-    return elapsed.some(({ periode }) => sppTotalFromIndex(sppIndex, s.id, periode) < tarif)
+    return elapsed.some(({ periode }) => !sppPaidIndexed(s, periode))
   }
 
   const isBillable = s => s.status !== 'Trial' // M5.4.3 — Trial siswa tidak masuk hitungan tunggakan sama sekali
@@ -544,7 +599,7 @@ export default function StudentList({ readOnly = false, trainerScoped = false })
                               <p className="text-slate-600">
                                 {periodeLabel}
                                 {' · '}{formatRupiah(Number(p.nominal || 0))}
-                                {' · Sumber: '}{p.sumberDana === 'ortu' ? 'Ortu langsung' : p.sumberDana === 'sekolah' ? 'Sekolah' : (p.sumberDana || '—')}
+                                {' · Sumber: '}{p.displaySumber || (p.sumberDana === 'ortu' ? 'Ortu langsung' : p.sumberDana === 'sekolah' ? 'Sekolah' : (p.sumberDana || '—'))}
                                 {' · Metode: '}{p.metode || '—'}
                               </p>
                             </div>

@@ -55,4 +55,58 @@ describe('tunggakan helpers', () => {
     expect(link).toContain('https://wa.me/628123?text=')
     expect(decodeURIComponent(link.split('?text=')[1])).toBe('Tagihan SPP bulan Agustus untuk Ananda Ayu Putri: Rp 150.000')
   })
+
+  it('recognizes settled school invoices as paid and clears tunggakan', () => {
+    const siswa = { id: 'student-1', sekolahId: 'sch-1', status: 'Aktif' }
+    const invoice = {
+      id: 'inv-1',
+      sekolahId: 'sch-1',
+      periode: '2026-09',
+      grandTotal: 1000000,
+      status: 'Terbit',
+    }
+    const schoolPayment = {
+      id: 'pay-sch-1',
+      invoiceId: 'inv-1',
+      sekolahId: 'sch-1',
+      periode: '2026-09',
+      nominal: 1000000,
+    }
+
+    // When invoice is settled via school payment:
+    expect(
+      sppPaidForPeriode(siswa, '2026-09', [schoolPayment], 100000, { invoices: [invoice] })
+    ).toBe(true)
+
+    // When invoice is not settled (partial or zero payment):
+    expect(
+      sppPaidForPeriode(siswa, '2026-09', [], 100000, { invoices: [invoice] })
+    ).toBe(false)
+
+    // isTunggakan is false when period is covered by settled invoice:
+    expect(
+      isTunggakan(
+        siswa,
+        [{ periode: '2026-09' }],
+        [schoolPayment],
+        100000,
+        { invoices: [invoice] }
+      )
+    ).toBe(false)
+
+    // filterTunggakan excludes students whose periods are settled via school invoice:
+    const filtered = filterTunggakan(
+      [siswa],
+      2026,
+      9,
+      [
+        { siswaId: 'student-1', periode: '2026-07', nominal: 100000 },
+        { siswaId: 'student-1', periode: '2026-08', nominal: 100000 },
+        schoolPayment,
+      ],
+      () => 100000,
+      { invoices: [invoice] }
+    )
+    expect(filtered).toHaveLength(0)
+  })
 })
