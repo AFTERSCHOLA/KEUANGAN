@@ -51,7 +51,11 @@ describe('Server PHP contracts: sekolah status validation & invoice generator is
       $config = serverConfig();
       $pdo = new PDO($config['dsn'], $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
       
-      $cabangId = 'cbg-test-pusat';
+      $cabangId = $pdo->query("SELECT id FROM cabang LIMIT 1")->fetchColumn();
+      if (!$cabangId) {
+          $cabangId = 'cbg-test-pusat';
+          $pdo->prepare("INSERT INTO cabang (id, kode, nama, version, payload) VALUES (:id, 'PST', 'Pusat Test', 1, '{}')")->execute([':id' => $cabangId]);
+      }
       
       $errsInvalid = validateSekolah([
         'id' => 'skl-test-val',
@@ -93,7 +97,11 @@ describe('Server PHP contracts: sekolah status validation & invoice generator is
       $config = serverConfig();
       $pdo = new PDO($config['dsn'], $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
       
-      $cabangId = 'cbg-test-pusat';
+      $cabangId = $pdo->query("SELECT id FROM cabang LIMIT 1")->fetchColumn();
+      if (!$cabangId) {
+          $cabangId = 'cbg-test-pusat';
+          $pdo->prepare("INSERT INTO cabang (id, kode, nama, version, payload) VALUES (:id, 'PST', 'Pusat Test', 1, '{}')")->execute([':id' => $cabangId]);
+      }
       $sklId = 'skl-test-nonaktif-' . bin2hex(random_bytes(3));
       $swId = 'sw-test-' . bin2hex(random_bytes(3));
       $periode = '2026-11';
