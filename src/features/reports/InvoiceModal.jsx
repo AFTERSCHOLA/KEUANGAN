@@ -16,6 +16,7 @@ import {
 import {
   invoicesForSekolah,
   invoiceSettlement,
+  invoicePaymentBreakdown,
   matchedPaymentsForInvoice,
   carryOverLines,
   resolvedCarryOverLines,
@@ -318,6 +319,263 @@ import {
   recomputeAllSppLunas,
 } from '../../lib/sppPayments.js'
 
+export function validateInstallmentPayment(form) {
+  const nominal = Number(form?.nominal) || 0
+  if (nominal <= 0) {
+    return 'Jumlah yang dibayarkan sekarang harus lebih dari 0.'
+  }
+  if (!form?.metode || !form.metode.trim()) {
+    return 'Metode pembayaran wajib dipilih.'
+  }
+  if (!form?.tanggalBayar) {
+    return 'Tanggal pembayaran wajib diisi.'
+  }
+  if (!form?.diterimaOleh || !form.diterimaOleh.trim()) {
+    return 'Diterima oleh wajib diisi.'
+  }
+  return null
+}
+
+export async function saveInstallmentPayment(inv, form, { sekolahAll = [], cabangAll = [] } = {}) {
+  const valErr = validateInstallmentPayment(form)
+  if (valErr) {
+    return { ok: false, error: valErr }
+  }
+
+  const sch = sekolahAll.find(s => s.id === inv.sekolahId)
+  const cabangId = inv.cabangId || sch?.cabangId
+  const cabangKode = cabangAll.find(c => c.id === cabangId)?.kode
+
+  const paymentPayload = newSppPayment({
+    siswaId: null,
+    sekolahId: inv.sekolahId,
+    cabangId,
+    cabangKode,
+    invoiceId: inv.id,
+    nominal: Number(form.nominal),
+    periode: inv.periode || (inv.periodeList && inv.periodeList[0]) || '',
+    tanggalBayar: form.tanggalBayar || localDateString(),
+    metode: form.metode || 'Transfer',
+    diterimaOleh: form.diterimaOleh.trim(),
+    sumberDana: 'sekolah',
+    catatan: (form.catatan || '').trim() || `Pembayaran invoice ${inv.nomor || inv.nomorInvoice || ''}`,
+    buktiBayar: form.buktiBayar || null,
+  })
+
+  const result = await addSppPayment(paymentPayload)
+  if (result?.status === 'forbidden') {
+    return { ok: false, error: result.message || 'Tidak diizinkan mencatat pembayaran.' }
+  }
+  if (result?.status === 'conflict') {
+    return { ok: false, error: 'Data pembayaran sudah berubah di server. Muat ulang halaman.' }
+  }
+
+  await read('sppPayments')
+  recomputeAllSppLunas()
+  await read('invoices')
+
+  return { ok: true, payment: result.payment }
+}
+
+export function InvoiceInstallmentForm({
+  inv,
+  breakdown,
+  form,
+  onChange,
+  onSave,
+  onCancel,
+  saving = false,
+  errorMsg = '',
+}) {
+  const nominalNum = Number(form?.nominal) || 0
+  const sisaSaatIni = breakdown?.sisaSaatIni || 0
+  const sisaSetelah = Math.max(0, sisaSaatIni - nominalNum)
+  const lebihBayar = nominalNum > sisaSaatIni ? nominalNum - sisaSaatIni : 0
+
+  return (
+    <div className="mt-2 border-t pt-2 space-y-3 bg-white">
+      <div className="flex items-center justify-between">
+        <h5 className="text-xs font-bold text-slate-800">
+          Catat Pembayaran — {inv?.nomor || inv?.nomorInvoice || 'Draft'}
+        </h5>
+      </div>
+
+      {/* Readonly breakdown summary */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs space-y-1">
+        <div className="flex justify-between">
+          <span className="text-slate-500">Total tagihan awal:</span>
+          <span className="font-bold text-slate-800">{formatRupiah(breakdown?.totalAwal || 0)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-slate-500">Sudah dibayar sebelumnya:</span>
+          <span className="font-bold text-emerald-700">{formatRupiah(breakdown?.sudahDibayar || 0)}</span>
+        </div>
+        <div className="flex justify-between border-t border-slate-200 pt-1">
+          <span className="text-slate-600 font-semibold">Sisa tagihan saat ini:</span>
+          <span className={`font-extrabold ${sisaSaatIni > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+            {formatRupiah(sisaSaatIni)}
+          </span>
+        </div>
+      </div>
+
+      {/* Live input & dynamic remaining calculation */}
+      <div className="space-y-1.5">
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Jumlah yang dibayarkan sekarang
+          </label>
+          <RupiahInput
+            value={form.nominal}
+            onChange={val => onChange({ ...form, nominal: val })}
+            disabled={saving}
+            placeholder="0"
+            className="w-full mt-0.5 rounded-lg border p-2 pl-9 text-xs font-bold"
+          />
+        </div>
+
+        <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 text-xs space-y-0.5">
+          <div className="flex justify-between items-center">
+            <span className="text-blue-900 font-semibold">Sisa tagihan setelah pembayaran:</span>
+            <span className={`font-extrabold ${sisaSetelah === 0 ? 'text-emerald-700' : 'text-blue-900'}`}>
+              {formatRupiah(sisaSetelah)}
+            </span>
+          </div>
+          {sisaSetelah === 0 && nominalNum > 0 && (
+            <p className="text-[11px] text-emerald-600 font-medium">
+              Pembayaran ini akan melunasi invoice.
+            </p>
+          )}
+          {lebihBayar > 0 && (
+            <p className="text-[11px] text-amber-700 font-medium">
+              Lebih bayar: {formatRupiah(lebihBayar)} (dicatat sebagai kredit).
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Details inputs */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">Metode pembayaran</label>
+          <select
+            value={form.metode}
+            onChange={e => onChange({ ...form, metode: e.target.value })}
+            disabled={saving}
+            className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white disabled:opacity-60"
+          >
+            <option value="Transfer">Transfer</option>
+            <option value="Tunai">Tunai</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">Tanggal pembayaran</label>
+          <input
+            type="date"
+            value={form.tanggalBayar}
+            onChange={e => onChange({ ...form, tanggalBayar: e.target.value })}
+            disabled={saving}
+            className="w-full mt-0.5 rounded-lg border p-2 text-xs bg-white disabled:opacity-60"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-500 uppercase">Diterima oleh</label>
+        <input
+          value={form.diterimaOleh}
+          onChange={e => onChange({ ...form, diterimaOleh: e.target.value })}
+          disabled={saving}
+          placeholder="Nama penerima"
+          className="w-full mt-0.5 rounded-lg border p-2 text-xs disabled:opacity-60"
+        />
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-500 uppercase">Upload bukti bayar</label>
+        <div className="mt-0.5 flex items-center gap-2">
+          <input
+            type="file"
+            accept="image/*"
+            disabled={saving}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              try {
+                const compressed = await compressImage(file)
+                let entry
+                const user = getSafeIdentityContext()
+                if (user && user.role !== 'superadmin') {
+                  try {
+                    entry = await uploadPhotoToServer(compressed)
+                  } catch {
+                    entry = await storePhoto(compressed, 'invoice-installment')
+                  }
+                } else {
+                  entry = await storePhoto(compressed, 'invoice-installment')
+                }
+                onChange({ ...form, buktiBayar: entry, uploadError: null })
+              } catch (err) {
+                onChange({ ...form, uploadError: err?.message || 'Gagal memproses gambar' })
+              }
+            }}
+            className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+          />
+          {form.buktiBayar && (
+            <button
+              type="button"
+              onClick={() => onChange({ ...form, buktiBayar: null })}
+              className="text-[10px] font-bold text-rose-500 hover:underline"
+            >
+              Hapus Bukti
+            </button>
+          )}
+        </div>
+        {form.uploadError && (
+          <p className="text-[11px] text-rose-600 font-semibold mt-1">{form.uploadError}</p>
+        )}
+        {form.buktiBayar && (
+          <div className="mt-1">
+            <ReceiptPreview entry={form.buktiBayar} />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="text-[10px] font-bold text-slate-500 uppercase">Catatan</label>
+        <input
+          value={form.catatan}
+          onChange={e => onChange({ ...form, catatan: e.target.value })}
+          disabled={saving}
+          placeholder="Keterangan / catatan pembayaran (opsional)"
+          className="w-full mt-0.5 rounded-lg border p-2 text-xs disabled:opacity-60"
+        />
+      </div>
+
+      {errorMsg && <p className="text-xs text-rose-600 font-semibold">{errorMsg}</p>}
+
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-lg transition"
+        >
+          {saving ? 'Menyimpan...' : 'Simpan Pembayaran'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold text-xs px-3.5 py-1.5 rounded-lg transition"
+        >
+          Batal
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
 const MONTH_NUM_LIST = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
 // BR.2 (D-BR1) — metode choices mirror SppPaymentModal.jsx (same ledger,
 // same enum); default 'Transfer' is the pinned bulk-settlement default.
@@ -372,6 +630,19 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   // chevron toggle). Display-only: rows come from
   // matchedPaymentsForInvoice, totals reuse the existing settlement.
   const [expandedInvoiceId, setExpandedInvoiceId] = useState(null)
+  const canRecordPayment = roleCtx.role === 'superadmin' || (roleCtx.role === 'admin_cabang' && sekolah?.cabangId === roleCtx.cabangId)
+  const [paymentEditing, setPaymentEditing] = useState(null)
+  const [paymentForm, setPaymentForm] = useState({
+    nominal: 0,
+    metode: 'Transfer',
+    tanggalBayar: localDateString(),
+    diterimaOleh: '',
+    buktiBayar: null,
+    catatan: '',
+    uploadError: null,
+  })
+  const [paymentSaving, setPaymentSaving] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
 
   if (!open || !sekolah) return null
 
@@ -443,7 +714,46 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
     setConfirmOpen(true)
   }
 
+  function openPayment(inv, breakdown) {
+    setPaymentError('')
+    setPaymentForm({
+      nominal: breakdown?.sisaSaatIni || 0,
+      metode: 'Transfer',
+      tanggalBayar: localDateString(),
+      diterimaOleh: '',
+      buktiBayar: null,
+      catatan: '',
+      uploadError: null,
+    })
+    setPaymentEditing(inv.id)
+    setBulkEditing(null)
+    setFuEditing(null)
+  }
+
+  async function handleSavePayment(inv) {
+    if (paymentSaving) return
+    setPaymentSaving(true)
+    setPaymentError('')
+    try {
+      const res = await saveInstallmentPayment(inv, paymentForm, {
+        sekolahAll,
+        cabangAll,
+      })
+      if (!res.ok) {
+        setPaymentError(res.error || 'Gagal menyimpan pembayaran.')
+        return
+      }
+      setPaymentEditing(null)
+      setTick(t => t + 1)
+    } catch (err) {
+      setPaymentError(err?.message || 'Gagal menyimpan pembayaran.')
+    } finally {
+      setPaymentSaving(false)
+    }
+  }
+
   function openFollowUp(inv) {
+    setPaymentEditing(null)
     setFuForm({
       penerima: '',
       wa: '',
@@ -520,6 +830,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   // via the existing sppPayments endpoint — never a bare siswaId-null
   // row for the same settlement (double-count guard, D-BR1).
   function openBulk(inv) {
+    setPaymentEditing(null)
     setBulkError('')
     setBulkForm({ metode: 'Transfer', diterimaOleh: '', tanggalBayar: localDateString() })
     setBulkEditing(inv.id)
@@ -828,8 +1139,45 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                         the fuEditing toggle idiom (per-row expand, same
                         button classes); empty state pins the second-run
                         expectation: a settled invoice offers no rows. */}
-                    {canBulkSettle && !isLegacyDraft && bulkEditing !== inv.id && bulkPreview.rows.length > 0 && (
-                      <button onClick={() => openBulk(inv)} className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg transition">
+                    {/* Installment Payment Button & Form */}
+                    {!isLegacyDraft && canRecordPayment && (
+                      <>
+                        {displayStatus === 'Lunas' ? (
+                          <div className="mt-2 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                            <svg className="w-4 h-4 text-emerald-500 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Invoice ini sudah lunas
+                          </div>
+                        ) : (
+                          paymentEditing !== inv.id && (
+                            <button
+                              type="button"
+                              onClick={() => openPayment(inv, breakdown)}
+                              className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg transition shadow-sm"
+                            >
+                              Catat Pembayaran
+                            </button>
+                          )
+                        )}
+                      </>
+                    )}
+
+                    {paymentEditing === inv.id && (
+                      <InvoiceInstallmentForm
+                        inv={inv}
+                        breakdown={breakdown}
+                        form={paymentForm}
+                        onChange={setPaymentForm}
+                        onSave={() => handleSavePayment(inv)}
+                        onCancel={() => setPaymentEditing(null)}
+                        saving={paymentSaving}
+                        errorMsg={paymentError}
+                      />
+                    )}
+
+                    {canBulkSettle && !isLegacyDraft && bulkEditing !== inv.id && paymentEditing !== inv.id && bulkPreview.rows.length > 0 && displayStatus !== 'Lunas' && (
+                      <button onClick={() => openBulk(inv)} className="mt-1.5 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-[11px] px-3 py-1.5 rounded-lg transition border border-slate-200">
                         Catat pelunasan sekolah
                       </button>
                     )}
