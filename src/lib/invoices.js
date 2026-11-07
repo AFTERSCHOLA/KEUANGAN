@@ -256,6 +256,51 @@ export function invoiceSettlement(
 }
 
 /**
+ * Breakdown multi-stage installment payments for an invoice.
+ * Extracts and sorts matched payments (ascending by tanggalBayar / createdAt),
+ * and computes current settlement state (totalAwal, sudahDibayar, sisaSaatIni, credit, status).
+ */
+export function invoicePaymentBreakdown(
+  invoice,
+  { sppPayments = [], siswa = [], invoices = [] } = {}
+) {
+  if (!invoice) {
+    return {
+      totalAwal: 0,
+      sudahDibayar: 0,
+      sisaSaatIni: 0,
+      credit: 0,
+      status: 'Belum Lunas',
+      payments: [],
+      latestPayment: null,
+    }
+  }
+
+  const settlement = invoiceSettlement(invoice, { sppPayments, siswa, invoices })
+  const matched = matchedPaymentsForInvoice(invoice, { sppPayments, siswa })
+
+  const sortedPayments = [...matched].sort((a, b) => {
+    const dateA = a.tanggalBayar || a.tanggal || a.createdAt || ''
+    const dateB = b.tanggalBayar || b.tanggal || b.createdAt || ''
+    if (dateA < dateB) return -1
+    if (dateA > dateB) return 1
+    return 0
+  })
+
+  const latestPayment = sortedPayments.length > 0 ? sortedPayments[sortedPayments.length - 1] : null
+
+  return {
+    totalAwal: settlement.total,
+    sudahDibayar: settlement.dibayar,
+    sisaSaatIni: settlement.sisa,
+    credit: settlement.credit,
+    status: settlement.status,
+    payments: sortedPayments,
+    latestPayment,
+  }
+}
+
+/**
  * Evaluates each carryOverLines entry on an invoice against referenced invoices.
  * If the referenced invoice has prevSettlement.sisa <= 0, marks isSettled: true, activeAmount: 0.
  * Otherwise activeAmount: Math.min(line.amount, prevSettlement.sisa), isSettled: false.
