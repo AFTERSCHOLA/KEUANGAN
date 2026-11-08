@@ -309,6 +309,49 @@ $missingDirect = containsAll($htmlDirectInstallment, [
 docCheck('Case B: current invoice renders Rincian Pembayaran Bertahap audit trail for multi installments',
     count($missingDirect) === 0, implode(' | ', $missingDirect));
 
+// Credit Carry-Over reconciliation check
+$invCreditCovered = [
+    'id' => 'inv-credit-1',
+    'sekolahId' => 'skl-doc-test-1',
+    'periode' => '2026-08',
+    'nomorInvoice' => 'AFS-202608-CR01',
+    'status' => 'Terbit',
+    'items' => [
+        ['deskripsi' => 'Ekskul Coding', 'jumlahSiswa' => 1, 'hargaSatuan' => 500000, 'total' => 500000],
+    ],
+    'grandTotal' => 500000,
+    'carryOverLines' => [
+        [
+            'type' => 'carry-over',
+            'kind' => 'credit',
+            'invoiceId' => 'inv-prev-cr',
+            'description' => 'Kelebihan bayar invoice sebelumnya',
+            'amount' => -500000,
+            'activeAmount' => -500000,
+            'isSettled' => false,
+        ],
+    ],
+];
+$settleCredit = invoiceDocSettlement($invCreditCovered, [], []);
+docCheck('credit carry-over settlement derives Lunas with sisa 0 and creditApplied 500rb',
+    $settleCredit['total'] === 500000.0 &&
+    $settleCredit['creditApplied'] === 500000.0 &&
+    $settleCredit['sisa'] === 0.0 &&
+    $settleCredit['status'] === 'Lunas',
+    json_encode($settleCredit, JSON_UNESCAPED_UNICODE));
+
+$htmlCredit = renderInvoiceDoc($invCreditCovered, $sekolah, $settings, $settleCredit, []);
+$missingCredit = containsAll($htmlCredit, [
+    'Lunas (Kredit)',
+    'Potongan Kredit Saldo Sebelumnya',
+    '- Rp 500.000',
+    'TOTAL YANG HARUS DIBAYAR',
+    'Rp 0',
+    'Nol Rupiah',
+]);
+docCheck('renderInvoiceDoc renders Lunas (Kredit) badge and credit deduction when covered by credit',
+    count($missingCredit) === 0, implode(' | ', $missingCredit));
+
 // --- HTTP protection leg (IP.2; skipped with --no-http) -------------------
 if (in_array('--no-http', $argv, true)) {
     echo "--- http leg SKIPPED (--no-http) ---\n";

@@ -1033,7 +1033,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                   sppPayments: sppPaymentsAll,
                   siswa: siswaAll,
                 })
-                const displayStatus = isLegacyDraft ? 'Draft (legacy)' : settlement.status
+                const displayStatus = isLegacyDraft ? 'Draft (legacy)' : (settlement.status === 'Lunas' && settlement.creditApplied > 0 && settlement.dibayar === 0 ? 'Lunas (Kredit)' : settlement.status)
                 // BR.2 — pure preview per invoice (cells settled -> skipped
                 // by construction, so a re-open after settling shows 0 rows).
                 const bulkPreview = !isLegacyDraft
@@ -1071,6 +1071,9 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       <p className="text-slate-400">{formatRupiah(inv.grandTotal ?? inv.total)} — {inv.periode || (inv.mode === 'semester' ? 'Semester' : 'Bulanan')}</p>
                       {!isLegacyDraft && (
                         <p className="text-slate-400 mt-0.5">
+                          {settlement.creditApplied > 0 && (
+                            <span className="text-emerald-600 font-semibold">Kredit saldo {formatRupiah(settlement.creditApplied)} · </span>
+                          )}
                           Dibayar {formatRupiah(settlement.dibayar)} · <span className={settlement.sisa > 0 ? 'text-rose-600 font-bold' : ''}>Sisa {formatRupiah(settlement.sisa)}</span>
                           {settlement.credit > 0 && ` · Lebih bayar ${formatRupiah(settlement.credit)}`}
                         </p>
@@ -1105,7 +1108,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 rounded-full font-bold ${
-                        displayStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' :
+                        settlement?.status === 'Lunas' ? 'bg-emerald-100 text-emerald-700' :
                         displayStatus === 'Belum Lunas' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
                       }`}>{displayStatus}</span>
                       <button onClick={() => onPrint(inv, sekolah)} className="text-blue-600 hover:underline font-bold">Cetak</button>
@@ -1150,7 +1153,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                     {/* Installment Payment Button & Form */}
                     {!isLegacyDraft && canRecordPayment && (
                       <>
-                        {displayStatus === 'Lunas' ? (
+                        {settlement?.status === 'Lunas' ? (
                           <div className="mt-2 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                             <svg className="w-4 h-4 text-emerald-500 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -1184,7 +1187,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       />
                     )}
 
-                    {canBulkSettle && !isLegacyDraft && bulkEditing !== inv.id && paymentEditing !== inv.id && bulkPreview.rows.length > 0 && displayStatus !== 'Lunas' && (
+                    {canBulkSettle && !isLegacyDraft && bulkEditing !== inv.id && paymentEditing !== inv.id && bulkPreview.rows.length > 0 && settlement?.status !== 'Lunas' && (
                       <button onClick={() => openBulk(inv)} className="mt-1.5 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-[11px] px-3 py-1.5 rounded-lg transition border border-slate-200">
                         Catat pelunasan sekolah
                       </button>

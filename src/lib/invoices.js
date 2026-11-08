@@ -227,10 +227,9 @@ export function invoiceSettlement(
   const matched = matchedPaymentsForInvoice(invoice, { sppPayments, siswa })
   const dibayar = matched.reduce((sum, p) => sum + Number(p.nominal || 0), 0)
   const total = invoiceTotal(invoice)
-  const sisa = Math.max(0, total - dibayar)
-  const credit = Math.max(0, dibayar - total)
 
   let hasActiveDebt = false
+  let activeCredit = 0
   if (Array.isArray(invoice?.carryOverLines) && invoice.carryOverLines.length > 0) {
     const contextInvoices = invoices.filter(i => i?.id !== invoice?.id)
     const resolved = resolvedCarryOverLines(invoice, {
@@ -240,18 +239,30 @@ export function invoiceSettlement(
     })
     hasActiveDebt = resolved.some(
       line =>
-        line.kind === 'outstanding' &&
+        (line.kind === 'outstanding' || !line.kind) &&
         !line.isSettled &&
         (line.activeAmount ?? line.amount) > 0
     )
+    activeCredit = Math.abs(
+      resolved
+        .filter(l => l.kind === 'credit' && !l.isSettled)
+        .reduce((sum, l) => sum + Math.abs(Number(l.activeAmount ?? l.amount ?? 0)), 0)
+    )
   }
+
+  const effectiveTotal = Math.max(0, total - activeCredit)
+  const sisa = Math.max(0, effectiveTotal - dibayar)
+  const credit = Math.max(0, dibayar - effectiveTotal)
+  const hasCreditSettle = activeCredit > 0 && effectiveTotal <= dibayar
+  const status = (sisa <= 0 && ((total > 0 && dibayar > 0) || hasCreditSettle) && !hasActiveDebt) ? 'Lunas' : 'Belum Lunas'
 
   return {
     total,
     dibayar,
     sisa,
     credit,
-    status: sisa <= 0 && total > 0 && dibayar > 0 && !hasActiveDebt ? 'Lunas' : 'Belum Lunas',
+    creditApplied: activeCredit,
+    status,
   }
 }
 
@@ -294,6 +305,7 @@ export function invoicePaymentBreakdown(
     sudahDibayar: settlement.dibayar,
     sisaSaatIni: settlement.sisa,
     credit: settlement.credit,
+    creditApplied: settlement.creditApplied,
     status: settlement.status,
     payments: sortedPayments,
     latestPayment,
@@ -389,23 +401,17 @@ export function invoiceTotalYangHarusDibayar(
   { invoices = [], sppPayments = [], siswa = [], settlement = null } = {}
 ) {
   if (!invoice) return 0
-  const grandTotal = invoiceTotal(invoice)
-  const isDraft = invoice.status === 'Draft'
   const activeSettlement = settlement !== null
     ? settlement
-    : (!isDraft ? invoiceSettlement(invoice, { invoices, sppPayments, siswa }) : null)
+    : invoiceSettlement(invoice, { invoices, sppPayments, siswa })
   const activeCarryOverLines = resolvedCarryOverLines(invoice, { invoices, sppPayments, siswa })
   const totalActiveCarryOver = activeCarryOverLines
     .filter(l => (l.kind === 'outstanding' || !l.kind) && !l.isSettled)
-    .reduce((sum, l) => sum + Number(l.activeAmount || 0), 0)
-  const totalCredit = activeCarryOverLines
-    .filter(l => l.kind === 'credit')
-    .reduce((sum, l) => sum + Number(l.activeAmount || l.amount || 0), 0)
+    .reduce((sum, l) => sum + Number(l.activeAmount ?? l.amount ?? 0), 0)
+
   return Math.max(
     0,
-    activeSettlement
-      ? activeSettlement.sisa + totalActiveCarryOver + totalCredit
-      : grandTotal + totalActiveCarryOver + totalCredit
+    Number(activeSettlement?.sisa || 0) + totalActiveCarryOver
   )
 }
 
@@ -476,7 +482,7 @@ export function carryOverLines(
     })
   }
 
-  if (settlement.credit > 0) {
+  if (settlement.credit > 0 && invoiceTotal(previous) > 0) {
     lines.push({
       type: 'carry-over',
       kind: 'credit',

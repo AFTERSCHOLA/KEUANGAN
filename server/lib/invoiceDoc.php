@@ -157,9 +157,28 @@ function invoiceDocSettlement(array $invoice, array $payments, array $siswaIds):
         if (!in_array($per, $periods, true)) continue;
         $dibayar += (float) ($p['nominal'] ?? 0);
     }
+    $activeCredit = 0.0;
+    $hasActiveDebt = false;
+    if (!empty($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) {
+        foreach ($invoice['carryOverLines'] as $line) {
+            if (!is_array($line)) continue;
+            $kind = $line['kind'] ?? '';
+            $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
+            $amt = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
+            if ($kind === 'credit' && !$isSettled) {
+                $activeCredit += abs($amt);
+            } elseif (($kind === 'outstanding' || $kind === '') && !$isSettled && $amt > 0) {
+                $hasActiveDebt = true;
+            }
+        }
+    }
+
     $total = invoiceDocTotal($invoice);
-    $sisa = max(0.0, $total - $dibayar);
-    $credit = max(0.0, $dibayar - $total);
+    $effectiveTotal = max(0.0, $total - $activeCredit);
+    $sisa = max(0.0, $effectiveTotal - $dibayar);
+    $credit = max(0.0, $dibayar - $effectiveTotal);
+    $hasCreditSettle = ($activeCredit > 0.0 && $effectiveTotal <= $dibayar);
+    $status = ($sisa <= 0.0 && (($total > 0.0 && $dibayar > 0.0) || $hasCreditSettle) && !$hasActiveDebt) ? 'Lunas' : 'Belum Lunas';
 
     $matched = [];
     foreach ($payments as $p) {
@@ -205,7 +224,8 @@ function invoiceDocSettlement(array $invoice, array $payments, array $siswaIds):
         'dibayar' => $dibayar,
         'sisa' => $sisa,
         'credit' => $credit,
-        'status' => ($sisa <= 0 && $total > 0 && $dibayar > 0) ? 'Lunas' : 'Belum Lunas',
+        'creditApplied' => $activeCredit,
+        'status' => $status,
         'hasMultiInstallment' => ($count >= 2),
         'sudahDibayarSebelumnya' => $paidPrev,
         'pembayaranSaatIni' => $paidCurrent,
@@ -240,21 +260,21 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
 
     $subtotalCurrent = $grandTotal;
     $totalActiveCarryOver = 0.0;
-    $totalCredit = 0.0;
+    $activeCredit = 0.0;
     foreach ($carryLines as $line) {
         if (!is_array($line)) continue;
         $kind = $line['kind'] ?? '';
         $isSettled = !empty($line['isSettled']) || (isset($line['activeAmount']) && (float) $line['activeAmount'] === 0.0);
         $amount = isset($line['activeAmount']) ? (float) $line['activeAmount'] : (float) ($line['amount'] ?? 0);
-        if ($kind === 'credit') {
-            $totalCredit += $amount;
+        if ($kind === 'credit' && !$isSettled) {
+            $activeCredit += abs($amount);
         } elseif (!$isSettled && ($kind === 'outstanding' || $kind === '')) {
             $totalActiveCarryOver += $amount;
         }
     }
     $totalYangHarusDibayar = max(0.0, ($settlement !== null && !$isDraft)
-        ? ((float) ($settlement['sisa'] ?? 0) + $totalActiveCarryOver + $totalCredit)
-        : ($grandTotal + $totalActiveCarryOver + $totalCredit)
+        ? ((float) ($settlement['sisa'] ?? 0) + $totalActiveCarryOver)
+        : (max(0.0, $grandTotal - $activeCredit) + $totalActiveCarryOver)
     );
     $terbilang = invoiceDocTerbilang($totalYangHarusDibayar);
 
@@ -296,12 +316,20 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '<span style="font-weight:700;color:#1e293b">' . invoiceDocRupiah($subtotalCurrent) . '</span>'
         . '</div>';
 
-    if ($settlement !== null && !$isDraft && (float) ($settlement['dibayar'] ?? 0) > 0) {
-        $topBreakdownHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#059669">'
-            . '<span>Sudah Dibayar (Periode Ini)</span>'
-            . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['dibayar']) . '</span>'
-            . '</div>'
-            . '<div style="display:flex;justify-content:space-between;align-items:center;color:#334155">'
+    if ($settlement !== null && !$isDraft && ((float) ($settlement['creditApplied'] ?? 0) > 0 || (float) ($settlement['dibayar'] ?? 0) > 0)) {
+        if ((float) ($settlement['creditApplied'] ?? 0) > 0) {
+            $topBreakdownHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#059669">'
+                . '<span>Potongan Kredit Saldo Sebelumnya</span>'
+                . '<span style="font-weight:700">- ' . invoiceDocRupiah($settlement['creditApplied']) . '</span>'
+                . '</div>';
+        }
+        if ((float) ($settlement['dibayar'] ?? 0) > 0) {
+            $topBreakdownHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#059669">'
+                . '<span>Sudah Dibayar (Periode Ini)</span>'
+                . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['dibayar']) . '</span>'
+                . '</div>';
+        }
+        $topBreakdownHtml .= '<div style="display:flex;justify-content:space-between;align-items:center;color:#334155">'
             . '<span style="font-weight:600">Sisa Periode Ini</span>'
             . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['sisa']) . '</span>'
             . '</div>';
@@ -398,7 +426,10 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         $isLunas = ($settlement['status'] ?? '') === 'Lunas';
         $statusBg = $isLunas ? '#dcfce7' : '#dbeafe';
         $statusColor = $isLunas ? '#15803d' : '#1d4ed8';
-        $statusChip = ' <span style="font-size:10px;font-weight:700;background:' . $statusBg . ';color:' . $statusColor . ';border-radius:999px;padding:2px 8px;vertical-align:middle">' . $h($settlement['status'] ?? '') . '</span>';
+        $statusLabel = ($isLunas && !empty($settlement['creditApplied']) && (float)($settlement['dibayar'] ?? 0) <= 0.0)
+            ? 'Lunas (Kredit)'
+            : ($settlement['status'] ?? '');
+        $statusChip = ' <span style="font-size:10px;font-weight:700;background:' . $statusBg . ';color:' . $statusColor . ';border-radius:999px;padding:2px 8px;vertical-align:middle">' . $h($statusLabel) . '</span>';
     }
 
     return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'

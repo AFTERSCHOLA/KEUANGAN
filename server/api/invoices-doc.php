@@ -103,8 +103,6 @@ if (is_string($sekolahId) && $sekolahId !== '') {
         }
     }
 }
-$settlement = invoiceDocSettlement($invoice, $payments, $siswaIds);
-
 if (!empty($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) {
     foreach ($invoice['carryOverLines'] as &$cline) {
         if (!is_array($cline)) continue;
@@ -127,10 +125,26 @@ if (!empty($invoice['carryOverLines']) && is_array($invoice['carryOverLines'])) 
                     $cline['prevSisa'] = $prevSettle['sisa'];
                 }
             }
+        } elseif (!empty($prevId) && ($cline['kind'] ?? '') === 'credit') {
+            $prevStmt = $pdo->prepare('SELECT payload FROM invoices WHERE id = :id');
+            $prevStmt->execute([':id' => $prevId]);
+            $prevRow = $prevStmt->fetch();
+            if ($prevRow !== false) {
+                $prevInv = json_decode((string) $prevRow['payload'], true);
+                if (is_array($prevInv)) {
+                    $prevSettle = invoiceDocSettlement($prevInv, $payments, $siswaIds);
+                    $rawAmt = abs((float) ($cline['amount'] ?? 0));
+                    $actCredit = min($rawAmt, (float) ($prevSettle['credit'] ?? 0));
+                    $cline['isSettled'] = (($prevSettle['credit'] ?? 0) <= 0.0);
+                    $cline['activeAmount'] = ((float) ($cline['amount'] ?? 0) < 0) ? -$actCredit : $actCredit;
+                }
+            }
         }
     }
     unset($cline);
 }
+
+$settlement = invoiceDocSettlement($invoice, $payments, $siswaIds);
 
 // --- images: explicit dataURL override wins, else tracked on-disk asset -
 $assets = ['logoDataUrl' => null, 'signatureDataUrl' => null];

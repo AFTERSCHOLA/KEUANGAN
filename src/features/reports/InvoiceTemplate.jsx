@@ -9,6 +9,7 @@ import {
   openInvoiceDoc,
   resolvedCarryOverLines,
   invoicePaymentBreakdown,
+  invoiceTotalYangHarusDibayar,
 } from '../../lib/invoices.js'
 import { fitPrintableToSinglePage, restorePrintFit } from '../../lib/printFit.js'
 
@@ -110,18 +111,12 @@ export default function InvoiceTemplate({
     sppPayments: sppPaymentsAll,
     siswa: siswaAll,
   })
-  const totalActiveCarryOver = activeCarryOverLines
-    .filter(l => (l.kind === 'outstanding' || !l.kind) && !l.isSettled)
-    .reduce((sum, l) => sum + Number(l.activeAmount || 0), 0)
-  const totalCredit = activeCarryOverLines
-    .filter(l => l.kind === 'credit')
-    .reduce((sum, l) => sum + Number(l.activeAmount || l.amount || 0), 0)
-  const totalYangHarusDibayar = Math.max(
-    0,
-    settlement
-      ? settlement.sisa + totalActiveCarryOver + totalCredit
-      : grandTotal + totalActiveCarryOver + totalCredit
-  )
+  const totalYangHarusDibayar = invoiceTotalYangHarusDibayar(invoice, {
+    invoices: invoicesAll,
+    sppPayments: sppPaymentsAll,
+    siswa: siswaAll,
+    settlement,
+  })
   const tableRows = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.map((it, idx) => {
         const isTrainer = it.basis === 'trainer' || Boolean(it.tarifPerPertemuan && !it.hargaSatuan && !it.jumlahSiswa)
@@ -167,7 +162,7 @@ export default function InvoiceTemplate({
               isDraft ? 'bg-slate-100 text-slate-500' :
               settlement.status === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
             }`}>
-              {isDraft ? 'Draft' : settlement.status}
+              {isDraft ? 'Draft' : (settlement.status === 'Lunas' && settlement.creditApplied > 0 && settlement.dibayar === 0 ? 'Lunas (Kredit)' : settlement.status)}
             </span>
           </div>
         </div>
@@ -238,17 +233,25 @@ export default function InvoiceTemplate({
             <span className="font-semibold">Subtotal Periode Ini</span>
             <span className="font-bold">{formatRupiah(subtotalCurrent)}</span>
           </div>
+          {!isDraft && settlement && settlement.creditApplied > 0 && (
+            <div className="flex justify-between items-center text-emerald-700">
+              <span>Potongan Kredit Saldo Sebelumnya</span>
+              <span className="font-bold">- {formatRupiah(settlement.creditApplied)}</span>
+            </div>
+          )}
           {!isDraft && settlement && settlement.dibayar > 0 && (
-            <>
-              <div className="flex justify-between items-center text-emerald-700">
-                <span>Sudah Dibayar (Periode Ini)</span>
-                <span className="font-bold">{formatRupiah(settlement.dibayar)}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-700">
-                <span className="font-semibold">Sisa Periode Ini</span>
-                <span className="font-bold">{formatRupiah(settlement.sisa)}</span>
-              </div>
-              {breakdown && breakdown.payments && breakdown.payments.length >= 2 && (
+            <div className="flex justify-between items-center text-emerald-700">
+              <span>Sudah Dibayar (Periode Ini)</span>
+              <span className="font-bold">{formatRupiah(settlement.dibayar)}</span>
+            </div>
+          )}
+          {!isDraft && settlement && (settlement.creditApplied > 0 || settlement.dibayar > 0) && (
+            <div className="flex justify-between items-center text-slate-700">
+              <span className="font-semibold">Sisa Periode Ini</span>
+              <span className="font-bold">{formatRupiah(settlement.sisa)}</span>
+            </div>
+          )}
+          {!isDraft && settlement && settlement.dibayar > 0 && breakdown && breakdown.payments && breakdown.payments.length >= 2 && (
                 <div className="my-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
                   <p className="font-bold text-slate-700 uppercase tracking-wide text-[11px] mb-1">
                     Rincian Pembayaran Bertahap
@@ -278,8 +281,6 @@ export default function InvoiceTemplate({
                   </div>
                 </div>
               )}
-            </>
-          )}
         </div>
 
         {/* Middle breakdown: Sisa Tagihan Sebelumnya (Carry-Over) */}
