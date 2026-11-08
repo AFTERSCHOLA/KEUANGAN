@@ -67,20 +67,20 @@
 - Test: `src/features/reports/__tests__/invoice-followup-output.test.jsx`
 - Test: `src/features/schools/__tests__/school-followup-output.test.jsx`
 
-- [ ] **Step 2.1**: Write component unit tests for follow-up outputs:
+- [x] **Step 2.1**: Write component unit tests for follow-up outputs:
   - In `invoice-followup-output.test.jsx`: verifies invoice card displays `[Follow-up: Menunggu Pembayaran]` badge when unpaid, and accordion displays status chips for each follow-up.
   - In `school-followup-output.test.jsx`: verifies school card in `SchoolList.jsx` displays the latest follow-up status chip when the school has active follow-ups.
-- [ ] **Step 2.2**: Run tests to verify they fail.
-- [ ] **Step 2.3**: Update `InvoiceModal.jsx`:
+- [x] **Step 2.2**: Run tests to verify they fail.
+- [x] **Step 2.3**: Update `InvoiceModal.jsx`:
   - Render a prominent badge `[Follow-up: Menunggu Pembayaran]` (amber) or `[Follow-up: Terbayar]` on the invoice card.
   - In `InvoiceFollowUpSection`: add status chip to each item in the accordion (`Belum Bayar` vs `Terbayar Rp X`).
-- [ ] **Step 2.4**: Update `src/features/schools/SchoolList.jsx`:
+- [x] **Step 2.4**: Update `src/features/schools/SchoolList.jsx`:
   - Compute latest follow-up across the school's invoices.
   - Display follow-up chip on the school card (`📞 Follow-up: <date> - <status>`).
-- [ ] **Step 2.5**: Update `InvoiceTemplate.jsx` and `server/lib/invoiceDoc.php`:
+- [x] **Step 2.5**: Update `InvoiceTemplate.jsx` and `server/lib/invoiceDoc.php`:
   - When an invoice is unpaid and has a follow-up note, include it in `Catatan Pembayaran`.
-- [ ] **Step 2.6**: Run tests to verify they pass.
-- [ ] **Step 2.7**: Commit Task 2 changes.
+- [x] **Step 2.6**: Run tests to verify they pass.
+- [x] **Step 2.7**: Commit Task 2 changes.
 
 ---
 
@@ -90,8 +90,8 @@
 - All touched files
 - Test: Full Vitest suite, PHP contract suite, and production build
 
-- [ ] **Step 3.1**: Run `npm test` across all test files.
-- [ ] **Step 3.2**: Run `npm run test:server` across all 18 PHP contract test suites.
-- [ ] **Step 3.3**: Run `npm run build` to verify clean Vite PWA production bundle.
-- [ ] **Step 3.4**: Verify working tree hygiene (`LOGBOOK_leyddddddd.md` and `docs/AdminDashboard/` untouched).
-- [ ] **Step 3.5**: Finalize documentation and commit.
+- [x] **Step 3.1**: Run `npm test` across all test files.
+- [x] **Step 3.2**: Run `npm run test:server` across all 18 PHP contract test suites.
+- [x] **Step 3.3**: Run `npm run build` to verify clean Vite PWA production bundle.
+- [x] **Step 3.4**: Verify working tree hygiene (`LOGBOOK_leyddddddd.md` and `docs/AdminDashboard/` untouched).
+- [x] **Step 3.5**: Finalize documentation and commit.
