@@ -352,6 +352,71 @@ $missingCredit = containsAll($htmlCredit, [
 docCheck('renderInvoiceDoc renders Lunas (Kredit) badge and credit deduction when covered by credit',
     count($missingCredit) === 0, implode(' | ', $missingCredit));
 
+// Task 2: Follow-up note in Catatan Pembayaran
+$invFuUnpaid = $canonical;
+$invFuUnpaid['followUps'] = [
+    [
+        'id' => 'fu-check-1',
+        'penerima' => 'Ibu Bendahara',
+        'tanggalFollowUp' => '2026-08-15',
+        'catatan' => 'Janji transfer minggu depan',
+        'nominal' => 0,
+    ],
+];
+$htmlFuUnpaid = renderInvoiceDoc($invFuUnpaid, $sekolah, $settings, $settlement, []);
+$missingFuUnpaid = containsAll($htmlFuUnpaid, [
+    'Catatan Pembayaran',
+    'Follow-up [2026-08-15]: Janji transfer minggu depan',
+]);
+docCheck('unpaid invoice renders follow-up note with catatan in Catatan Pembayaran',
+    count($missingFuUnpaid) === 0, implode(' | ', $missingFuUnpaid));
+
+$invFuEmptyNote = $canonical;
+$invFuEmptyNote['followUps'] = [
+    [
+        'id' => 'fu-check-2',
+        'penerima' => 'Ibu Bendahara',
+        'tanggalFollowUp' => '2026-08-20',
+        'catatan' => '',
+        'nominal' => 0,
+    ],
+];
+$htmlFuEmptyNote = renderInvoiceDoc($invFuEmptyNote, $sekolah, $settings, $settlement, []);
+$missingFuEmptyNote = containsAll($htmlFuEmptyNote, [
+    'Catatan Pembayaran',
+    'Follow-up [2026-08-20]: Menunggu konfirmasi pembayaran',
+]);
+docCheck('unpaid invoice renders fallback "Menunggu konfirmasi pembayaran" when note is empty',
+    count($missingFuEmptyNote) === 0, implode(' | ', $missingFuEmptyNote));
+
+$invFuLunas = $canonical;
+$invFuLunas['followUps'] = [
+    [
+        'id' => 'fu-check-3',
+        'tanggalFollowUp' => '2026-08-10',
+        'catatan' => 'Janji transfer',
+        'nominal' => 9350000,
+    ],
+];
+$settleLunas = ['total' => 9350000, 'dibayar' => 9350000, 'sisa' => 0, 'credit' => 0, 'status' => 'Lunas'];
+$htmlFuLunas = renderInvoiceDoc($invFuLunas, $sekolah, $settings, $settleLunas, []);
+docCheck('paid invoice hides follow-up note in Catatan Pembayaran',
+    strpos($htmlFuLunas, 'Follow-up [2026-08-10]') === false);
+
+$invFuDraft = $canonical;
+$invFuDraft['status'] = 'Draft';
+$invFuDraft['followUps'] = [
+    [
+        'id' => 'fu-check-4',
+        'tanggalFollowUp' => '2026-08-10',
+        'catatan' => 'Janji transfer',
+        'nominal' => 0,
+    ],
+];
+$htmlFuDraft = renderInvoiceDoc($invFuDraft, $sekolah, $settings, null, []);
+docCheck('draft invoice hides follow-up note in Catatan Pembayaran',
+    strpos($htmlFuDraft, 'Follow-up [2026-08-10]') === false);
+
 // --- HTTP protection leg (IP.2; skipped with --no-http) -------------------
 if (in_array('--no-http', $argv, true)) {
     echo "--- http leg SKIPPED (--no-http) ---\n";

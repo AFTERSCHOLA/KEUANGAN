@@ -10,6 +10,7 @@ import {
   resolvedCarryOverLines,
   invoicePaymentBreakdown,
   invoiceTotalYangHarusDibayar,
+  normalizeInvoiceFollowUps,
 } from '../../lib/invoices.js'
 import { fitPrintableToSinglePage, restorePrintFit } from '../../lib/printFit.js'
 
@@ -117,6 +118,18 @@ export default function InvoiceTemplate({
     siswa: siswaAll,
     settlement,
   })
+  const isUnpaid = !isDraft && (settlement ? settlement.status !== 'Lunas' : invoice.status !== 'Lunas')
+  const followUps = normalizeInvoiceFollowUps(invoice)
+  const latestFu = followUps[followUps.length - 1] || null
+  const hasNoteOrCommitment = Boolean(
+    latestFu && ((latestFu.catatan && latestFu.catatan.trim()) || latestFu.tanggalFollowUp)
+  )
+  const fuDate = latestFu?.tanggalFollowUp || latestFu?.tanggalKirim || (latestFu?.createdAt ? latestFu.createdAt.slice(0, 10) : '')
+  const fuCatatan = latestFu?.catatan?.trim() || ''
+  const fuNoteText = fuCatatan || 'Menunggu konfirmasi pembayaran'
+  const followUpNote = isUnpaid && hasNoteOrCommitment
+    ? (fuDate ? `Follow-up [${fuDate}]: ${fuNoteText}` : `Follow-up: ${fuNoteText}`)
+    : null
   const tableRows = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.map((it, idx) => {
         const isTrainer = it.basis === 'trainer' || Boolean(it.tarifPerPertemuan && !it.hargaSatuan && !it.jumlahSiswa)
@@ -423,6 +436,11 @@ export default function InvoiceTemplate({
                 </>
               ) : (
                 <p className="text-slate-400">Belum diatur — isi info rekening di Pengaturan.</p>
+              )}
+              {followUpNote && (
+                <p className="mt-2 text-slate-700 font-medium border-t border-slate-200/80 pt-2">
+                  {followUpNote}
+                </p>
               )}
             </div>
           </div>

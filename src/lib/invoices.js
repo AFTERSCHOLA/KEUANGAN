@@ -614,3 +614,27 @@ export function normalizeInvoiceFollowUps(inv) {
   }
   return []
 }
+
+/**
+ * Computes the latest follow-up entry for a given school across all its invoices.
+ */
+export function latestFollowUpForSekolah(sekolahId, { invoices = readCached('invoices') } = {}) {
+  const schoolInvoices = (invoices || []).filter(inv => inv.sekolahId === sekolahId)
+  const allFollowUps = []
+  for (const inv of schoolInvoices) {
+    const list = normalizeInvoiceFollowUps(inv)
+    for (let i = 0; i < list.length; i++) {
+      allFollowUps.push({
+        fu: list[i],
+        time: list[i].createdAt || list[i].tanggalFollowUp || list[i].tanggalKirim || inv.createdAt || '',
+        order: i,
+      })
+    }
+  }
+  if (allFollowUps.length === 0) return null
+  allFollowUps.sort((a, b) => {
+    if (a.time !== b.time) return a.time < b.time ? 1 : -1
+    return b.order - a.order
+  })
+  return allFollowUps[0].fu
+}

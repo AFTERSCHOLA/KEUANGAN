@@ -234,6 +234,22 @@ function invoiceDocSettlement(array $invoice, array $payments, array $siswaIds):
 }
 
 /**
+ * Normalizes follow-ups on an invoice payload (array of entries).
+ */
+function invoiceDocNormalizeFollowUps(array $invoice): array {
+    if (isset($invoice['followUps']) && is_array($invoice['followUps'])) {
+        return array_values($invoice['followUps']);
+    }
+    if (isset($invoice['followUp']) && is_array($invoice['followUp'])) {
+        $fu = $invoice['followUp'];
+        $fu['id'] = $fu['id'] ?? 'fu-legacy';
+        $fu['createdAt'] = $fu['createdAt'] ?? ($fu['tanggalKirim'] ?? ($invoice['createdAt'] ?? ''));
+        return [$fu];
+    }
+    return [];
+}
+
+/**
  * Render the standalone invoice document.
  *
  * $invoice: stored payload (either shape). $sekolah: stored payload.
@@ -419,6 +435,23 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         $bankBlock = '<p style="margin:0;color:#94a3b8">Belum diatur — isi info rekening di Pengaturan.</p>';
     }
 
+    $isUnpaid = !$isDraft && ($settlement !== null ? ($settlement['status'] ?? '') !== 'Lunas' : ($invoice['status'] ?? '') !== 'Lunas');
+    $followUps = invoiceDocNormalizeFollowUps($invoice);
+    $latestFu = count($followUps) > 0 ? $followUps[count($followUps) - 1] : null;
+    $hasFuNoteOrCommitment = $latestFu !== null && (!empty(trim((string)($latestFu['catatan'] ?? ''))) || !empty($latestFu['tanggalFollowUp']));
+    $followUpNote = '';
+    if ($isUnpaid && $hasFuNoteOrCommitment) {
+        $fuDate = (string)($latestFu['tanggalFollowUp'] ?? $latestFu['tanggalKirim'] ?? (isset($latestFu['createdAt']) ? substr((string)$latestFu['createdAt'], 0, 10) : ''));
+        $fuCatatan = trim((string)($latestFu['catatan'] ?? ''));
+        $fuNoteText = $fuCatatan !== '' ? $fuCatatan : 'Menunggu konfirmasi pembayaran';
+        $followUpNote = $fuDate !== '' ? "Follow-up [$fuDate]: $fuNoteText" : "Follow-up: $fuNoteText";
+    }
+    $followUpBlock = '';
+    if ($followUpNote !== '') {
+        $followUpBlock = '<p style="margin:8px 0 0;padding-top:8px;border-top:1px solid #e2e8f0;color:#334155;font-weight:500">'
+            . $h($followUpNote) . '</p>';
+    }
+
     $statusChip = '';
     if ($isDraft) {
         $statusChip = ' <span style="font-size:10px;font-weight:700;background:#f1f5f9;color:#64748b;border-radius:999px;padding:2px 8px;vertical-align:middle">DRAFT</span>';
@@ -468,7 +501,7 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . $bottomSummaryHtml
         . '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:32px">'
         . '<div style="flex:1"><div style="background:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:20px;font-size:12px;line-height:1.7;color:#475569">'
-        . '<p style="margin:0 0 6px;font-weight:700;color:#1e293b">Catatan Pembayaran:</p>' . $bankBlock . '</div></div>'
+        . '<p style="margin:0 0 6px;font-weight:700;color:#1e293b">Catatan Pembayaran:</p>' . $bankBlock . $followUpBlock . '</div></div>'
         . '<div style="text-align:center;font-size:12px;min-width:180px"><p style="margin:0 0 4px;color:#64748b">Hormat Kami,</p>'
         . $sigImg
         . '<p style="display:inline-block;border-top:1px solid #94a3b8;margin:8px 0 0;padding:4px 8px 0;font-weight:700;color:#1e293b">' . $h($settings['penandatangan'] ?? '-') . '</p></div>'

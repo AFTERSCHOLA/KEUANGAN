@@ -130,6 +130,13 @@ export function InvoiceFollowUpSection({
                     {fu.wa && <span className="text-slate-500">({fu.wa})</span>}
                     <span>·</span>
                     <span className="font-extrabold text-blue-700">{formatRupiah(fu.nominal || 0)}</span>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      Number(fu.nominal || 0) > 0
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {Number(fu.nominal || 0) > 0 ? 'Terbayar' : 'Menunggu Pembayaran'}
+                    </span>
                     {fu.buktiBayar && (
                       <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         📷 Bukti
@@ -1106,11 +1113,20 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2 py-1 rounded-full font-bold ${
                         settlement?.status === 'Lunas' ? 'bg-emerald-100 text-emerald-700' :
                         displayStatus === 'Belum Lunas' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
                       }`}>{displayStatus}</span>
+                      {latestFu && (
+                        <span className={`px-2 py-1 rounded-full font-bold ${
+                          Number(latestFu.nominal || 0) > 0
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {Number(latestFu.nominal || 0) > 0 ? 'Follow-up: Terbayar' : 'Follow-up: Menunggu Pembayaran'}
+                        </span>
+                      )}
                       <button onClick={() => onPrint(inv, sekolah)} className="text-blue-600 hover:underline font-bold">Cetak</button>
                       {canEditFollowUp && (
                         <button onClick={() => (fuEditing === inv.id ? setFuEditing(null) : openFollowUp(inv))} className="text-slate-600 hover:underline font-bold">Follow-up</button>

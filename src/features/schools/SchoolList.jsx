@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 import { newSekolah, defaultCabang, newJadwalEntry } from '../../lib/constants.js'
 import { countSiswaBySekolahId } from '../../lib/tunggakan.js'
+import { latestFollowUpForSekolah } from '../../lib/invoices.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -28,6 +29,7 @@ export default function SchoolList() {
     const list = readCached('cabang')
     return list.length ? list : [defaultCabang()]
   })
+  const [invoices, setInvoices] = useState(() => readCached('invoices'))
   const [selectedCabangId, setSelectedCabangId] = useState('')
   const [statusFilter, setStatusFilter] = useState('Aktif')
   const [modalOpen, setModalOpen] = useState(false)
@@ -64,6 +66,7 @@ export default function SchoolList() {
       await Promise.all([
         pullRemote('sekolah'),
         pullRemote('cabang'),
+        pullRemote('invoices').catch(() => {}),
       ])
 
       if (!cancelled) refresh()
@@ -101,12 +104,21 @@ export default function SchoolList() {
   // Perf slice: one siswa read + one count pass per render. Was
   // readCached('siswa').filter() per card (N JSON.parse + N scans).
   const siswaCounts = useMemo(() => countSiswaBySekolahId(readCached('siswa')), [sekolah])
+  const schoolFollowUps = useMemo(() => {
+    const map = new Map()
+    for (const s of sekolah) {
+      const fu = latestFollowUpForSekolah(s.id, { invoices })
+      if (fu) map.set(s.id, fu)
+    }
+    return map
+  }, [sekolah, invoices])
 
   function refresh() {
-  setSekolah(readCached('sekolah'))
-  const nextCabang = readCached('cabang')
-  if (nextCabang.length) setCabang(nextCabang)
-}
+    setSekolah(readCached('sekolah'))
+    const nextCabang = readCached('cabang')
+    if (nextCabang.length) setCabang(nextCabang)
+    setInvoices(readCached('invoices'))
+  }
 
   function openAdd() {
     const first = cabang[0] || defaultCabang()
@@ -379,13 +391,26 @@ try {
             <div className="p-5 flex-1 flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-bold text-slate-800 line-clamp-1">{sch.nama}</h3>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <p className="text-[10px] text-blue-600 font-bold uppercase">{cabang.find(c => c.id === sch.cabangId)?.kode || 'PST'}</p>
                   {sch.status === 'Non-Aktif' ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Non-Aktif</span>
                   ) : (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Aktif</span>
                   )}
+                  {(() => {
+                    const latestFu = schoolFollowUps.get(sch.id)
+                    if (!latestFu) return null
+                    const fuDate = latestFu.tanggalFollowUp || latestFu.tanggalKirim || (latestFu.createdAt ? latestFu.createdAt.slice(0, 10) : '')
+                    const isPaid = Number(latestFu.nominal || 0) > 0
+                    return (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        📞 Follow-up: {fuDate ? `${fuDate} ` : ''}({isPaid ? 'Terbayar' : 'Menunggu Pembayaran'})
+                      </span>
+                    )
+                  })()}
                 </div>
                 <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
                   <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
