@@ -305,9 +305,16 @@ $missingDirect = containsAll($htmlDirectInstallment, [
     'Rp 200.000',
     'Sisa tagihan:',
     'Rp 150.000',
+    'Lembar Sisa Tagihan (Bukan Faktur Baru) — Mengacu pada Invoice #AFS-202608-0002',
+    'Lembar Sisa Tagihan (Bukan Tagihan Baru) — Mengacu pada Nomor Faktur: #AFS-202608-0002',
 ]);
 docCheck('Case B: current invoice renders Rincian Pembayaran Bertahap audit trail for multi installments',
     count($missingDirect) === 0, implode(' | ', $missingDirect));
+
+$settleLunasFull = ['total' => 600000, 'dibayar' => 600000, 'sisa' => 0, 'status' => 'Lunas'];
+$htmlLunasFull = renderInvoiceDoc($invDirectInstallment, $sekolah, $settings, $settleLunasFull, []);
+docCheck('unpaid/paid invoices hide remaining balance clarification copy',
+    strpos($html, 'Lembar Sisa Tagihan') === false && strpos($htmlLunasFull, 'Lembar Sisa Tagihan') === false);
 
 // Credit Carry-Over reconciliation check
 $invCreditCovered = [

@@ -421,7 +421,7 @@ try {
                     let statusColor = 'bg-amber-100 text-amber-700'
 
                     if (settlement) {
-                      if (settlement.status === 'Lunas' || settlement.sisa === 0) {
+                      if (settlement.status === 'Lunas') {
                         statusLabel = 'Lunas'
                         statusColor = 'bg-emerald-100 text-emerald-700'
                       } else if (settlement.dibayar > 0 && settlement.sisa > 0) {

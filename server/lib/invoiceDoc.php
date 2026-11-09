@@ -350,6 +350,12 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
             . '<span style="font-weight:700">' . invoiceDocRupiah($settlement['sisa']) . '</span>'
             . '</div>';
 
+        if ((float) ($settlement['dibayar'] ?? 0) > 0 && (float) ($settlement['sisa'] ?? 0) > 0) {
+            $topBreakdownHtml .= '<div style="background:#fffbeb;border:1px solid #fef3c7;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:11px;font-weight:600;color:#b45309">'
+                . 'Lembar Sisa Tagihan (Bukan Faktur Baru) — Mengacu pada Invoice #' . $h($nomor ?? '-')
+                . '</div>';
+        }
+
         if (!empty($settlement['hasMultiInstallment'])) {
             $topBreakdownHtml .= '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:11px;color:#475569">'
                 . '<p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.06em;color:#334155;text-transform:uppercase">Rincian Pembayaran Bertahap</p>'
@@ -465,6 +471,8 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         $statusChip = ' <span style="font-size:10px;font-weight:700;background:' . $statusBg . ';color:' . $statusColor . ';border-radius:999px;padding:2px 8px;vertical-align:middle">' . $h($statusLabel) . '</span>';
     }
 
+    $isPartialSisa = !$isDraft && $settlement !== null && (float) ($settlement['dibayar'] ?? 0) > 0 && (float) ($settlement['sisa'] ?? 0) > 0;
+
     return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
         . '<title>Invoice ' . $h($nomor ?? 'Draft') . ' — ' . $h($sekolah['nama'] ?? '') . '</title>'
         . '<style>'
@@ -478,7 +486,9 @@ function renderInvoiceDoc(array $invoice, array $sekolah, array $settings, ?arra
         . '<div>' . $logoImg . '<p style="margin:4px 0 0;font-size:14px;font-weight:800;color:#1e293b">AfterSchola</p><p style="font-size:12px;color:#94a3b8;margin:8px 0 0">' . $h($settings['alamatUsaha'] ?? '') . '</p></div>'
         . '<div style="text-align:right"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:.04em;color:#1e3a8a">INVOICE' . $statusChip . '</h1>'
         . '<p style="margin:4px 0 0;font-size:14px;font-weight:700;color:#1d4ed8">' . $h($nomor ?? '(Draft)') . '</p>'
-        . '<p style="margin:4px 0 0;font-size:12px;color:#94a3b8">Tanggal: ' . $h($tanggalLabel) . '</p></div>'
+        . '<p style="margin:4px 0 0;font-size:12px;color:#94a3b8">Tanggal: ' . $h($tanggalLabel) . '</p>'
+        . ($isPartialSisa ? '<p style="margin:4px 0 0;font-size:11px;font-weight:600;color:#d97706">Lembar Sisa Tagihan (Bukan Tagihan Baru) — Mengacu pada Nomor Faktur: #' . $h($nomor ?? '-') . '</p>' : '')
+        . '</div>'
         . '</div>'
         . '<div style="display:flex;justify-content:space-between;background:#f8fafc;border-radius:12px;padding:16px 20px;margin-top:24px">'
         . '<div><p style="margin:0;font-size:10px;font-weight:700;letter-spacing:.08em;color:#94a3b8">KEPADA YTH:</p>'

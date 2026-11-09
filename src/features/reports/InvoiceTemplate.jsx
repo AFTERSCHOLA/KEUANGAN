@@ -202,6 +202,11 @@ export default function InvoiceTemplate({
             <h3 className="text-3xl font-extrabold text-blue-900 tracking-wide">INVOICE</h3>
             <p className="text-sm font-bold text-blue-700">{nomorDisplay || '(Draft)'}</p>
             <p className="text-xs text-slate-400 mt-1">Tanggal: {tanggalLabel}</p>
+            {!isDraft && settlement && settlement.dibayar > 0 && settlement.sisa > 0 && (
+              <p className="text-[11px] font-semibold text-amber-600 mt-1">
+                Lembar Sisa Tagihan (Bukan Tagihan Baru) — Mengacu pada Nomor Faktur: #{nomorDisplay || '-'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -262,6 +267,11 @@ export default function InvoiceTemplate({
             <div className="flex justify-between items-center text-slate-700">
               <span className="font-semibold">Sisa Periode Ini</span>
               <span className="font-bold">{formatRupiah(settlement.sisa)}</span>
+            </div>
+          )}
+          {!isDraft && settlement && settlement.dibayar > 0 && settlement.sisa > 0 && (
+            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-800">
+              Lembar Sisa Tagihan (Bukan Faktur Baru) — Mengacu pada Invoice #{nomorDisplay || '-'}
             </div>
           )}
           {!isDraft && settlement && settlement.dibayar > 0 && breakdown && breakdown.payments && breakdown.payments.length >= 2 && (
