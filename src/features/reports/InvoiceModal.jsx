@@ -86,6 +86,7 @@ export function ReceiptPreview({ entry }) {
 
 export function InvoiceFollowUpSection({
   inv,
+  breakdown,
   expandedCards = {},
   onToggleCard,
   fuForm,
@@ -96,6 +97,11 @@ export function InvoiceFollowUpSection({
   errorMsg = '',
 }) {
   const followUps = normalizeInvoiceFollowUps(inv)
+  const totalAwal = breakdown?.totalAwal ?? (inv?.grandTotal ?? inv?.total ?? 0)
+  const sudahDibayar = breakdown?.sudahDibayar ?? 0
+  const sisaSaatIni = breakdown?.sisaSaatIni ?? totalAwal
+  const nominalNum = Number(fuForm?.nominal) || 0
+  const sisaSetelah = Math.max(0, sisaSaatIni - nominalNum)
 
   return (
     <div className="mt-2 border-t pt-2 space-y-3">
@@ -191,6 +197,25 @@ export function InvoiceFollowUpSection({
         <h6 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Catat Follow-up Baru
         </h6>
+
+        {/* Balance summary cards */}
+        <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Tagihan Awal</span>
+            <span className="font-bold text-slate-800">{formatRupiah(totalAwal)}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase block">Sudah Dibayar Sebelumnya</span>
+            <span className="font-bold text-emerald-700">{formatRupiah(sudahDibayar)}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase block">Sisa Tagihan Saat Ini</span>
+            <span className={`font-extrabold ${sisaSaatIni > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+              {formatRupiah(sisaSaatIni)}
+            </span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase">Penerima</label>
@@ -212,7 +237,7 @@ export function InvoiceFollowUpSection({
             />
           </div>
           <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase">Tgl kirim</label>
+            <label className="text-[10px] font-bold text-slate-400 uppercase">Tgl Kirim / Kontak</label>
             <input
               type="date"
               value={fuForm.tanggalKirim}
@@ -221,7 +246,7 @@ export function InvoiceFollowUpSection({
             />
           </div>
           <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase">Tgl follow-up</label>
+            <label className="text-[10px] font-bold text-slate-400 uppercase">Tgl Rencana Bayar / Janji Bayar</label>
             <input
               type="date"
               value={fuForm.tanggalFollowUp}
@@ -231,15 +256,26 @@ export function InvoiceFollowUpSection({
           </div>
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase">Nominal Pembayaran</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase">Nominal Pembayaran / Cicilan Saat Ini</label>
           <RupiahInput
             value={fuForm.nominal}
             onChange={val => onFormChange({ ...fuForm, nominal: val })}
             className="w-full mt-0.5 rounded-lg border p-2 pl-9 text-xs"
           />
         </div>
+
+        {/* Reactive preview */}
+        <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 text-xs">
+          <div className="flex justify-between items-center">
+            <span className="text-blue-900 font-semibold">Sisa tagihan setelah pembayaran ini:</span>
+            <span className={`font-extrabold ${sisaSetelah === 0 ? 'text-emerald-700' : 'text-blue-900'}`}>
+              {formatRupiah(sisaSetelah)}
+            </span>
+          </div>
+        </div>
+
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase">Upload Bukti Bayar</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase">Upload Bukti Transfer / Koordinasi</label>
           <div className="mt-0.5 flex items-center gap-2">
             <input
               type="file"
@@ -1246,6 +1282,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                     {canEditFollowUp && fuEditing === inv.id && (
                       <InvoiceFollowUpSection
                         inv={inv}
+                        breakdown={breakdown}
                         expandedCards={expandedFuCards}
                         onToggleCard={handleToggleFuCard}
                         fuForm={fuForm}

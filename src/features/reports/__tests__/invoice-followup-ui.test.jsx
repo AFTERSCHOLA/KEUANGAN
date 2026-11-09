@@ -246,7 +246,7 @@ describe('Invoice Follow-Up Schema & UI', () => {
       expect(html).toContain('2026-10-12')
     })
 
-    it('renders the form below accordion to log new follow-up', () => {
+    it('renders the form below accordion to log new follow-up with clarified labels', () => {
       const html = renderToStaticMarkup(
         <InvoiceFollowUpSection
           inv={mockInvoice}
@@ -270,13 +270,167 @@ describe('Invoice Follow-Up Schema & UI', () => {
 
       expect(html).toContain('Penerima')
       expect(html).toContain('No WA')
-      expect(html).toContain('Tgl kirim')
-      expect(html).toContain('Tgl follow-up')
-      expect(html).toContain('Nominal Pembayaran')
-      expect(html).toContain('Upload Bukti Bayar')
+      expect(html).toContain('Tgl Kirim / Kontak')
+      expect(html).toContain('Tgl Rencana Bayar / Janji Bayar')
+      expect(html).toContain('Nominal Pembayaran / Cicilan Saat Ini')
+      expect(html).toContain('Upload Bukti Transfer / Koordinasi')
       expect(html).toContain('Catatan')
       expect(html).toContain('Simpan Follow-up')
       expect(html).toContain('Batal')
+    })
+
+    it('renders balance summary cards (Total Tagihan Awal, Sudah Dibayar Sebelumnya, Sisa Tagihan Saat Ini) using breakdown prop', () => {
+      const breakdown = {
+        totalAwal: 1500000,
+        sudahDibayar: 500000,
+        sisaSaatIni: 1000000,
+        payments: [],
+      }
+
+      const html = renderToStaticMarkup(
+        <InvoiceFollowUpSection
+          inv={mockInvoice}
+          breakdown={breakdown}
+          expandedCards={{}}
+          onToggleCard={() => {}}
+          fuForm={{
+            penerima: 'Pak Hendra',
+            wa: '0812345678',
+            tanggalKirim: '2026-10-25',
+            tanggalFollowUp: '2026-10-30',
+            nominal: 0,
+            buktiBayar: null,
+            catatan: '',
+          }}
+          onFormChange={() => {}}
+          onSave={() => {}}
+          onCancel={() => {}}
+          saving={false}
+        />
+      )
+
+      expect(html).toContain('Total Tagihan Awal')
+      expect(html).toContain('Sudah Dibayar Sebelumnya')
+      expect(html).toContain('Sisa Tagihan Saat Ini')
+      expect(html).toContain(formatRupiah(1500000))
+      expect(html).toContain(formatRupiah(500000))
+      expect(html).toContain(formatRupiah(1000000))
+    })
+
+    it('updates "Sisa tagihan setelah pembayaran ini" reactively based on fuForm.nominal', () => {
+      const breakdown = {
+        totalAwal: 1500000,
+        sudahDibayar: 500000,
+        sisaSaatIni: 1000000,
+        payments: [],
+      }
+
+      // Step A: nominal = 300.000 -> sisa setelah pembayaran ini = 700.000
+      const htmlPartial = renderToStaticMarkup(
+        <InvoiceFollowUpSection
+          inv={mockInvoice}
+          breakdown={breakdown}
+          expandedCards={{}}
+          onToggleCard={() => {}}
+          fuForm={{
+            penerima: '',
+            wa: '',
+            tanggalKirim: '',
+            tanggalFollowUp: '',
+            nominal: 300000,
+            buktiBayar: null,
+            catatan: '',
+          }}
+          onFormChange={() => {}}
+          onSave={() => {}}
+          onCancel={() => {}}
+          saving={false}
+        />
+      )
+
+      expect(htmlPartial).toContain('Sisa tagihan setelah pembayaran ini')
+      expect(htmlPartial).toContain(formatRupiah(700000))
+
+      // Step B: exact remaining nominal = 1.000.000 -> sisa = 0
+      const htmlLunas = renderToStaticMarkup(
+        <InvoiceFollowUpSection
+          inv={mockInvoice}
+          breakdown={breakdown}
+          expandedCards={{}}
+          onToggleCard={() => {}}
+          fuForm={{
+            penerima: '',
+            wa: '',
+            tanggalKirim: '',
+            tanggalFollowUp: '',
+            nominal: 1000000,
+            buktiBayar: null,
+            catatan: '',
+          }}
+          onFormChange={() => {}}
+          onSave={() => {}}
+          onCancel={() => {}}
+          saving={false}
+        />
+      )
+
+      expect(htmlLunas).toContain('Sisa tagihan setelah pembayaran ini')
+      expect(htmlLunas).toContain(formatRupiah(0))
+
+      // Step C: overpayment nominal = 1.200.000 -> clamped at Math.max(0, ...) -> 0
+      const htmlOver = renderToStaticMarkup(
+        <InvoiceFollowUpSection
+          inv={mockInvoice}
+          breakdown={breakdown}
+          expandedCards={{}}
+          onToggleCard={() => {}}
+          fuForm={{
+            penerima: '',
+            wa: '',
+            tanggalKirim: '',
+            tanggalFollowUp: '',
+            nominal: 1200000,
+            buktiBayar: null,
+            catatan: '',
+          }}
+          onFormChange={() => {}}
+          onSave={() => {}}
+          onCancel={() => {}}
+          saving={false}
+        />
+      )
+
+      expect(htmlOver).toContain('Sisa tagihan setelah pembayaran ini')
+      expect(htmlOver).toContain(formatRupiah(0))
+    })
+
+    it('falls back gracefully to invoice grandTotal when breakdown is omitted', () => {
+      const html = renderToStaticMarkup(
+        <InvoiceFollowUpSection
+          inv={{ ...mockInvoice, grandTotal: 800000 }}
+          expandedCards={{}}
+          onToggleCard={() => {}}
+          fuForm={{
+            penerima: '',
+            wa: '',
+            tanggalKirim: '',
+            tanggalFollowUp: '',
+            nominal: 200000,
+            buktiBayar: null,
+            catatan: '',
+          }}
+          onFormChange={() => {}}
+          onSave={() => {}}
+          onCancel={() => {}}
+          saving={false}
+        />
+      )
+
+      expect(html).toContain('Total Tagihan Awal')
+      expect(html).toContain(formatRupiah(800000))
+      expect(html).toContain('Sisa Tagihan Saat Ini')
+      expect(html).toContain('Sisa tagihan setelah pembayaran ini')
+      expect(html).toContain(formatRupiah(600000))
     })
 
     it('renders uploadError when present on fuForm', () => {
