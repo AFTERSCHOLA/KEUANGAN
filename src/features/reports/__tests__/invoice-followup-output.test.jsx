@@ -83,8 +83,8 @@ describe('Invoice Follow-Up Multi-Level Output', () => {
       expect(html).toContain('bg-amber-100 text-amber-700')
     })
 
-    it('renders "Follow-up: Terbayar" badge when latestFu.nominal > 0', () => {
-      const paidFuInvoice = {
+    it('renders "Follow-up: Cicilan (Sisa ...)" badge when invoice has partial payments remaining', () => {
+      const partialFuInvoice = {
         id: 'inv-fu-2',
         nomor: 'BDG-202611-0002',
         sekolahId: 'skl-test-1',
@@ -94,22 +94,17 @@ describe('Invoice Follow-Up Multi-Level Output', () => {
         followUps: [
           {
             id: 'fu-1',
-            penerima: 'Ibu Guru',
-            tanggalFollowUp: '2026-11-05',
-            nominal: 0,
-          },
-          {
-            id: 'fu-2',
             penerima: 'Pak Bendahara',
             tanggalFollowUp: '2026-11-12',
-            nominal: 1000000,
-            catatan: 'Sudah ditransfer lunas',
+            nominal: 400000,
+            catatan: 'Cicilan termin 1',
           },
         ],
       }
 
       vi.mocked(store.readCached).mockImplementation((key) => {
-        if (key === 'invoices') return [paidFuInvoice]
+        if (key === 'invoices') return [partialFuInvoice]
+        if (key === 'sppPayments') return [{ id: 'pay-1', invoiceId: 'inv-fu-2', nominal: 400000, sekolahId: 'skl-test-1' }]
         return []
       })
 
@@ -117,8 +112,45 @@ describe('Invoice Follow-Up Multi-Level Output', () => {
         <InvoiceModal open={true} onClose={() => {}} sekolah={mockSekolah} onPrint={() => {}} />
       )
 
-      expect(html).toContain('Follow-up: Terbayar')
+      expect(html).toContain('Follow-up: Cicilan (Sisa')
+      expect(html).toContain('bg-sky-100 text-sky-700')
+      expect(html).not.toContain('Follow-up: Terbayar')
+      expect(html).toContain('>Follow-up</button>')
+    })
+
+    it('renders "Follow-up: Lunas" badge and "Kasus Selesai" without actionable button when invoice is Lunas', () => {
+      const settledInvoice = {
+        id: 'inv-fu-3',
+        nomor: 'BDG-202611-0003',
+        sekolahId: 'skl-test-1',
+        cabangId: 'cbg-bandung',
+        grandTotal: 1000000,
+        status: 'Terbit',
+        followUps: [
+          {
+            id: 'fu-1',
+            penerima: 'Pak Bendahara',
+            tanggalFollowUp: '2026-11-12',
+            nominal: 1000000,
+            catatan: 'Pelunasan sisa tagihan',
+          },
+        ],
+      }
+
+      vi.mocked(store.readCached).mockImplementation((key) => {
+        if (key === 'invoices') return [settledInvoice]
+        if (key === 'sppPayments') return [{ id: 'pay-2', invoiceId: 'inv-fu-3', nominal: 1000000, sekolahId: 'skl-test-1' }]
+        return []
+      })
+
+      const html = renderToStaticMarkup(
+        <InvoiceModal open={true} onClose={() => {}} sekolah={mockSekolah} onPrint={() => {}} />
+      )
+
+      expect(html).toContain('Follow-up: Lunas')
       expect(html).toContain('bg-emerald-100 text-emerald-700')
+      expect(html).toContain('Kasus Selesai')
+      expect(html).not.toContain('>Follow-up</button>')
     })
   })
 

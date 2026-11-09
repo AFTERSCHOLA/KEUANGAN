@@ -796,6 +796,12 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
   }
 
   function openFollowUp(inv) {
+    const s = invoiceSettlement(inv, {
+      sppPayments: sppPaymentsAll,
+      siswa: siswaAll,
+      invoices: existing,
+    })
+    if (s?.status === 'Lunas') return
     setPaymentEditing(null)
     setFuForm({
       penerima: '',
@@ -818,6 +824,15 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
 
   async function saveFollowUp(inv) {
     if (fuSaving) return
+    const s = invoiceSettlement(inv, {
+      sppPayments: sppPaymentsAll,
+      siswa: siswaAll,
+      invoices: existing,
+    })
+    if (s?.status === 'Lunas') {
+      setErrorMsg('Invoice sudah lunas, follow-up tidak dapat ditambah.')
+      return
+    }
     setFuSaving(true)
     setErrorMsg('')
     try {
@@ -1156,16 +1171,26 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                       }`}>{displayStatus}</span>
                       {latestFu && (
                         <span className={`px-2 py-1 rounded-full font-bold ${
-                          Number(latestFu.nominal || 0) > 0
+                          settlement?.status === 'Lunas'
                             ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
+                            : (settlement?.dibayar || 0) > 0
+                              ? 'bg-sky-100 text-sky-700'
+                              : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {Number(latestFu.nominal || 0) > 0 ? 'Follow-up: Terbayar' : 'Follow-up: Menunggu Pembayaran'}
+                          {settlement?.status === 'Lunas'
+                            ? 'Follow-up: Lunas'
+                            : (settlement?.dibayar || 0) > 0
+                              ? `Follow-up: Cicilan (Sisa ${formatRupiah(settlement.sisa)})`
+                              : 'Follow-up: Menunggu Pembayaran'}
                         </span>
                       )}
                       <button onClick={() => onPrint(inv, sekolah)} className="text-blue-600 hover:underline font-bold">Cetak</button>
                       {canEditFollowUp && (
-                        <button onClick={() => (fuEditing === inv.id ? setFuEditing(null) : openFollowUp(inv))} className="text-slate-600 hover:underline font-bold">Follow-up</button>
+                        settlement?.status === 'Lunas' ? (
+                          <span className="text-[11px] font-bold text-slate-400">Kasus Selesai</span>
+                        ) : (
+                          <button onClick={() => (fuEditing === inv.id ? setFuEditing(null) : openFollowUp(inv))} className="text-slate-600 hover:underline font-bold">Follow-up</button>
+                        )
                       )}
                       <button onClick={() => removeInvoice(inv)} disabled={submitting} className="text-rose-500 hover:underline font-bold disabled:opacity-40">Hapus</button>
                     </div>
@@ -1279,7 +1304,7 @@ export default function InvoiceModal({ open, onClose, sekolah, onPrint }) {
                         </div>
                       </div>
                     )}
-                    {canEditFollowUp && fuEditing === inv.id && (
+                    {canEditFollowUp && fuEditing === inv.id && settlement?.status !== 'Lunas' && (
                       <InvoiceFollowUpSection
                         inv={inv}
                         breakdown={breakdown}

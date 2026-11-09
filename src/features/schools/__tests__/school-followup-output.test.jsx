@@ -102,7 +102,47 @@ describe('SchoolList - School Card Follow-Up Status Output', () => {
     expect(html).toContain('bg-amber-100 text-amber-700')
   })
 
-  it('renders "Follow-up: <date> (Terbayar)" when latest follow-up is paid', () => {
+  it('renders "Follow-up: <date> (Cicilan)" when school invoice has partial payment', () => {
+    const invoices = [
+      {
+        id: 'inv-2',
+        sekolahId: 'skl-b',
+        nomor: 'BDG-202611-0002',
+        status: 'Terbit',
+        grandTotal: 1200000,
+        followUps: [
+          {
+            id: 'fu-1',
+            penerima: 'Bendahara',
+            tanggalFollowUp: '2026-11-05',
+            nominal: 0,
+          },
+          {
+            id: 'fu-2',
+            penerima: 'Bendahara',
+            tanggalFollowUp: '2026-11-15',
+            nominal: 500000,
+            catatan: 'Cicilan pertama',
+          },
+        ],
+      },
+    ]
+
+    vi.mocked(store.readCached).mockImplementation((key) => {
+      if (key === 'sekolah') return [mockSekolahB]
+      if (key === 'cabang') return [{ id: 'cbg-bandung', nama: 'Bandung', kode: 'BDG' }]
+      if (key === 'invoices') return invoices
+      if (key === 'sppPayments') return [{ id: 'pay-1', invoiceId: 'inv-2', nominal: 500000, sekolahId: 'skl-b' }]
+      return []
+    })
+
+    const html = renderToStaticMarkup(<SchoolList />)
+
+    expect(html).toContain('Follow-up: 2026-11-15 (Cicilan)')
+    expect(html).toContain('bg-sky-100 text-sky-700')
+  })
+
+  it('renders "Follow-up: <date> (Lunas)" when school invoice is fully settled', () => {
     const invoices = [
       {
         id: 'inv-2',
@@ -132,12 +172,13 @@ describe('SchoolList - School Card Follow-Up Status Output', () => {
       if (key === 'sekolah') return [mockSekolahB]
       if (key === 'cabang') return [{ id: 'cbg-bandung', nama: 'Bandung', kode: 'BDG' }]
       if (key === 'invoices') return invoices
+      if (key === 'sppPayments') return [{ id: 'pay-2', invoiceId: 'inv-2', nominal: 1200000, sekolahId: 'skl-b' }]
       return []
     })
 
     const html = renderToStaticMarkup(<SchoolList />)
 
-    expect(html).toContain('Follow-up: 2026-11-15 (Terbayar)')
+    expect(html).toContain('Follow-up: 2026-11-15 (Lunas)')
     expect(html).toContain('bg-emerald-100 text-emerald-700')
   })
 

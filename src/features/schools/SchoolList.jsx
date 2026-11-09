@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { formatRupiah, formatJadwalList } from '../../lib/format.js'
 import { newSekolah, defaultCabang, newJadwalEntry } from '../../lib/constants.js'
 import { countSiswaBySekolahId } from '../../lib/tunggakan.js'
-import { latestFollowUpForSekolah } from '../../lib/invoices.js'
+import { latestFollowUpForSekolah, normalizeInvoiceFollowUps, invoiceSettlement } from '../../lib/invoices.js'
 import RupiahInput from '../../components/RupiahInput.jsx'
 import AlertDialog from '../../components/AlertDialog.jsx'
 import Modal from '../../components/Modal.jsx'
@@ -105,10 +105,22 @@ export default function SchoolList() {
   // readCached('siswa').filter() per card (N JSON.parse + N scans).
   const siswaCounts = useMemo(() => countSiswaBySekolahId(readCached('siswa')), [sekolah])
   const schoolFollowUps = useMemo(() => {
+    const sppPayments = readCached('sppPayments')
+    const siswa = readCached('siswa')
     const map = new Map()
     for (const s of sekolah) {
       const fu = latestFollowUpForSekolah(s.id, { invoices })
-      if (fu) map.set(s.id, fu)
+      if (!fu) continue
+      const schoolInvs = (invoices || []).filter(inv => inv.sekolahId === s.id)
+      const targetInvoice = schoolInvs.find(inv =>
+        normalizeInvoiceFollowUps(inv).some(f => f.id === fu.id || f === fu)
+      ) || schoolInvs[schoolInvs.length - 1]
+
+      const settlement = targetInvoice
+        ? invoiceSettlement(targetInvoice, { sppPayments, siswa, invoices })
+        : null
+
+      map.set(s.id, { fu, settlement })
     }
     return map
   }, [sekolah, invoices])
@@ -399,15 +411,34 @@ try {
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Aktif</span>
                   )}
                   {(() => {
-                    const latestFu = schoolFollowUps.get(sch.id)
-                    if (!latestFu) return null
+                    const item = schoolFollowUps.get(sch.id)
+                    if (!item) return null
+                    const latestFu = item.fu || item
+                    const settlement = item.settlement
                     const fuDate = latestFu.tanggalFollowUp || latestFu.tanggalKirim || (latestFu.createdAt ? latestFu.createdAt.slice(0, 10) : '')
-                    const isPaid = Number(latestFu.nominal || 0) > 0
+                    
+                    let statusLabel = 'Menunggu Pembayaran'
+                    let statusColor = 'bg-amber-100 text-amber-700'
+
+                    if (settlement) {
+                      if (settlement.status === 'Lunas' || settlement.sisa === 0) {
+                        statusLabel = 'Lunas'
+                        statusColor = 'bg-emerald-100 text-emerald-700'
+                      } else if (settlement.dibayar > 0 && settlement.sisa > 0) {
+                        statusLabel = 'Cicilan'
+                        statusColor = 'bg-sky-100 text-sky-700'
+                      } else {
+                        statusLabel = 'Menunggu Pembayaran'
+                        statusColor = 'bg-amber-100 text-amber-700'
+                      }
+                    } else if (Number(latestFu.nominal || 0) > 0) {
+                      statusLabel = 'Cicilan'
+                      statusColor = 'bg-sky-100 text-sky-700'
+                    }
+
                     return (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        📞 Follow-up: {fuDate ? `${fuDate} ` : ''}({isPaid ? 'Terbayar' : 'Menunggu Pembayaran'})
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor}`}>
+                        📞 Follow-up: {fuDate ? `${fuDate} ` : ''}({statusLabel})
                       </span>
                     )
                   })()}
